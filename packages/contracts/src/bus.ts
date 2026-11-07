@@ -160,20 +160,45 @@ export const VALKEY_ACL: Record<z.infer<typeof ServiceName>, Acl> = {
 };
 
 /**
- * One ACL line per service (without the password part). Valkey's `&channel` grants both publish and subscribe,
- * so a service gets exactly the channels it publishes or reads. BullMQ needs Lua and its own keys; the queue
- * workers verify the command set against BullMQ in Phase 1.
+ * The commands a BullMQ queue user needs, and nothing more: every command BullMQ's Lua scripts call (Valkey checks
+ * each one, and each key, against the caller's ACL inside the script), plus what its client sends itself (EVALSHA,
+ * EVAL and SCRIPT LOAD to run the scripts, BZPOPMIN to wait for jobs, MULTI/EXEC, INFO for its version check).
+ * Read from bullmq 6.4.2's commands/*.lua and checked with ACL LOG on Valkey 8.1 (packages/service-kit/test/valkey.test.ts).
+ * No category grants (+@write, +@keyspace, +@scripting): those carry key-less commands that reach every key, like
+ * FLUSHALL, SWAPDB, SCRIPT FLUSH, FUNCTION LOAD and CLIENT KILL.
+ */
+export const BULLMQ_COMMANDS = [
+  'evalsha', 'eval', 'script|load', 'multi', 'exec', 'bzpopmin',
+  'exists', 'type', 'del', 'unlink', 'rename', 'get', 'set', 'incr', 'incrby', 'pexpire', 'pexpireat', 'pttl', 'time',
+  'hset', 'hmset', 'hget', 'hmget', 'hgetall', 'hdel', 'hexists', 'hincrby', 'hlen',
+  'lpush', 'rpush', 'lpop', 'rpop', 'rpoplpush', 'lrem', 'llen', 'lrange', 'lindex', 'lpos', 'lset', 'ltrim',
+  'sadd', 'srem', 'scard', 'smembers', 'sismember',
+  'zadd', 'zrem', 'zscore', 'zcard', 'zcount', 'zlexcount', 'zrange', 'zrevrange', 'zrangebyscore', 'zrevrangebyscore',
+  'zrangebylex', 'zremrangebyscore', 'zremrangebyrank', 'zpopmin',
+  'xadd', 'xread', 'xrange', 'xlen', 'xtrim', 'xdel',
+] as const;
+
+/** audit's commands on `log:actions`: create the group, read as a consumer, reclaim, ack, trim. */
+export const LOG_READ_COMMANDS = ['xgroup|create', 'xreadgroup', 'xack', 'xpending', 'xautoclaim', 'xinfo|groups', 'xinfo|stream', 'xlen', 'xtrim', 'xrange'] as const;
+
+/**
+ * One ACL line per service (without the password part). Each user reaches only its own keys and channels:
+ * `~bull:<queue>:*` for its queues, `log:actions` (append, or read for audit) and `&events.<name>` for the events it
+ * publishes or reads (Valkey's `&channel` grants both). The key and channel rules hold inside BullMQ's Lua too.
+ * The stream's rule is a selector `(…)`: a command passes if the root rule or the selector allows it with all its keys.
  */
 export function valkeyAclRule(service: z.infer<typeof ServiceName>): string {
   const a = VALKEY_ACL[service];
-  const parts: string[] = ['resetkeys', 'resetchannels', '-@all', '+ping', '+hello', '+client|setname', '+info'];
+  const parts: string[] = ['resetkeys', 'resetchannels', '-@all', '+ping', '+hello', '+client|setname', '+client|setinfo', '+quit'];
   for (const q of a.queues) parts.push(`~${BULL_PREFIX}:${q}:*`);
-  if (a.queues.length) parts.push('+@read', '+@write', '+@scripting', '+@keyspace', '+@list', '+@sortedset', '+@hash', '+@stream', '+@transaction', '+@connection');
-  parts.push(a.logStream === 'append' ? `%W~${LOG_STREAM}` : `%RW~${LOG_STREAM}`);
-  parts.push(...(a.logStream === 'append' ? ['+xadd'] : ['+xreadgroup', '+xgroup', '+xack', '+xinfo', '+xrange', '+xlen']));
+  if (a.queues.length) parts.push('+info', ...BULLMQ_COMMANDS.map((c) => `+${c}`));
+  // A selector, so the queue commands above (DEL, XTRIM, PEXPIRE…) never reach the stream: appenders get XADD only.
+  if (a.logStream === 'append') parts.push(`(%W~${LOG_STREAM} +xadd)`);
+  else parts.push(`(~${LOG_STREAM} ${LOG_READ_COMMANDS.map((c) => `+${c}`).join(' ')})`);
   const channels = a.subscribe === 'all' ? [`${EVENT_CHANNEL_PREFIX}*`] : [...new Set([...a.publish, ...a.subscribe])].map(eventChannel);
   for (const c of channels) parts.push(`&${c}`);
   if (a.publish.length) parts.push('+publish');
-  if (a.subscribe === 'all' || a.subscribe.length) parts.push('+subscribe', '+psubscribe', '+unsubscribe', '+punsubscribe');
-  return parts.join(' ');
+  if (a.subscribe === 'all') parts.push('+psubscribe', '+punsubscribe');
+  else if (a.subscribe.length) parts.push('+subscribe', '+unsubscribe');
+  return [...new Set(parts)].join(' ');
 }
