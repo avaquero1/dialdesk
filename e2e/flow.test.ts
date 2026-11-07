@@ -31,10 +31,12 @@ let sandbox: SandboxClient;
 
 // Wire every fake in process, the way the services are wired in production.
 const audit = createFakeAudit();
+const marketsApp = fakeApp('markets', MARKETS, markets());
 const apps = {
   accounts: fakeApp('accounts', ACCOUNTS, accounts()),
-  board: fakeApp('board', BOARD, board()),
-  markets: fakeApp('markets', MARKETS, markets()),
+  // First paint: board reads cached prices from markets when it creates a widget.
+  board: fakeApp('board', BOARD, board({ markets: createClient({ baseUrl: 'http://svc.internal', token: TEST_TOKENS.board, fetch: (r) => marketsApp.fetch(r) }) })),
+  markets: marketsApp,
   models: fakeApp('models', MODELS, models()),
   connections: fakeApp('connections', CONNECTIONS, connections()),
   audit: fakeApp('audit', AUDIT, audit.handlers),
@@ -90,6 +92,12 @@ describe('e2e on fakes', () => {
     expect(displays.map((w) => w.spec.kind === 'display' && w.spec.type)).toEqual(['events', 'probability', 'gap', 'news', 'positions', 'movement']);
     expect(b.widgets.filter((w) => w.spec.kind === 'folder')).toHaveLength(2);
     expect(b.widgets.filter((w) => w.spec.kind === 'app')).toHaveLength(5);
+    // First paint: before any run, every display on a market shows its cached price.
+    for (const w of b.widgets) {
+      if (w.spec.kind !== 'display' || !w.spec.market_ids.length) continue;
+      expect(w.result).toBeNull();
+      expect(w.quotes?.map((q) => q.market_id)).toEqual(w.spec.market_ids);
+    }
   });
 
   it('2. the chat builds one widget, and it is real only after the click', async () => {

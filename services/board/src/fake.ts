@@ -64,7 +64,6 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
   const widgets = new Map<string, Widget>();
   const proposals = new Map<string, Proposal>();
   const traces = new Map<string, RunTraceStep[]>();
-  const refreshes = new Map<string, number[]>();
 
   /** Folder children follow the places: a display whose place names a folder is in it. */
   const withChildren = (w: Widget, ids: string[]): Widget => {
@@ -102,8 +101,12 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     }
     return max + 1;
   };
+  /** The same job id in the same minute collapses, as it does on the queue. */
+  const requested = new Map<string, { at: number; reason: WidgetRunJob['reason']; widget_id: string }>();
   async function enqueueRun(spec: DisplaySpec, kind: RunKind, reason: WidgetRunJob['reason']) {
     const job = runJob(spec, kind, reason);
+    if (requested.has(job.job_id)) return job.job_id;
+    requested.set(job.job_id, { at: Date.now(), reason, widget_id: spec.widget_id });
     await enqueue(QUEUES.widgetRuns, job);
     return job.job_id;
   }
@@ -235,7 +238,10 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     },
     clear: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
-      if (w.spec.kind === 'display') w.profile = defaultProfile(w.spec.widget_id, w.spec.type);
+      if (w.spec.kind === 'display') {
+        w.profile = defaultProfile(w.spec.widget_id, w.spec.type);
+        await enqueueRun(w.spec, refreshKind(w.spec), 'clear');
+      }
       await bus.emit('widget.updated', { account_id: body.account_id, at: now(), widget_id: params.widget_id, change: 'cleared' });
       return shown(w);
     },
@@ -248,9 +254,9 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     refresh: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
       if (w.spec.kind !== 'display') throw new HttpError(404, 'not_found', 'only displays refresh');
-      const recent = (refreshes.get(w.spec.widget_id) ?? []).filter((t) => t > Date.now() - 3600_000);
+      const hour = Date.now() - 3600_000;
+      const recent = [...requested.values()].filter((r) => r.widget_id === w.spec.widget_id && r.reason === 'refresh' && r.at > hour);
       if (recent.length >= REFRESH_PER_HOUR) throw new HttpError(429, 'too_many_refreshes', 'this widget was refreshed too often this hour');
-      refreshes.set(w.spec.widget_id, [...recent, Date.now()]);
       return { job_id: await enqueueRun(w.spec, refreshKind(w.spec), 'refresh') };
     },
     addSource: async ({ params, body }) => {
@@ -274,7 +280,15 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       traces.set(w.spec.widget_id, body.trace);
       await bus.emit('result.updated', { account_id: body.account_id, at: now(), widget_id: w.spec.widget_id, result_id: body.result.result_id, phase: body.phase });
       const flag = movementFlag(w.spec, body.result);
-      if (flag) await bus.emit('movement.flagged', { account_id: body.account_id, at: now(), widget_id: w.spec.widget_id, ...flag });
+      if (flag) {
+        await bus.emit('movement.flagged', { account_id: body.account_id, at: now(), widget_id: w.spec.widget_id, ...flag });
+        // A move past the threshold starts a research run for this account's widgets that read sources on that market.
+        for (const id of boards.get(body.account_id)!.widgets) {
+          const r = widgets.get(id)!;
+          if (r.spec.kind === 'display' && displayEntry(r.spec.type).research && r.spec.market_ids.includes(flag.market_id))
+            await enqueueRun(r.spec, 'research', 'movement');
+        }
+      }
       return { result_id: body.result.result_id };
     },
     getTrace: ({ params, query }) => {

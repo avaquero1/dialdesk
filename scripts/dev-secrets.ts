@@ -69,6 +69,7 @@ lines.push(
 
 lines.push('', '# --- run a service as its in-memory fake: <SVC>_FAKE=1 (npm run fake -w services/<svc> sets it)');
 lines.push(`# ports: ${Object.entries(PORTS).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+lines.push('# board keeps screenshots in BOARD_SCREENSHOT_DIR until Object Storage exists (default .data/board/screenshots)');
 lines.push('LOG_LEVEL=info', '');
 
 if (example) {
