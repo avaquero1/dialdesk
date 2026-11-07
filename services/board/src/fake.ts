@@ -2,7 +2,6 @@ import {
   BOARD,
   QUEUES,
   SIZE_CELLS,
-  WIDGET_CATALOG,
   WidgetSpec,
   displayEntry,
   newId,
@@ -33,6 +32,7 @@ import {
   view,
   type DisplaySpec,
 } from './logic.ts';
+import { prescribedTiles } from './defaults.ts';
 import { MemoryObjectStore, isPng, type ObjectStore } from './storage.ts';
 
 export interface FakeDeps {
@@ -135,7 +135,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     createDefaults: async ({ params }) => {
       const account_id = params.account_id;
       if (boards.has(account_id)) throw new HttpError(409, 'exists', 'board already exists');
-      const tiles = WIDGET_CATALOG.default_board.tiles;
+      const tiles = await prescribedTiles(deps.markets, Date.now());
       const displays = tiles.flatMap((t) => (t.kind === 'display' ? [t] : t.kind === 'folder' ? t.children : []));
       const quotes = [...(await fetchQuotes(deps.markets, allMarketIds(displays))).values()];
       boards.set(account_id, { widgets: [], pending: [] });

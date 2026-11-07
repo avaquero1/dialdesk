@@ -67,3 +67,31 @@ export function captureLog(): { log: Logger; lines: string[] } {
 export function realApp(cfg: Record<string, unknown>, deps: RealDeps) {
   return buildApp({ service: 'markets', mode: 'real', api: MARKETS, handlers: real(cfg, deps), callers: testCallers(), log: createLogger('markets', 'silent'), strictResponses: true });
 }
+
+/** When fixtures/markets/live/weekend was recorded (scripts/record-weekend.ts), and which games it found on each exchange. */
+export const WEEKEND = JSON.parse(live('weekend/recorded.json')) as {
+  recorded_at: string;
+  days: [string, string];
+  games: { event_key: string; kalshi: string; polymarket: string | null }[];
+};
+
+/** A fetch for markets' list on the weekend recording: Kalshi's open games and Polymarket's moneylines. 404 otherwise. */
+export function weekendFetch() {
+  const calls: string[] = [];
+  const f = (async (input: string | URL | Request) => {
+    const url = String(input);
+    calls.push(url);
+    const u = new URL(url);
+    const json = (body: string) => new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
+    const series = u.searchParams.get('series_ticker');
+    if (u.hostname === 'api.elections.kalshi.com' && u.pathname.endsWith('/events') && (series === 'KXNFLGAME' || series === 'KXNBAGAME'))
+      return json(live(`weekend/events-${series}.json`));
+    if (u.hostname === 'gamma-api.polymarket.com' && u.pathname === '/markets') {
+      const want = new Set(u.searchParams.getAll('slug'));
+      const all = JSON.parse(live('weekend/markets-by-slug.json')) as { slug: string }[];
+      return json(JSON.stringify(all.filter((m) => want.has(m.slug))));
+    }
+    return new Response('{"error":"not found"}', { status: 404 });
+  }) as typeof fetch;
+  return { fetch: f, calls };
+}

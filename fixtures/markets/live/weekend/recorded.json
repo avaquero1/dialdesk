@@ -1,0 +1,189 @@
+{
+  "recorded_at": "2026-11-07T22:30:09.294Z",
+  "days": [
+    "2026-11-07",
+    "2026-11-09"
+  ],
+  "games": [
+    {
+      "event_key": "nfl-2026-11-08-cin-atl",
+      "kalshi": "KXNFLGAME-26NOV08CINATL",
+      "polymarket": "nfl-cin-atl-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-cle-no",
+      "kalshi": "KXNFLGAME-26NOV08CLENO",
+      "polymarket": "nfl-cle-no-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-dal-ind",
+      "kalshi": "KXNFLGAME-26NOV08DALIND",
+      "polymarket": "nfl-dal-ind-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-den-car",
+      "kalshi": "KXNFLGAME-26NOV08DENCAR",
+      "polymarket": "nfl-den-car-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-det-mia",
+      "kalshi": "KXNFLGAME-26NOV08DETMIA",
+      "polymarket": "nfl-det-mia-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-lar-was",
+      "kalshi": "KXNFLGAME-26NOV08LARWAS",
+      "polymarket": "nfl-la-was-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-nyg-phi",
+      "kalshi": "KXNFLGAME-26NOV08NYGPHI",
+      "polymarket": "nfl-nyg-phi-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-nyj-kc",
+      "kalshi": "KXNFLGAME-26NOV08NYJKC",
+      "polymarket": "nfl-nyj-kc-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-hou-lac",
+      "kalshi": "KXNFLGAME-26NOV08HOULAC",
+      "polymarket": "nfl-hou-lac-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-ari-sea",
+      "kalshi": "KXNFLGAME-26NOV08ARISEA",
+      "polymarket": "nfl-ari-sea-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-gb-ne",
+      "kalshi": "KXNFLGAME-26NOV08GBNE",
+      "polymarket": "nfl-gb-ne-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-lv-sf",
+      "kalshi": "KXNFLGAME-26NOV08LVSF",
+      "polymarket": "nfl-lv-sf-2026-11-08"
+    },
+    {
+      "event_key": "nfl-2026-11-08-tb-chi",
+      "kalshi": "KXNFLGAME-26NOV08TBCHI",
+      "polymarket": "nfl-tb-chi-2026-11-09"
+    },
+    {
+      "event_key": "nfl-2026-11-09-buf-min",
+      "kalshi": "KXNFLGAME-26NOV09BUFMIN",
+      "polymarket": "nfl-buf-min-2026-11-10"
+    },
+    {
+      "event_key": "nba-2026-11-07-den-ind",
+      "kalshi": "KXNBAGAME-26NOV07DENIND",
+      "polymarket": "nba-den-ind-2026-11-07"
+    },
+    {
+      "event_key": "nba-2026-11-07-bkn-atl",
+      "kalshi": "KXNBAGAME-26NOV07BKNATL",
+      "polymarket": "nba-bkn-atl-2026-11-07"
+    },
+    {
+      "event_key": "nba-2026-11-07-nyk-cle",
+      "kalshi": "KXNBAGAME-26NOV07NYKCLE",
+      "polymarket": "nba-nyk-cle-2026-11-07"
+    },
+    {
+      "event_key": "nba-2026-11-07-was-okc",
+      "kalshi": "KXNBAGAME-26NOV07WASOKC",
+      "polymarket": "nba-was-okc-2026-11-07"
+    },
+    {
+      "event_key": "nba-2026-11-07-orl-gsw",
+      "kalshi": "KXNBAGAME-26NOV07ORLGSW",
+      "polymarket": "nba-orl-gsw-2026-11-07"
+    },
+    {
+      "event_key": "nba-2026-11-07-hou-phx",
+      "kalshi": "KXNBAGAME-26NOV07HOUPHX",
+      "polymarket": "nba-hou-phx-2026-11-07"
+    },
+    {
+      "event_key": "nba-2026-11-07-sas-por",
+      "kalshi": "KXNBAGAME-26NOV07SASPOR",
+      "polymarket": "nba-sas-por-2026-11-07"
+    },
+    {
+      "event_key": "nba-2026-11-08-phi-chi",
+      "kalshi": "KXNBAGAME-26NOV08PHICHI",
+      "polymarket": "nba-phi-chi-2026-11-08"
+    },
+    {
+      "event_key": "nba-2026-11-08-lal-det",
+      "kalshi": "KXNBAGAME-26NOV08LALDET",
+      "polymarket": "nba-lal-det-2026-11-08"
+    },
+    {
+      "event_key": "nba-2026-11-08-uta-min",
+      "kalshi": "KXNBAGAME-26NOV08UTAMIN",
+      "polymarket": "nba-uta-min-2026-11-08"
+    },
+    {
+      "event_key": "nba-2026-11-08-bkn-dal",
+      "kalshi": "KXNBAGAME-26NOV08BKNDAL",
+      "polymarket": "nba-bkn-dal-2026-11-08"
+    },
+    {
+      "event_key": "nba-2026-11-08-bos-mil",
+      "kalshi": "KXNBAGAME-26NOV08BOSMIL",
+      "polymarket": "nba-bos-mil-2026-11-08"
+    },
+    {
+      "event_key": "nba-2026-11-08-mia-sac",
+      "kalshi": "KXNBAGAME-26NOV08MIASAC",
+      "polymarket": "nba-mia-sac-2026-11-08"
+    },
+    {
+      "event_key": "nba-2026-11-08-nop-lac",
+      "kalshi": "KXNBAGAME-26NOV08NOPLAC",
+      "polymarket": "nba-nop-lac-2026-11-08"
+    },
+    {
+      "event_key": "nba-2026-11-09-cle-cha",
+      "kalshi": "KXNBAGAME-26NOV09CLECHA",
+      "polymarket": "nba-cle-cha-2026-11-09"
+    },
+    {
+      "event_key": "nba-2026-11-09-lal-atl",
+      "kalshi": "KXNBAGAME-26NOV09LALATL",
+      "polymarket": "nba-lal-atl-2026-11-09"
+    },
+    {
+      "event_key": "nba-2026-11-09-was-det",
+      "kalshi": "KXNBAGAME-26NOV09WASDET",
+      "polymarket": "nba-was-det-2026-11-09"
+    },
+    {
+      "event_key": "nba-2026-11-09-mem-tor",
+      "kalshi": "KXNBAGAME-26NOV09MEMTOR",
+      "polymarket": "nba-mem-tor-2026-11-09"
+    },
+    {
+      "event_key": "nba-2026-11-09-ind-dal",
+      "kalshi": "KXNBAGAME-26NOV09INDDAL",
+      "polymarket": "nba-ind-dal-2026-11-09"
+    },
+    {
+      "event_key": "nba-2026-11-09-den-hou",
+      "kalshi": "KXNBAGAME-26NOV09DENHOU",
+      "polymarket": "nba-den-hou-2026-11-09"
+    },
+    {
+      "event_key": "nba-2026-11-09-sas-phx",
+      "kalshi": "KXNBAGAME-26NOV09SASPHX",
+      "polymarket": "nba-sas-phx-2026-11-09"
+    },
+    {
+      "event_key": "nba-2026-11-09-nop-gsw",
+      "kalshi": "KXNBAGAME-26NOV09NOPGSW",
+      "polymarket": "nba-nop-gsw-2026-11-09"
+    }
+  ]
+}

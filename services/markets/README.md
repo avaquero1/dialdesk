@@ -62,5 +62,7 @@ list costs 2 requests (one Kalshi events page, one Gamma multi-slug read).
 
 - `npm run verify-sources -w services/markets`: every production feed, online.
 - `npm run record-live -w services/markets [event-key]`: re-records `fixtures/markets/live/` (and a Brave answer when the key exists).
+- `npm run record-weekend -w services/markets [days]`: re-records `fixtures/markets/live/weekend/`, every open NFL and NBA game of the
+  next days on both exchanges (four requests). board's first-paint test (`services/board/test/first-paint.test.ts`) reads it.
 - `npm run test:live -w services/markets`: the contract cases against the live APIs (needs the network; the gate skips it).
 - `test/real.test.ts` (in the gate): the real handlers on the recorded answers, through the service template in real mode.

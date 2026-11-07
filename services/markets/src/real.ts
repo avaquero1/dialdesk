@@ -133,7 +133,10 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
       );
       for (const raw of pm.value) {
         const mk = polyToMarket(raw, { asOf: iso(pm.at), stale: pm.stale });
-        if (mk && mk.event_key && keys.has(mk.event_key)) out.push(mk);
+        if (mk && mk.event_key && keys.has(mk.event_key)) {
+          out.push(mk);
+          if (!pm.stale) cache.put(`p:m:${raw.slug}`, raw, pm.at); // like Kalshi's: a list read is also a fresh quote
+        }
       }
     } catch (err) {
       if (!isUpstream(err)) throw err;

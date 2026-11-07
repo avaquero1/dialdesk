@@ -13,7 +13,8 @@
     "fake": "MARKETS_FAKE=1 tsx --env-file-if-exists=../../.env src/main.ts",
     "test:live": "MARKETS_LIVE=1 vitest run --root ../.. --project contracts services/markets/test/live.test.ts",
     "verify-sources": "node --import tsx scripts/verify-sources.ts",
-    "record-live": "node --import tsx scripts/record-live.ts"
+    "record-live": "node --import tsx scripts/record-live.ts",
+    "record-weekend": "node --import tsx scripts/record-weekend.ts"
   },
   "dependencies": {
     "@app/contracts": "*",
