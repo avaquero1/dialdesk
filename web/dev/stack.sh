@@ -35,7 +35,9 @@ envs() {
 
 start() {
   local s=$1 fake=$2 S=${1^^}
-  ( cd "$repo" && env "${S}_FAKE=$fake" node --import tsx "services/$s/src/main.ts" > "$run/$s.log" 2>&1 & echo $! > "$run/$s.pid" )
+  # exec: the pid file holds node itself, so `down` stops the process that holds the port (not a wrapper shell).
+  ( cd "$repo" && exec env "${S}_FAKE=$fake" node --import tsx "services/$s/src/main.ts" ) > "$run/$s.log" 2>&1 < /dev/null &
+  echo $! > "$run/$s.pid"
 }
 
 wait_health() {
@@ -43,7 +45,7 @@ wait_health() {
   for s in "${!PORT[@]}"; do
     p=${PORT[$s]}
     for _ in $(seq 1 60); do curl -fsS "http://127.0.0.1:$p/health" > /dev/null 2>&1 && break; sleep 0.5; done
-    curl -fsS "http://127.0.0.1:$p/health" > /dev/null 2>&1 || { echo "$s did not start (see $run/$s.log)"; tail -5 "$run/$s.log"; exit 1; }
+    curl -fsS "http://127.0.0.1:$p/health" > /dev/null 2>&1 && alive "$s" || { echo "$s did not start (see $run/$s.log)"; tail -5 "$run/$s.log"; exit 1; }
   done
 }
 
@@ -56,10 +58,21 @@ stop_services() {
     for _ in $(seq 1 40); do kill -0 "$pid" 2> /dev/null || break; sleep 0.25; done
     kill -9 "$pid" 2> /dev/null || true
   done
-  # A port still taken means a service from elsewhere: refuse rather than test against it.
+  # Wait for every port to free (a loaded box can take a while to close a socket). A port still held after that is a
+  # service from elsewhere: refuse rather than start beside it (EADDRINUSE) or test against it.
   for p in "${PORT[@]}"; do
-    if curl -fsS "http://127.0.0.1:$p/health" > /dev/null 2>&1; then echo "port $p is still in use; stop that process first"; exit 1; fi
+    for _ in $(seq 1 60); do listening "$p" || break; sleep 0.5; done
+    if listening "$p"; then echo "port $p is still in use; stop that process first"; exit 1; fi
   done
+}
+
+listening() { [ -n "$(ss -Hltn "sport = :$1" 2> /dev/null)" ]; }
+
+# The service this run started is still alive: /health could otherwise come from a leftover on the same port.
+alive() {
+  local pid
+  pid=$(cat "$run/$1.pid" 2> /dev/null) || return 1
+  kill -0 "$pid" 2> /dev/null
 }
 
 case "${1:-}" in

@@ -26,7 +26,7 @@ let session: Awaited<ReturnType<BrowserContext['storageState']>> | undefined;
 async function open(ctx: BrowserContext, path = '/'): Promise<Page> {
   const page = await ctx.newPage();
   page.on('console', (m) => {
-    if (m.type() === 'error') problems.push(`console: ${m.text()}`);
+    if (m.type() === 'error') problems.push(`console: ${m.text()} @ ${m.location().url}`);
   });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
   page.on('request', (r) => {
@@ -38,6 +38,14 @@ async function open(ctx: BrowserContext, path = '/'): Promise<Page> {
 }
 
 const ready = (page: Page) => page.waitForFunction(() => window.__ready === true && document.documentElement.dataset.view === 'board', null, { timeout: 90_000 });
+
+/** Wait for motion to finish (no CSS transition running, no surface still closing): a state, not a fixed sleep. */
+const settled = (page: Page) =>
+  page.waitForFunction(
+    () => !document.querySelector('.surface.is-closing') && document.getAnimations().every((a) => !(a instanceof CSSTransition) || a.playState !== 'running'),
+    null,
+    { timeout: 30_000, polling: 100 },
+  );
 
 /** The grid order as the user sees it: tiles sorted by their position. */
 const visualOrder = (page: Page) =>
@@ -111,8 +119,8 @@ describe('web app on the local stack', () => {
       expect(await page.locator('.foot').innerText()).toContain('Not investment advice.');
 
       await setLookInSheet(page, name, mode === 'dark' ? 'Dark' : 'Light');
-      await page.waitForTimeout(1200);
-      expect(await page.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.dataset.mode])).toEqual([theme, mode]);
+      await page.waitForFunction(([t, m]) => document.documentElement.dataset.theme === t && document.documentElement.dataset.mode === m, [theme, mode] as const);
+      await settled(page);
       await page.screenshot({ path: join(SHOTS, `desktop-${theme}-${mode}.png`) });
 
       // The look survives a reload: it came back from accounts.
@@ -122,19 +130,22 @@ describe('web app on the local stack', () => {
 
       // The surfaces: the ⋯ menu, an open folder, the Look sheet.
       await page.locator('#board > .w[aria-label="Chiefs beat the Bills"] .w-menu-btn').click();
-      await page.waitForTimeout(1300);
+      await page.locator('.surface.menu.is-open').waitFor();
+      await settled(page);
       await expect(page.locator('.surface.menu').innerText()).resolves.toContain('next build');
       await page.screenshot({ path: join(SHOTS, `menu-${theme}-${mode}.png`) });
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(500);
+      await settled(page);
       await page.locator('#board > .w[aria-label="NFL Week 10"]').click();
-      await page.waitForTimeout(1300);
+      await page.locator('.surface.folder-open.is-open').waitFor();
+      await settled(page);
       expect(await page.locator('.surface.folder-open .card').count()).toBe(4);
       await page.screenshot({ path: join(SHOTS, `folder-${theme}-${mode}.png`) });
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(500);
+      await settled(page);
       await page.locator('#look-btn').click();
-      await page.waitForTimeout(1300);
+      await page.locator('.surface.sheet.is-open').waitFor();
+      await settled(page);
       await page.screenshot({ path: join(SHOTS, `look-${theme}-${mode}.png`) });
       session ??= await ctx.storageState();
       await ctx.close();
@@ -155,12 +166,11 @@ describe('web app on the local stack', () => {
     await page.mouse.down();
     await page.mouse.move(a.x + a.width / 2 + 12, a.y + a.height / 2, { steps: 3 });
     await page.mouse.move(b.x + b.width / 3, b.y + b.height / 3, { steps: 30 });
-    await page.waitForTimeout(700);
+    await settled(page);
     await page.screenshot({ path: join(SHOTS, 'mid-drag.png') });
-    await page.waitForTimeout(400);
     await page.mouse.up();
     expect((await saved).status()).toBe(200);
-    await page.waitForTimeout(1200);
+    await settled(page);
     const after = await visualOrder(page);
     // Under load the swaps it passes over can differ; what matters: the order changed, it was saved, a reload keeps it.
     expect(after).not.toEqual(before);
@@ -211,8 +221,10 @@ describe('web app on the local stack', () => {
   });
 
   it('had no console errors, no policy violations and no off-origin requests', () => {
-    // A 401 from /api/me at the door and the 413 above are expected network answers; Chromium logs failed loads as errors.
-    const real = problems.filter((p) => !/Failed to load resource: the server responded with a status of (401|413)/.test(p));
+    // Two expected answers that Chromium logs as failed loads: /api/me's 401 for a signed-out visitor at boot, and the
+    // login 413 above. Only those two requests are let through.
+    const expected = [/status of 401 .* @ http:\/\/[^/]+\/api\/me$/, /status of 413 .* @ http:\/\/[^/]+\/api\/login$/];
+    const real = problems.filter((p) => !(p.startsWith('console: Failed to load resource') && expected.some((e) => e.test(p))));
     expect(real).toEqual([]);
   });
 });
