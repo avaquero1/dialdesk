@@ -165,17 +165,18 @@ pub struct Limits {
 }
 
 impl Limits {
-    // Set from the spike.
+    // From the VX1 spike (Nov 7, gVisor 16/16): 1 CPU, 1 GB with no swap, 256 processes,
+    // a 512 MB /tmp. The hold's hard cap stays open in the architecture.
     pub const BROWSE: Limits = Limits {
         cpu_millis: 1000,
         memory_mb: 1024,
         pids: 256,
         wall_s: 30,
         hold_s: 60,
-        disk_mb: 256,
+        disk_mb: 512,
         output_kb: 2048,
     };
-    // Set from the spike.
+    // The engine is small and fast; the spike did not measure it.
     pub const COMPUTE: Limits = Limits {
         cpu_millis: 1000,
         memory_mb: 128,

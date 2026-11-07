@@ -1,13 +1,19 @@
 //! The egress decision. Every connection a sandbox asks for goes through `decide`:
 //! a named host on the allowlist, port 443, and only public addresses after DNS.
 //! Checking the resolved addresses (not just the name) stops DNS rebinding.
+//!
+//! `server` is the proxy itself (CONNECT on the sandbox side, a control socket on the
+//! manager side); `control` is the manager's client for that socket.
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+pub mod control;
+pub mod server;
 
 /// Why a connection was allowed or refused. Shared with the manager's proxy log.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Reason {
     Allowlisted,
@@ -104,6 +110,21 @@ pub fn is_blocked(ip: IpAddr) -> bool {
     }
 }
 
+/// The checks that need no DNS: a refusal, or None when the name may be resolved.
+/// The proxy resolves only names that pass, so a page can't use its resolver as a tunnel.
+pub fn precheck<S: AsRef<str>>(host: &str, port: u16, allowlist: &[S]) -> Option<Decision> {
+    if is_ip_literal(host) {
+        return Some(refuse(Reason::IpLiteral));
+    }
+    if port != 443 {
+        return Some(refuse(Reason::BadPort));
+    }
+    if !on_allowlist(host, allowlist) {
+        return Some(refuse(Reason::NotOnAllowlist));
+    }
+    None
+}
+
 /// Decides one connection. `resolved` is every address DNS returned for `host`;
 /// all of them must be public, because the client may connect to any.
 pub fn decide<S: AsRef<str>>(
@@ -112,14 +133,8 @@ pub fn decide<S: AsRef<str>>(
     resolved: &[IpAddr],
     allowlist: &[S],
 ) -> Decision {
-    if is_ip_literal(host) {
-        return refuse(Reason::IpLiteral);
-    }
-    if port != 443 {
-        return refuse(Reason::BadPort);
-    }
-    if !on_allowlist(host, allowlist) {
-        return refuse(Reason::NotOnAllowlist);
+    if let Some(d) = precheck(host, port, allowlist) {
+        return d;
     }
     if resolved.is_empty() {
         return refuse(Reason::DnsFailed);
@@ -220,6 +235,20 @@ mod tests {
                 "{p}"
             );
         }
+    }
+
+    #[test]
+    fn precheck_refuses_before_any_lookup() {
+        // Off-list names are refused before DNS, never reported as dns_failed.
+        assert_eq!(
+            precheck("x.evil.example", 443, LIST).map(|d| d.reason),
+            Some(Reason::NotOnAllowlist)
+        );
+        assert_eq!(precheck("api.kalshi.com", 443, LIST), None);
+        assert_eq!(
+            reason("leak.evil.example", 443, &[]),
+            Reason::NotOnAllowlist
+        );
     }
 
     #[test]

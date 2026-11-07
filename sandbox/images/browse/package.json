@@ -1,0 +1,10 @@
+{
+  "name": "vha-browse-sandbox",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "The browse sandbox's driver: puppeteer-core drives Debian's Chromium. Installed only inside the image.",
+  "dependencies": {
+    "puppeteer-core": "24.43.1"
+  }
+}

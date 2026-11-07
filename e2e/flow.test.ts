@@ -2,13 +2,16 @@
  * End to end on fakes, from day one: sign up, the chat builds one widget, a run fills it with numbers and receipts,
  * and a poisoned page gets its sandbox killed. Everything goes through edge's browser API. The runs go the way they
  * do in production: board enqueues them on widget-runs and runner consumes them (here the queue is an in-process
- * list instead of BullMQ). sandbox-manager is the real Rust binary (docker backend stub).
- * Steps that need Phase 1+ are `it.todo`.
+ * list instead of BullMQ). sandbox-manager is the real Rust binary on the docker backend: real Chromium sandboxes behind
+ * the real egress proxy, on the dev topology (sandbox/dev/topology.ts; `make images` and `make engine-image` first).
+ * E2E_SANDBOX=stub runs it on the stub backend (no Docker) and skips the steps that need real sandboxes.
+ * Steps that need later phases are `it.todo`.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { liveSandboxes, startManager, topologyUp, type Manager, type Topology } from '../sandbox/dev/topology.ts';
 import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, EDGE, MARKETS, MODELS, POISONED_NOTE, type Board, type ChatReply, type WidgetRunJob } from '@app/contracts';
 import { MemoryBus, createClient, hashToken, sandboxClient, type SandboxClient } from '@app/service-kit';
 import { fakeApp, fixtures, pageText, TEST_TOKENS } from '@app/testkit';
@@ -27,8 +30,11 @@ const MANAGER = join(ROOT, 'target', 'debug', 'sandbox-manager');
 const PORT = 18200 + (process.pid % 500);
 const RUNNER_TOKEN = TEST_TOKENS.runner;
 
-let manager: ChildProcess;
+let manager: ChildProcess | undefined;
 let sandbox: SandboxClient;
+const STUB = process.env.E2E_SANDBOX === 'stub';
+let real: Manager | undefined;
+let topo: Topology | undefined;
 
 // Wire every fake in process, the way the services are wired in production.
 const audit = createFakeAudit();
@@ -60,7 +66,7 @@ const fe = createFakeEdge(
 );
 const edgeApp = fakeApp('edge', EDGE, fe.handlers, fe.sessionCheck);
 
-// runner, on the same fakes. The stub sandbox opens no Chromium, so page text comes from the fixture site.
+// runner, on the same fakes. Real sandboxes return the page text; on the stub (no Chromium) it comes from the fixture site.
 const runnerBus = new MemoryBus();
 const runnerStore = new MemoryStore();
 const scheduler = new Scheduler(runnerStore, async (j) => void queue.push(j));
@@ -107,8 +113,14 @@ const browser = createClient({
 
 beforeAll(async () => {
   if (!existsSync(MANAGER)) throw new Error('build sandbox-manager first: cargo build -p sandbox-manager (make check does)');
+  if (!STUB) {
+    topo = topologyUp(`vha-e2e${process.pid}`);
+    real = await startManager(topo, `runner:${hashToken(RUNNER_TOKEN)}`);
+    sandbox = sandboxClient({ baseUrl: real.url, token: RUNNER_TOKEN });
+    return;
+  }
   manager = spawn(MANAGER, ['serve'], {
-    env: { ...process.env, SANDBOX_MANAGER_ADDR: `127.0.0.1:${PORT}`, SANDBOX_MANAGER_CALLERS: `runner:${hashToken(RUNNER_TOKEN)}`, SANDBOX_MANAGER_DEV: '1' },
+    env: { ...process.env, SANDBOX_BACKEND: 'stub', SANDBOX_MANAGER_ADDR: `127.0.0.1:${PORT}`, SANDBOX_MANAGER_CALLERS: `runner:${hashToken(RUNNER_TOKEN)}`, SANDBOX_MANAGER_DEV: '1' },
     stdio: 'ignore',
   });
   sandbox = sandboxClient({ baseUrl: `http://127.0.0.1:${PORT}`, token: RUNNER_TOKEN });
@@ -121,10 +133,12 @@ beforeAll(async () => {
 });
 afterAll(() => {
   manager?.kill('SIGTERM');
+  real?.stop();
+  topo?.down();
 });
 
 describe('e2e on fakes', () => {
-  const s: { account_id?: string; widget_id?: string; killed?: string[]; released?: number; runs?: RunRecord[] } = {};
+  const s: { account_id?: string; widget_id?: string; killed?: string[]; released?: number; runs?: RunRecord[]; research?: RunRecord } = {};
 
   it('1. sign up: the board opens with the prescribed defaults', async () => {
     const { account } = await browser(EDGE.signup, { body: { email: 'trader@example.test', password: 'correct horse battery' } });
@@ -179,6 +193,7 @@ describe('e2e on fakes', () => {
     const run = s.runs!.find((r) => r.widget_id === s.widget_id && r.kind === 'research')!;
     expect(run.status).toBe('poisoned');
     expect(run.steps.map((x) => x.step)).toEqual(expect.arrayContaining(['sources', 'plan', 'read', 'extract', 'math', 'summary', 'guard', 'publish']));
+    s.research = run;
     s.killed = run.steps.filter((x) => x.status === 'poisoned').map((x) => `${run.run_id}:read:${run.steps.find((y) => y.step === 'read' && y.sandbox?.sandbox_id === x.sandbox?.sandbox_id)!.source!.candidate_id}`);
     s.released = run.steps.filter((x) => x.step === 'extract' && x.sandbox?.state === 'released').length;
 
@@ -233,7 +248,7 @@ describe('e2e on fakes', () => {
     expect(k.kill_reason).toBe('poison');
     expect(s.released).toBeGreaterThan(0);
     const list = await sandbox.sandboxes();
-    expect(list.backend).toBe('docker');
+    expect(list.backend).toBe(STUB ? 'stub' : 'docker');
     // Nothing is left held: every browse sandbox got its verdict.
     expect(list.sandboxes.filter((x) => x.state === 'held')).toEqual([]);
     const trust = await browser(EDGE.trust, {});
@@ -245,8 +260,34 @@ describe('e2e on fakes', () => {
     expect((await browser(EDGE.auditVerify, {})).ok).toBe(true);
   });
 
-  it.todo('the browse sandbox opens the page in Chromium behind the proxy and returns its text (sandbox-manager, Phase 1)');
-  it.todo("the proxy refuses the poisoned page's callouts: 169.254.169.254, collect.exfil.fixture.test, tracker.offlist.fixture.test (Phase 1)");
+  it.skipIf(STUB)('4c. each browse sandbox opened its page in Chromium behind the proxy, returned its text, and was destroyed', async () => {
+    const run = s.research!;
+    const clean = run.steps
+      .filter((x) => x.step === 'read' && x.source && !s.killed!.some((k) => k.endsWith(`:read:${x.source!.candidate_id}`)))
+      .map((x) => `${run.run_id}:read:${x.source!.candidate_id}`);
+    expect(clean.length).toBeGreaterThan(0);
+    for (const id of clean) {
+      const j = await sandbox.getJob(id);
+      expect(j.state).toBe('released');
+      expect(j.pages[0]!.status).toBe(200);
+      expect(j.pages[0]!.text.length).toBeGreaterThan(200);
+      const domain = new URL(j.pages[0]!.url).hostname;
+      // Only the job's own domain got through.
+      expect(j.proxy_log.filter((e) => e.allowed).map((e) => e.host)).toContain(domain);
+      expect(j.proxy_log.filter((e) => e.allowed).every((e) => e.host === domain)).toBe(true);
+    }
+    expect(liveSandboxes(topo!)).toEqual([]);
+  });
+
+  it.skipIf(STUB)("4d. the proxy refused and logged the poisoned page's callouts before its sandbox was killed", async () => {
+    const k = await sandbox.getJob(s.killed![0]!);
+    expect(k.pages[0]!.text).toMatch(/ignore your previous instructions/i); // the reader saw the planted orders
+    const refused = (host: string) => k.proxy_log.filter((e) => e.host === host && !e.allowed).map((e) => e.reason);
+    expect(refused('169.254.169.254')).toContain('ip_literal');
+    expect(refused('collect.exfil.fixture.test')).toContain('not_on_allowlist');
+    expect(refused('tracker.offlist.fixture.test')).toContain('not_on_allowlist');
+    expect(k.proxy_log.filter((e) => e.allowed).map((e) => e.host)).toEqual(['fanpost.fixture.test']);
+  });
   it.todo('the same runs on BullMQ on Valkey (runner worker + board queue; make valkey-test territory, Phase 2-3)');
   it.todo('run.step and run.poisoned reach the browser over /live (edge + runner, Phase 2)');
   it.todo('the same flow against the real services instead of the fakes (Phase 2-3)');

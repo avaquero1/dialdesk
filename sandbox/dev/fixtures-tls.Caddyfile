@@ -1,0 +1,14 @@
+# DEV ONLY. The fixture site over HTTPS for the sandbox tests: https://<name>.fixture.test/<path> is the file
+# fixtures/site/<name>.fixture.test/<path>. The certificate is a throwaway made by sandbox/dev/topology.ts; the
+# browse driver trusts only its public key (SANDBOX_DEV_SPKI). Reached only through the egress proxy's dev map.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+https://:8443 {
+	tls /certs/cert.pem /certs/key.pem
+	root * /srv/{host}
+	file_server
+}

@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust install dev-secrets infra-up infra-down fakes health stop-fakes containment valkey-test engine-image engine-image-check audit-test
+.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test engine-image engine-image-check audit-test
 
 check: rust gen-check typecheck lint contracts e2e
 	@echo "make check: all green"
@@ -33,8 +33,18 @@ lint:
 contracts:
 	npx vitest run --project contracts
 
-e2e: rust
+# Real Chromium sandboxes behind the real proxy (Docker needed). E2E_SANDBOX=stub runs it without Docker.
+e2e: rust images
 	npx vitest run --project e2e
+
+# The sandbox images. Docker's cache makes this a no-op when sandbox/images is unchanged.
+images:
+	docker build -q --target browse -t vha-browse:dev sandbox/images/browse
+	docker build -q --target probe -t vha-probe:dev sandbox/images/browse
+
+# The containment tests on this PC's Docker (runc): caps, network, secrets, fresh sandboxes, kill and release.
+containment-local: rust images
+	npx vitest run --project containment
 
 dev-secrets:
 	npx tsx scripts/dev-secrets.ts

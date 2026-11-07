@@ -54,7 +54,11 @@ pub fn parse_callers(s: &str) -> Result<Vec<Caller>, String> {
 
 pub struct Config {
     pub callers: Vec<Caller>,
+    /// Live sandboxes at most (queued, running, held); past it POST /jobs answers busy.
     pub slots: usize,
+    /// Sandboxes starting at once at most (Chromium's cold start is the CPU peak); the
+    /// rest wait queued.
+    pub starting: usize,
     /// Allows http:// URLs.
     pub dev: bool,
 }
@@ -67,6 +71,7 @@ struct Job {
 }
 
 pub struct AppState {
+    starting: Arc<tokio::sync::Semaphore>,
     cfg: Config,
     backend: Arc<dyn Backend>,
     jobs: Mutex<HashMap<String, Job>>,
@@ -77,6 +82,7 @@ pub type Shared = Arc<AppState>;
 impl AppState {
     pub fn new(cfg: Config, backend: Arc<dyn Backend>) -> Shared {
         Arc::new(AppState {
+            starting: Arc::new(tokio::sync::Semaphore::new(cfg.starting.max(1))),
             cfg,
             backend,
             jobs: Mutex::new(HashMap::new()),
@@ -318,10 +324,29 @@ async fn create_job(State(st): State<Shared>, body: Bytes) -> ApiResult {
             tokio::spawn(run_job(st.clone(), req.job_id.clone()));
         } else {
             // Killed while the sandbox was being created.
-            let _ = st.backend.destroy(&h).await;
+            teardown(&st, &req.job_id, &h, false).await;
         }
     }
     Ok((StatusCode::ACCEPTED, Json(status)).into_response())
+}
+
+/// Destroys a job's sandbox (killing it first if asked) and adds the rest of its proxy
+/// log to the job. Returns the job as it stands after.
+async fn teardown(st: &Shared, id: &str, h: &SandboxHandle, kill: bool) -> Option<JobStatus> {
+    if kill {
+        let _ = st.backend.kill(h).await;
+    }
+    let log = match st.backend.destroy(h).await {
+        Ok(log) => log,
+        Err(e) => {
+            tracing::warn!(job_id = id, sandbox_id = %h.sandbox_id, error = %e, "destroy failed");
+            vec![]
+        }
+    };
+    let mut jobs = st.jobs();
+    let job = jobs.get_mut(id)?;
+    job.status.proxy_log.extend(log);
+    Some(job.status.clone())
 }
 
 enum Outcome {
@@ -331,6 +356,9 @@ enum Outcome {
 
 /// Runs a queued job to held / done / failed, unless it is killed meanwhile.
 async fn run_job(st: Shared, job_id: String) {
+    let Ok(_starting) = st.starting.clone().acquire_owned().await else {
+        return;
+    };
     let (req, handle) = {
         let mut jobs = st.jobs();
         let Some(job) = jobs.get_mut(&job_id) else {
@@ -368,7 +396,7 @@ async fn run_job(st: Shared, job_id: String) {
         match outcome {
             Ok(Ok(Outcome::Pages((pages, log)))) => {
                 s.pages = pages;
-                s.proxy_log = log;
+                s.proxy_log.extend(log);
                 if req.browse.as_ref().is_some_and(|b| b.hold) {
                     s.state = JobState::Held;
                     job.held_at = Some(Instant::now());
@@ -394,8 +422,7 @@ async fn run_job(st: Shared, job_id: String) {
         !s.state.active()
     };
     if terminal {
-        let _ = st.backend.kill(&handle).await;
-        let _ = st.backend.destroy(&handle).await;
+        teardown(&st, &job_id, &handle, true).await;
     }
 }
 
@@ -429,9 +456,10 @@ async fn release_job(State(st): State<Shared>, Path(id): Path<String>) -> ApiRes
         (job.status.clone(), job.handle.clone())
     };
     tracing::info!(job_id = %id, sandbox_id = %status.sandbox_id, "job released");
-    if let Some(h) = handle {
-        let _ = st.backend.destroy(&h).await;
-    }
+    let status = match handle {
+        Some(h) => teardown(&st, &id, &h, false).await.unwrap_or(status),
+        None => status,
+    };
     Ok(Json(status).into_response())
 }
 
@@ -476,11 +504,10 @@ pub async fn kill_job(
         (job.status.clone(), job.handle.clone())
     };
     tracing::warn!(job_id = id, sandbox_id = %status.sandbox_id, reason, audit_row_id, "job killed");
-    if let Some(h) = handle {
-        let _ = st.backend.kill(&h).await;
-        let _ = st.backend.destroy(&h).await;
+    match handle {
+        Some(h) => Ok(teardown(st, id, &h, true).await.unwrap_or(status)),
+        None => Ok(status),
     }
-    Ok(status)
 }
 
 /// Kills held sandboxes whose hold_s has passed. Run every second by `serve`.

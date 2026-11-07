@@ -15,5 +15,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["packages/*/src", "packages/*/scripts", "packages/*/test", "services/*/src", "services/*/test", "e2e", "tests", "scripts", "vitest.config.ts", "eslint.config.js"]
+  "include": ["packages/*/src", "packages/*/scripts", "packages/*/test", "services/*/src", "services/*/test", "e2e", "tests", "sandbox/dev", "sandbox/test", "scripts", "vitest.config.ts", "eslint.config.js"]
 }

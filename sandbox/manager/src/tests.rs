@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use tower::ServiceExt;
 
 use crate::app::{self, AppState, Config, Shared};
-use crate::backend::DockerBackend;
+use crate::backend::StubBackend;
 
 const TOKEN: &str = "test-token-runner";
 
@@ -20,9 +20,10 @@ fn state(slots: usize) -> Shared {
         Config {
             callers,
             slots,
+            starting: 2,
             dev: false,
         },
-        std::sync::Arc::new(DockerBackend),
+        std::sync::Arc::new(StubBackend),
     )
 }
 
@@ -91,7 +92,7 @@ async fn auth_is_required_except_health() {
     assert_eq!(s, StatusCode::OK);
     assert_eq!(
         v,
-        json!({"ok": true, "service": "sandbox-manager", "backend": "docker"})
+        json!({"ok": true, "service": "sandbox-manager", "backend": "stub"})
     );
 }
 
