@@ -7,20 +7,32 @@ import { createFakeAudit } from '../../audit/src/fake.ts';
 import { fake as board } from '../../board/src/fake.ts';
 import { fake as connections } from '../../connections/src/fake.ts';
 import { fake as models } from '../../models/src/fake.ts';
-import { createFakeEdge, inProcess } from '../src/fake.ts';
+import type { Hono } from 'hono';
+import { createFakeEdge, inProcess, type FakeDeps } from '../src/fake.ts';
 
 export const api = EDGE;
 let boardAsRunner: ReturnType<typeof createClient>;
 
 /** edge on top of the other fakes, in process. */
 export function makeApp() {
+  return wire((deps) => {
+    const e = createFakeEdge(deps);
+    return fakeApp('edge', EDGE, e.handlers, e.sessionCheck);
+  });
+}
+
+/**
+ * The upstream fakes, in process, with any accounts app and any edge on top: real.test.ts runs these same cases
+ * with the real accounts and the real edge.
+ */
+export function wire(makeEdge: (deps: FakeDeps) => Hono, accountsApp: Hono = fakeApp('accounts', ACCOUNTS, accounts())) {
   const t = TEST_TOKENS.edge;
   const boardApp = fakeApp('board', BOARD, board());
   boardAsRunner = createClient({ baseUrl: 'http://board.internal', token: TEST_TOKENS.runner, fetch: (r) => boardApp.fetch(r) });
   const agentApp = fakeApp('agent', AGENT, agent({ board: inProcess({ board: boardApp }, { board: TEST_TOKENS.agent }).board }));
   const deps = inProcess(
     {
-      accounts: fakeApp('accounts', ACCOUNTS, accounts()),
+      accounts: accountsApp,
       board: boardApp,
       agent: agentApp,
       connections: fakeApp('connections', CONNECTIONS, connections()),
@@ -29,8 +41,7 @@ export function makeApp() {
     },
     { accounts: t, board: t, agent: t, connections: t, audit: t, models: t },
   );
-  const e = createFakeEdge(deps);
-  return fakeApp('edge', EDGE, e.handlers, e.sessionCheck);
+  return makeEdge(deps);
 }
 
 export const cases: Case[] = [

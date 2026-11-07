@@ -5,7 +5,7 @@
 | `compose.dev.yml` | Dev infrastructure (Compose project `vha-dev`): Postgres 17, Valkey 8.1 and a Caddy server for `fixtures/site`. Ports bind to 127.0.0.1 only; images are pinned by tag and digest. The TypeScript services run natively with `tsx`, and sandbox-manager with `cargo`. |
 | `db-init.sql` | One login role (`svc_<name>`) and one schema per data-storing service: accounts, board, agent, runner, markets, connections, models, audit. Passwords come from `DB_PASSWORD_<NAME>` through psql's `\getenv`. Safe to run again (that also rotates passwords). Runs as the container's init script and on managed Postgres with `psql -v ON_ERROR_STOP=1 -f deploy/db-init.sql`. |
 | `fixtures.Caddyfile` | Static file server for `fixtures/site` (no directory listings). |
-| `Caddyfile` | Stub for the control VM: TLS, the web app, `/api/*` and `/live` to `edge:8080`, strict security headers. Phase 3 fills it in. |
+| `Caddyfile` | The control VM's only public listener: TCP 443 (no port 80, no HTTP/3, no admin API; the certificate comes over TLS-ALPN-01). Serves the web app from `/srv/web`, sends `/api/*` (bodies capped at 64 KB) and `/live` to `edge:8080`, and sets a CSP with no inline scripts. `caddy adapt --validate` passes; `services/edge/test/caddy.test.ts` guards its promises. |
 | `nftables/control.nft`, `nftables/sandbox.nft` | Stub firewall rules, **not applied**. Phase 3 tests and enables them. |
 | `compose.control.yml`, `compose.sandbox.yml` | Phase 3 stubs: which containers run on which VM. Only `config` is expected to pass. |
 

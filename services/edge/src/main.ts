@@ -1,15 +1,39 @@
+import { serve } from '@hono/node-server';
+import { z } from 'zod';
 import { EDGE } from '@app/contracts';
-import { runService } from '@app/service-kit';
-import { createFakeEdge, fakeDepsFromEnv } from './fake.ts';
-import { real } from './real.ts';
+import { createLogger, loadConfig, runService } from '@app/service-kit';
+import { createFakeEdge, depsFromEnv } from './fake.ts';
+import { createRealEdge } from './real.ts';
+import { sessionKeys } from './session.ts';
 
-// The fake's session check is the fake one; the real edge (Phase 1) brings its JWT check with its handlers.
-const fakeEdge = process.env.EDGE_FAKE === '1' ? createFakeEdge(await fakeDepsFromEnv()) : null;
-
-await runService({
-  service: 'edge',
-  api: EDGE,
-  fake: () => fakeEdge!.handlers,
-  real,
-  sessionCheck: fakeEdge?.sessionCheck,
-});
+if (process.env.EDGE_FAKE === '1') {
+  // The fake: the same routes with the fake session check, on the template.
+  const fakeEdge = createFakeEdge(await depsFromEnv());
+  await runService({ service: 'edge', api: EDGE, fake: () => fakeEdge.handlers, real: () => fakeEdge.handlers, sessionCheck: fakeEdge.sessionCheck });
+} else {
+  // The real edge builds its own server: it wraps the template in its middleware and serves /live on the same port.
+  const cfg = loadConfig('edge', {
+    SESSION_PUBLIC_KEYS: z.string({ error: 'set EDGE_SESSION_PUBLIC_KEYS (make dev-secrets writes it)' }).min(1),
+    ALLOWED_ORIGINS: z.string().default('https://vultrcontest.vaquerothe.dev'),
+    TRUST_PROXY: z.enum(['0', '1']).default('0'),
+    HOST: z.string().default('127.0.0.1'),
+  });
+  const log = createLogger('edge');
+  const edge = createRealEdge({
+    deps: await depsFromEnv(),
+    keys: sessionKeys(cfg.SESSION_PUBLIC_KEYS),
+    origins: cfg.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
+    trustProxy: cfg.TRUST_PROXY === '1',
+    log,
+  });
+  // Until service-kit's Valkey feed lands, /live hears only this process's events.
+  log.warn('live: in-process events only (the Valkey feed is not wired yet)');
+  const server = serve({ fetch: edge.app.fetch, port: cfg.PORT, hostname: cfg.HOST }, (info) => log.info({ port: info.port, mode: 'real' }, 'listening'));
+  const live = edge.attach(server as never);
+  const stop = () => {
+    live.close();
+    server.close(() => process.exit(0));
+  };
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
+}

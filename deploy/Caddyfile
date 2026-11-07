@@ -1,30 +1,64 @@
-# Caddyfile for the control VM. STUB: Phase 3 fills this in.
-# Serves the built web app from /srv/web and sends the API and the live socket to edge.
-# Every other service listens on the internal network only.
+# Caddyfile for the control VM: the only public listener. TCP 443, nothing else.
+#
+# - Port 443 only: no HTTP listener (no port 80, no redirect, no HTTP-01 challenge) and no HTTP/3 (no UDP).
+#   The certificate comes from Let's Encrypt over the TLS-ALPN-01 challenge, on 443 itself.
+# - Serves the built web app from /srv/web, and sends /api/* and the /live WebSocket to edge. Every other service
+#   listens on the internal network only; edge's own /health is not reachable from outside.
+# - A Content-Security-Policy with no inline scripts and no eval.
+# - Caddy replaces any X-Forwarded-For a client sends with the client's address, so edge (EDGE_TRUST_PROXY=1) can
+#   rate limit by it.
 
-vultrcontest.vaquerothe.dev {
-	# TLS is automatic (Let's Encrypt via the ACME HTTP and TLS-ALPN challenges).
+{
+	admin off
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://vultrcontest.vaquerothe.dev {
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
+
 	encode zstd gzip
 
 	header {
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' wss://vultrcontest.vaquerothe.dev; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		# No inline scripts, no eval, no plugins, no framing. img-src: add the screenshot bucket's host when it is known
+		# (Phase 3), or serve screenshots through edge.
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://vultrcontest.vaquerothe.dev; manifest-src 'self'; worker-src 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
 		-Server
 	}
 
 	handle /api/* {
+		request_body {
+			max_size 64KB
+		}
 		reverse_proxy edge:8080
 	}
 
+	# Exactly /live: the WebSocket. edge checks the Origin and the session cookie on the handshake.
 	handle /live {
 		reverse_proxy edge:8080
 	}
 
 	handle {
 		root * /srv/web
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
 		try_files {path} /index.html
-		file_server
+		file_server {
+			hide .*
+		}
 	}
 }
