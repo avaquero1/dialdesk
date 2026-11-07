@@ -1,0 +1,7 @@
+# The egress mode for control.nft: ENFORCED. A container's call to a host that isn't on its list is logged
+# ("vha-egress-drop", rate-limited) and dropped.
+# Switch at runtime: nft -f /etc/vha/nft/egress-enforce.nft   (or egress-log-only.nft)
+flush chain inet vha egress_final
+add rule inet vha egress_final counter name egress_logged
+add rule inet vha egress_final limit rate 20/second log prefix "vha-egress-drop " level info
+add rule inet vha egress_final drop

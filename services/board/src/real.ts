@@ -47,6 +47,7 @@ import {
   type DisplaySpec,
 } from './logic.ts';
 import { prescribedTiles } from './defaults.ts';
+import { s3ObjectStoreFromConfig } from './s3-store.ts';
 import { LocalDirObjectStore, isPng, type ObjectStore } from './storage.ts';
 
 type Sql = postgres.Sql;
@@ -63,7 +64,10 @@ export interface RealDeps {
   objects: ObjectStore;
 }
 
-/** From env: BOARD_DATABASE_URL, BOARD_VALKEY_URL, BOARD_TOKEN_MARKETS / BOARD_URL_MARKETS, BOARD_SCREENSHOT_DIR (dev). */
+/**
+ * From env: BOARD_DATABASE_URL, BOARD_VALKEY_URL, BOARD_TOKEN_MARKETS / BOARD_URL_MARKETS, and where screenshots go:
+ * BOARD_S3_BUCKET (+ _ENDPOINT, _REGION, _CREDENTIALS_FILE) for Object Storage, else BOARD_SCREENSHOT_DIR (dev, fallback).
+ */
 export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeof BOARD>> {
   const url = cfg.DATABASE_URL;
   if (typeof url !== 'string' || !url) throw new Error('board: BOARD_DATABASE_URL is required in real mode');
@@ -72,13 +76,15 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
   const runs = createQueue(QUEUES.widgetRuns, valkey!, 'board');
   const log = createLogger('board');
   const dir = typeof cfg.SCREENSHOT_DIR === 'string' && cfg.SCREENSHOT_DIR ? cfg.SCREENSHOT_DIR : resolve('.data/board/screenshots');
-  log.info({ objects: 'local' }, 'screenshots in a local folder until Object Storage exists');
+  const s3 = s3ObjectStoreFromConfig(cfg);
+  if (s3) log.info({ objects: 's3' }, 'screenshots in Object Storage');
+  else log.info({ objects: 'local' }, 'screenshots in a local folder (no BOARD_S3_BUCKET)');
   return createReal({
     sql: connect(url),
     bus,
     enqueue: async (_q, job) => void (await runs.enqueue(job)),
     markets: await clientFromEnv('board', 'markets'),
-    objects: new LocalDirObjectStore(dir),
+    objects: s3 ?? new LocalDirObjectStore(dir),
   });
 }
 

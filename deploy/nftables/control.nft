@@ -1,41 +1,139 @@
 #!/usr/sbin/nft -f
-# ======================================================================================
-# STUB, not applied: Phase 3 tests and enables.
-# ======================================================================================
-# Firewall for the control VM. The public interface takes HTTPS (and HTTP for ACME and the
-# redirect) and SSH from the admin address only. The VPC interface takes only replies to
-# connections that control started itself (to the sandbox manager on 8200).
+# The control VM's host firewall. Loaded by vha-nft.service (deploy.sh installs it):
+#   nft -I /etc/vha/nft -f /etc/vha/nft/control.nft
+# control-vars.nft (addresses) is written by deploy.sh from deploy.env; control-egress-mode.nft picks log-only or
+# enforce (deploy/nftables/egress-log-only.nft or egress-enforce.nft, copied under that name). The allow sets are
+# filled by egress-refresh.sh (a timer) from egress-hosts.ts.
+#
+# - Inbound: TCP 443 from anyone (Docker DNATs it to caddy, so it is matched in `forward`), SSH only from the admin
+#   address, DHCP, rate-limited ICMP. The VPC side takes only replies to connections control opened.
+# - Outbound per container: every container on the `egress` bridge has a fixed address; each one may reach only
+#   its own hosts on 443 (and Postgres, for the ones that store data). Everything else ends in egress_final:
+#   logged and let through while log-only, logged and dropped once enforced.
+# - Docker's own iptables rules stay as they are (this is a separate table; a packet must pass both). Docker's
+#   `apps` network is internal, so the services on it alone have no route out at all.
+# - Replaces itself in one transaction (the delete runs only together with the new table), so it is safe to reload.
 
-define PUBLIC_IF = "enp1s0"            # placeholder: public interface name
-define VPC_IF    = "enp8s0"            # placeholder: VPC interface name
-define ADMIN_IP  = 203.0.113.10        # placeholder (TEST-NET-3): the admin's address
+include "control-vars.nft"
 
-flush ruleset
+table inet vha
+delete table inet vha
+table inet vha {
+	counter input_drop {
+	}
+	counter forward_drop {
+	}
+	counter egress_logged {
+	}
 
-table inet control {
+	# Filled by egress-refresh.sh: the resolved addresses of each container's allowed hosts.
+	set allow_caddy {
+		type ipv4_addr
+	}
+	set allow_models {
+		type ipv4_addr
+	}
+	set allow_markets {
+		type ipv4_addr
+	}
+	set allow_connections {
+		type ipv4_addr
+	}
+	set allow_audit {
+		type ipv4_addr
+	}
+	set allow_board {
+		type ipv4_addr
+	}
+
 	chain input {
-		type filter hook input priority filter; policy drop;
+		type filter hook input priority filter - 10; policy drop;
+		iifname "lo" accept
 		ct state established,related accept
 		ct state invalid drop
-		iifname "lo" accept
-		# VPC: replies only (handled by the established,related rule above).
-		iifname $VPC_IF drop
-		# Public: web and SSH from the admin address.
-		iifname $PUBLIC_IF tcp dport 443 accept
-		iifname $PUBLIC_IF udp dport 443 accept   # HTTP/3
-		iifname $PUBLIC_IF tcp dport 80 accept    # ACME challenge and the HTTPS redirect
 		iifname $PUBLIC_IF ip saddr $ADMIN_IP tcp dport 22 accept
-		ip protocol icmp icmp type { echo-request, destination-unreachable, time-exceeded } limit rate 10/second accept
-		ip6 nexthdr icmpv6 accept
+		udp sport 67 udp dport 68 accept
+		icmp type { echo-request, destination-unreachable, time-exceeded } limit rate 10/second accept
+		icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+		counter name input_drop drop
 	}
 
 	chain forward {
-		type filter hook forward priority filter; policy drop;
-		# Docker inserts its own forward rules for the Compose network; Phase 3 checks how
-		# they interact with this table before it is enabled.
+		type filter hook forward priority filter - 10; policy drop;
+		ct state established,related accept
+		ct state invalid drop
+		# HTTPS in: Docker has already rewritten the address to caddy's.
+		oifname "vha-egress" ip daddr $CADDY_IP tcp dport 443 accept
+		# Image builds on this VM (BuildKit RUN steps use the default bridge). No service container joins docker0.
+		iifname "docker0" accept
+		iifname "vha-egress" ip saddr vmap {
+			$CADDY_IP : jump out_caddy,
+			$MODELS_IP : jump out_models,
+			$MARKETS_IP : jump out_markets,
+			$CONNECTIONS_IP : jump out_connections,
+			$RUNNER_IP : jump out_runner,
+			$AUDIT_IP : jump out_audit,
+			$BOARD_IP : jump out_board,
+			$ACCOUNTS_IP : jump out_db_only,
+			$AGENT_IP : jump out_db_only
+		}
+		counter name forward_drop drop
+	}
+
+	# Postgres (Managed, over the VPC): only the services that store data jump here.
+	chain to_db {
+		ip daddr $PG_IP tcp dport $PG_PORT accept
+	}
+
+	chain out_caddy {
+		# Let's Encrypt (ACME) only.
+		ip daddr @allow_caddy tcp dport 443 accept
+		jump egress_final
+	}
+	chain out_models {
+		ip daddr @allow_models tcp dport 443 accept
+		jump to_db
+		jump egress_final
+	}
+	chain out_markets {
+		ip daddr @allow_markets tcp dport 443 accept
+		jump to_db
+		jump egress_final
+	}
+	chain out_connections {
+		ip daddr @allow_connections tcp dport 443 accept
+		jump to_db
+		jump egress_final
+	}
+	chain out_runner {
+		# sandbox-manager over the VPC. Nothing on the internet.
+		ip daddr $SANDBOX_VPC_IP tcp dport 8200 accept
+		jump to_db
+		jump egress_final
+	}
+	chain out_audit {
+		ip daddr @allow_audit tcp dport 443 accept
+		jump to_db
+		jump egress_final
+	}
+	chain out_board {
+		ip daddr @allow_board tcp dport 443 accept
+		jump to_db
+		jump egress_final
+	}
+	chain out_db_only {
+		jump to_db
+		jump egress_final
+	}
+
+	# Filled by control-egress-mode.nft: log-only (accept) or enforce (drop).
+	chain egress_final {
 	}
 
 	chain output {
-		type filter hook output priority filter; policy accept;
+		# The host itself: image builds, Container Registry, NTP, OS updates, DNS for Docker's resolver.
+		type filter hook output priority filter - 10; policy accept;
 	}
 }
+
+include "control-egress-mode.nft"

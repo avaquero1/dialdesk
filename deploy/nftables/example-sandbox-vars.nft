@@ -1,0 +1,8 @@
+# Example only (documentation addresses, RFC 5737). deploy.sh writes the real /etc/vha/nft/sandbox-vars.nft.
+define PUBLIC_IF = "enp1s0"
+define VPC_IF = "enp8s0"
+define ADMIN_IP = 203.0.113.10
+define CONTROL_VPC_IP = 10.1.96.3
+define VPC_SUBNET = 10.1.96.0/20
+define SBX_GATEWAY = 172.30.78.1
+define PROXY_UID = 10002

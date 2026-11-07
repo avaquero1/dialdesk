@@ -1,0 +1,19 @@
+# Only what the services and the web bundle need. Never .env, deploy/.dev, keys, logs or build output.
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!packages/**
+!services/**
+!fixtures/**
+!web/**
+!deploy/Caddyfile
+!deploy/prod-secrets.ts
+!deploy/egress-hosts.ts
+!deploy/s3-bucket.ts
+**/node_modules
+**/.data
+**/dist
+**/*.log
+**/.env
+**/.env.*

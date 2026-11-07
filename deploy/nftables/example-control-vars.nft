@@ -1,0 +1,16 @@
+# Example only (documentation addresses, RFC 5737). deploy.sh writes the real /etc/vha/nft/control-vars.nft.
+define PUBLIC_IF = "enp1s0"
+define VPC_IF = "enp8s0"
+define ADMIN_IP = 203.0.113.10
+define SANDBOX_VPC_IP = 10.1.96.4
+define PG_IP = 10.1.96.5
+define PG_PORT = 16751
+define CADDY_IP = 172.31.250.10
+define MODELS_IP = 172.31.250.11
+define MARKETS_IP = 172.31.250.12
+define CONNECTIONS_IP = 172.31.250.13
+define RUNNER_IP = 172.31.250.14
+define AUDIT_IP = 172.31.250.15
+define BOARD_IP = 172.31.250.16
+define ACCOUNTS_IP = 172.31.250.17
+define AGENT_IP = 172.31.250.18

@@ -1,62 +1,88 @@
 #!/usr/sbin/nft -f
-# ======================================================================================
-# STUB, not applied: Phase 3 tests and enables.
-# ======================================================================================
-# Firewall for the sandbox VM. Throwaway sandboxes sit on the bridge SBX_BRIDGE and can reach
-# one thing: the egress proxy on the host (port 8201). Only the proxy's own user may reach the
-# internet, only on 443, and never a private, link-local (cloud metadata) or VPC address.
-# The manager API (8200) answers only the control VM over the VPC.
+# The sandbox VM's host firewall (the VX1). Loaded by vha-nft.service (deploy.sh installs it):
+#   nft -I /etc/vha/nft -f /etc/vha/nft/sandbox.nft
+# sandbox-vars.nft (addresses) is written by deploy.sh from deploy.env. It replaces the spike's `table inet spike`
+# (deploy.sh stops spike-nft.service first) and keeps the spike's tested rules, including the uid-10002 reply rule.
+#
+# - Inbound: the manager port (8200) only from control's VPC address; SSH from the admin address and from control.
+#   The sandboxes on vha-sbx reach the host only at the proxy (gateway:8201); their DNS and anything else is dropped.
+# - Forward: nothing leaves vha-sbx and nothing new enters it. A sandbox's only way out is the proxy.
+# - Output: the proxy's user (uid 10002, shared with the manager for the control socket) may answer the sandboxes and
+#   control, and may open only TCP 443 (and DNS) to public addresses: never private, link-local (169.254.169.254),
+#   carrier NAT, multicast or the VPC.
+# - Docker's own iptables rules stay as they are (this is a separate table; a packet must pass both).
 
-define CONTROL_VPC = 10.0.0.2          # placeholder: control VM's VPC address
-define VPC_IF      = "enp8s0"          # placeholder: VPC interface name
-define VPC_RANGE   = 10.0.0.0/24       # placeholder: the VPC subnet
-define SBX_BRIDGE  = "sbx0"
-define PROXY_UID   = 990               # placeholder: uid of the egress proxy's user
-define MANAGER_PORT = 8200
-define PROXY_PORT   = 8201
+include "sandbox-vars.nft"
 
-flush ruleset
-
-table inet sandbox {
-	set blocked_v4 {
-		type ipv4_addr; flags interval; auto-merge
-		elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10, 127.0.0.0/8, $VPC_RANGE }
+table inet vha_sandbox
+delete table inet vha_sandbox
+table inet vha_sandbox {
+	counter sbx_forward_drop {
 	}
-	set blocked_v6 {
-		type ipv6_addr; flags interval; auto-merge
-		elements = { ::1/128, fe80::/10, fc00::/7 }
+	counter sbx_dns_drop {
+	}
+	counter sbx_host_drop {
+	}
+	counter proxy_private_drop {
+	}
+	counter proxy_other_drop {
+	}
+	counter input_drop {
+	}
+
+	set blocked4 {
+		type ipv4_addr
+		flags interval
+		auto-merge
+		elements = { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24,
+			     192.168.0.0/16, 198.18.0.0/15, 224.0.0.0/4, 240.0.0.0/4, $VPC_SUBNET }
+	}
+	set blocked6 {
+		type ipv6_addr
+		flags interval
+		elements = { ::1/128, fc00::/7, fe80::/10, ff00::/8 }
 	}
 
 	chain input {
-		type filter hook input priority filter; policy drop;
+		type filter hook input priority filter - 10; policy drop;
+		iifname "lo" accept
 		ct state established,related accept
 		ct state invalid drop
-		iifname "lo" accept
-		# Manager API: only the control VM, only over the VPC.
-		iifname $VPC_IF ip saddr $CONTROL_VPC tcp dport $MANAGER_PORT accept
-		# Sandboxes: only the egress proxy on the host.
-		iifname $SBX_BRIDGE tcp dport $PROXY_PORT accept
-		iifname $SBX_BRIDGE drop
-		# SSH for admin is reached through the VPC from control only (Phase 3 decides).
+		# The manager API: control only, over the VPC.
+		iifname $VPC_IF ip saddr $CONTROL_VPC_IP tcp dport 8200 accept
+		# SSH: the admin address on the public side, and control over the VPC (architecture D4).
+		iifname $PUBLIC_IF ip saddr $ADMIN_IP tcp dport 22 accept
+		iifname $VPC_IF ip saddr $CONTROL_VPC_IP tcp dport 22 accept
+		udp sport 67 udp dport 68 accept
+		icmp type { echo-request, destination-unreachable, time-exceeded } limit rate 10/second accept
+		icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+		# The sandboxes: the proxy, and nothing else on the host.
+		iifname "vha-sbx" ip daddr $SBX_GATEWAY tcp dport 8201 accept
+		iifname "vha-sbx" meta l4proto { tcp, udp } th dport 53 counter name sbx_dns_drop drop
+		iifname "vha-sbx" counter name sbx_host_drop drop
+		counter name input_drop drop
 	}
 
 	chain forward {
-		type filter hook forward priority filter; policy drop;
-		# Sandboxes never route anywhere directly: no forward rules accept their traffic.
-		iifname $SBX_BRIDGE drop
-		oifname $SBX_BRIDGE drop
+		type filter hook forward priority filter - 10; policy drop;
+		iifname "vha-sbx" counter name sbx_forward_drop drop
+		oifname "vha-sbx" counter name sbx_forward_drop drop
+		ct state established,related accept
+		# Image builds on this VM (BuildKit RUN steps use the default bridge). No sandbox joins docker0.
+		iifname "docker0" accept
 	}
 
 	chain output {
-		type filter hook output priority filter; policy drop;
-		ct state established,related accept
-		oifname "lo" accept
-		# The proxy's user: internet on 443 only, never private, metadata or VPC addresses.
-		meta skuid $PROXY_UID ip daddr @blocked_v4 drop
-		meta skuid $PROXY_UID ip6 daddr @blocked_v6 drop
+		type filter hook output priority filter - 10; policy accept;
+		meta skuid $PROXY_UID oifname "lo" accept
+		# Replies: to the sandboxes (their subnet is inside 172.16/12) and the manager's to control. Without this the
+		# proxy's SYN-ACKs are dropped (found on the VX1 in the spike, step 2).
+		meta skuid $PROXY_UID ct direction reply accept
+		meta skuid $PROXY_UID ip daddr @blocked4 counter name proxy_private_drop drop
+		meta skuid $PROXY_UID ip6 daddr @blocked6 counter name proxy_private_drop drop
 		meta skuid $PROXY_UID tcp dport 443 accept
-		# DNS for the proxy goes to the VM's resolver (Phase 3: pin the resolver address).
-		meta skuid $PROXY_UID udp dport 53 accept
-		# Everything else the host starts outbound is dropped.
+		meta skuid $PROXY_UID meta l4proto { tcp, udp } th dport 53 accept
+		meta skuid $PROXY_UID counter name proxy_other_drop drop
+		# Everything else the host starts (apt, image pulls and builds) is allowed: the host holds no key.
 	}
 }

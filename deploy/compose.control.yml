@@ -1,47 +1,289 @@
-# Phase 3: the control VM. STUB, not runnable yet (the app images are not built).
-# Only `docker compose -f deploy/compose.control.yml config` is expected to pass.
+# The control VM (Cloud Compute vc2-4c-8gb): caddy, the 9 TypeScript services and Valkey.
+# Postgres is Vultr Managed PostgreSQL over the VPC; screenshots and audit heads go to Vultr Object Storage.
 #
-# Runs here: caddy (public 80/443), edge, accounts, board, agent, runner, markets, connections,
-# models, audit, valkey. Postgres is Vultr Managed Postgres, reached over the VPC.
-# Phase 3 adds env files, secrets, resource limits, read-only root file systems and digests.
+#   docker compose -f deploy/compose.control.yml --env-file /etc/vha/deploy.env up -d --wait
+#
+# deploy/scripts/deploy.sh builds the images on this VM, writes /etc/vha/deploy.env and the secret files, and runs it.
+#
+# Rules this file keeps:
+# - Every secret is a file under ${VHA_SECRETS}, mounted read-only into its one container at /run/secrets/<name>,
+#   owned by that container's own uid with mode 0400. No secret is in `environment:` (so not in `docker inspect`).
+#   A service's tokens, caller hashes, database and Valkey URLs are its own env file, /run/secrets/env, read by
+#   `node --env-file`.
+# - Networks: `apps` is internal (no route out). Only the containers that must reach something outside are also on
+#   `egress`, each at a fixed address, so the host firewall (deploy/nftables/control.nft) can allow per container.
+#   edge and valkey are on `apps` only.
+# - Every container: read-only root, all capabilities dropped, no-new-privileges, its own uid, memory and pid caps.
 name: vha-control
 
-x-service: &service
+x-app: &app
+  image: vha/app:${VHA_TAG:?set VHA_TAG (the git hash deploy.sh built)}
   restart: unless-stopped
+  init: true
   read_only: true
   security_opt: ["no-new-privileges:true"]
   cap_drop: ["ALL"]
-  networks: [internal]
+  # tsx keeps its compiled files in /tmp.
+  tmpfs: ["/tmp:size=64m,mode=1777,noexec,nosuid,nodev"]
+  pids_limit: 256
+  mem_limit: 384m
+  cpus: 1.0
+  stop_grace_period: 10s
+  logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+  depends_on:
+    valkey: { condition: service_healthy }
+
+x-health: &health
+  interval: 10s
+  timeout: 3s
+  retries: 6
+  start_period: 40s
 
 services:
   caddy:
-    image: caddy:2.10-alpine
+    image: vha/caddy:${VHA_TAG:?}
     restart: unless-stopped
-    # TCP 443 only: no port 80 and no HTTP/3 (the Caddyfile turns both off; the certificate comes over TLS-ALPN).
-    ports: ["443:443"]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    # TCP 443 only: no port 80 and no HTTP/3 (the Caddyfile turns both off; the certificate comes over TLS-ALPN-01).
+    ports: ["443:443/tcp"]
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../web/dist:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
-    networks: [internal]
-  edge:        { <<: *service, image: "vha/edge:phase3" }
-  accounts:    { <<: *service, image: "vha/accounts:phase3" }
-  board:       { <<: *service, image: "vha/board:phase3" }
-  agent:       { <<: *service, image: "vha/agent:phase3" }
-  runner:      { <<: *service, image: "vha/runner:phase3" }
-  markets:     { <<: *service, image: "vha/markets:phase3" }
-  connections: { <<: *service, image: "vha/connections:phase3" }
-  models:      { <<: *service, image: "vha/models:phase3" }
-  audit:       { <<: *service, image: "vha/audit:phase3" }
+    tmpfs: ["/tmp:size=16m"]
+    mem_limit: 256m
+    pids_limit: 128
+    networks:
+      apps: {}
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.10" }
+    depends_on:
+      edge: { condition: service_healthy }
+    healthcheck:
+      # The admin API is off; the check is "caddy runs and its config parses". deploy.sh checks https:// from outside.
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      <<: *health
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  edge:
+    <<: *app
+    user: "10101:10101"
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/edge/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      EDGE_HOST: 0.0.0.0
+      EDGE_TRUST_PROXY: "1"
+      EDGE_ALLOWED_ORIGINS: "https://${VHA_HOSTNAME:-vultrcontest.vaquerothe.dev}"
+    secrets: [{ source: edge-env, target: env }]
+    networks: [apps]
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"], <<: *health }
+
+  accounts:
+    <<: *app
+    user: "10102:10102"
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/accounts/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      ACCOUNTS_HOST: 0.0.0.0
+      ACCOUNTS_SESSION_KEY_FILE: /run/secrets/session-key
+    secrets: [{ source: accounts-env, target: env }, { source: session-key, target: session-key }]
+    networks:
+      apps: {}
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.17" }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8101/health"], <<: *health }
+
+  board:
+    <<: *app
+    user: "10103:10103"
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/board/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      BOARD_HOST: 0.0.0.0
+      # Object Storage when BOARD_S3_BUCKET is set (deploy.env); else the folder below (the fallback).
+      BOARD_S3_ENDPOINT: ${S3_ENDPOINT:-}
+      BOARD_S3_REGION: ${S3_REGION:-us-east-1}
+      BOARD_S3_BUCKET: ${S3_BUCKET_SCREENSHOTS:-}
+      BOARD_S3_CREDENTIALS_FILE: /run/secrets/s3
+      BOARD_SCREENSHOT_DIR: /var/lib/board/screenshots
+    secrets: [{ source: board-env, target: env }, { source: board-s3, target: s3 }]
+    volumes: ["board_screenshots:/var/lib/board/screenshots"]
+    networks:
+      apps: {}
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.16" }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8102/health"], <<: *health }
+
+  agent:
+    <<: *app
+    user: "10104:10104"
+    mem_limit: 512m
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/agent/src/main.ts"]
+    environment: { NODE_ENV: production, AGENT_HOST: 0.0.0.0 }
+    secrets: [{ source: agent-env, target: env }]
+    networks:
+      apps: {}
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.18" }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8103/health"], <<: *health }
+
+  runner:
+    <<: *app
+    user: "10105:10105"
+    mem_limit: 512m
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/runner/src/main.ts"]
+    environment: { NODE_ENV: production, RUNNER_HOST: 0.0.0.0 }
+    secrets: [{ source: runner-env, target: env }]
+    networks:
+      apps: {}
+      # Reaches sandbox-manager over the VPC (RUNNER_URL_SANDBOX_MANAGER in its env file).
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.14" }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8104/health"], <<: *health }
+
+  markets:
+    <<: *app
+    user: "10106:10106"
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/markets/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      MARKETS_HOST: 0.0.0.0
+      # An empty file = no Brave key: markets skips Brave with one log line.
+      MARKETS_BRAVE_KEY_FILE: /run/secrets/brave-search
+    secrets: [{ source: markets-env, target: env }, { source: brave-search, target: brave-search }]
+    networks:
+      apps: {}
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.12" }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8105/health"], <<: *health }
+
+  connections:
+    <<: *app
+    user: "10107:10107"
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/connections/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      CONNECTIONS_HOST: 0.0.0.0
+      CONNECTIONS_MASTER_KEY_FILE: /run/secrets/connections-master
+      # Demo exchange only on the public link (architecture, "Public demo").
+      CONNECTIONS_KALSHI_ENVS: ${CONNECTIONS_KALSHI_ENVS:-demo}
+    secrets: [{ source: connections-env, target: env }, { source: connections-master, target: connections-master }]
+    networks:
+      apps: {}
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.13" }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8106/health"], <<: *health }
+
+  models:
+    <<: *app
+    user: "10108:10108"
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/models/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      MODELS_HOST: 0.0.0.0
+      MODELS_VULTR_KEY_FILE: /run/secrets/vultr-inference
+    secrets: [{ source: models-env, target: env }, { source: vultr-inference, target: vultr-inference }]
+    networks:
+      apps: {}
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.11" }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8107/health"], <<: *health }
+
+  audit:
+    <<: *app
+    user: "10109:10109"
+    command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/audit/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      AUDIT_HOST: 0.0.0.0
+      AUDIT_SIGNING_KEY_FILE: /run/secrets/audit-signing-key
+      # Object Storage (write-once) when AUDIT_S3_BUCKET is set; else the write-once folder below (the fallback).
+      AUDIT_S3_ENDPOINT: ${S3_ENDPOINT:-}
+      AUDIT_S3_REGION: ${S3_REGION:-us-east-1}
+      AUDIT_S3_BUCKET: ${S3_BUCKET_HEADS:-}
+      AUDIT_S3_CREDENTIALS_FILE: /run/secrets/s3
+      AUDIT_S3_LOCK_DAYS: ${S3_HEADS_LOCK_DAYS:-0}
+      AUDIT_HEADS_DIR: /var/lib/audit/heads
+    secrets: [{ source: audit-env, target: env }, { source: audit-signing-key, target: audit-signing-key }, { source: audit-s3, target: s3 }]
+    volumes: ["audit_heads:/var/lib/audit/heads"]
+    networks:
+      apps: {}
+      egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.15" }
+    healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8108/health"], <<: *health }
+
   valkey:
-    <<: *service
-    image: valkey/valkey:8.1-alpine
-    command: ["valkey-server", "--aclfile", "/etc/valkey/users.acl"]
+    image: valkey/valkey:8.1-alpine@sha256:2602ace2be6569bc2bbb06f873776516ab9089821525be34f4305c67eb9db02a
+    restart: unless-stopped
+    user: "999:1000"
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    # No default user; one ACL user per service (valkeyAclRule). BullMQ needs noeviction. AOF keeps the queues across restarts.
+    command: ["valkey-server", "--aclfile", "/run/secrets/valkey-acl", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction",
+              "--appendonly", "yes", "--save", "", "--bind", "0.0.0.0"]
+    secrets: [{ source: valkey-acl, target: valkey-acl }, { source: valkey-health, target: valkey-health }]
+    volumes: ["valkey_data:/data"]
+    mem_limit: 320m
+    pids_limit: 64
+    networks: [apps]
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli --no-auth-warning --user health --pass \"$$(cat /run/secrets/valkey-health)\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  # The fallback database (architecture: if Managed Postgres isn't reachable by Saturday noon). Off unless
+  # `--profile local-db`; then prod-secrets.ts --local-db points every DATABASE_URL at postgres:5432.
+  postgres:
+    profiles: ["local-db"]
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    # The passwords come from a secret file, not from `environment:`; db-init.sql reads them with \getenv.
+    entrypoint: ["sh", "-c", "set -a; . /run/secrets/env; set +a; exec docker-entrypoint.sh postgres"]
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust"
+    secrets: [{ source: postgres-env, target: env }]
+    volumes:
+      - ./db-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    mem_limit: 768m
+    networks: [apps]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U postgres -d app"], interval: 3s, timeout: 3s, retries: 20 }
 
 networks:
-  internal: {}
+  apps:
+    internal: true
+  egress:
+    driver: bridge
+    driver_opts:
+      # A fixed bridge name, so nftables can match it; no container-to-container traffic on it.
+      com.docker.network.bridge.name: vha-egress
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      config: [{ subnet: "${EGRESS_PREFIX:-172.31.250}.0/24" }]
 
 volumes:
   caddy_data:
   caddy_config:
+  valkey_data:
+  board_screenshots:
+  audit_heads:
+  pgdata:
+
+secrets:
+  edge-env:            { file: "${VHA_SECRETS:-/etc/vha/secrets}/edge/env" }
+  accounts-env:        { file: "${VHA_SECRETS:-/etc/vha/secrets}/accounts/env" }
+  session-key:         { file: "${VHA_SECRETS:-/etc/vha/secrets}/accounts/session-key" }
+  board-env:           { file: "${VHA_SECRETS:-/etc/vha/secrets}/board/env" }
+  board-s3:            { file: "${VHA_SECRETS:-/etc/vha/secrets}/board/s3" }
+  agent-env:           { file: "${VHA_SECRETS:-/etc/vha/secrets}/agent/env" }
+  runner-env:          { file: "${VHA_SECRETS:-/etc/vha/secrets}/runner/env" }
+  markets-env:         { file: "${VHA_SECRETS:-/etc/vha/secrets}/markets/env" }
+  brave-search:        { file: "${VHA_SECRETS:-/etc/vha/secrets}/markets/brave-search" }
+  connections-env:     { file: "${VHA_SECRETS:-/etc/vha/secrets}/connections/env" }
+  connections-master:  { file: "${VHA_SECRETS:-/etc/vha/secrets}/connections/master" }
+  models-env:          { file: "${VHA_SECRETS:-/etc/vha/secrets}/models/env" }
+  vultr-inference:     { file: "${VHA_SECRETS:-/etc/vha/secrets}/models/vultr-inference" }
+  audit-env:           { file: "${VHA_SECRETS:-/etc/vha/secrets}/audit/env" }
+  audit-signing-key:   { file: "${VHA_SECRETS:-/etc/vha/secrets}/audit/signing-key" }
+  audit-s3:            { file: "${VHA_SECRETS:-/etc/vha/secrets}/audit/s3" }
+  valkey-acl:          { file: "${VHA_SECRETS:-/etc/vha/secrets}/valkey/users.acl" }
+  valkey-health:       { file: "${VHA_SECRETS:-/etc/vha/secrets}/valkey/health" }
+  postgres-env:        { file: "${VHA_SECRETS:-/etc/vha/secrets}/postgres/env" }

@@ -3,6 +3,7 @@ import { HttpError, LogStreamReader, createLogger, now, type Handlers } from '@a
 import { z } from 'zod';
 import { Consumer, DEFAULTS, type ConsumerOptions } from './consumer.ts';
 import { DirHeadStore, type HeadStore } from './heads.ts';
+import { s3HeadStoreFromConfig } from './s3-heads.ts';
 import { Signer } from './signer.ts';
 import { PgAuditStore } from './store.ts';
 import { verifyChain } from './verify.ts';
@@ -16,6 +17,13 @@ export const AuditConfig = z.object({
   SIGNING_KEY_FILE: z.string().min(1).default('/run/secrets/audit-signing-key'),
   /** Write-once storage for the signed heads: a folder (dev, and the fallback if the bucket isn't up). */
   HEADS_DIR: z.string().min(1).default('/var/lib/audit/heads'),
+  /** Object Storage for the heads (write-once). Set S3_BUCKET to use it instead of HEADS_DIR. */
+  S3_BUCKET: z.string().optional(),
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_CREDENTIALS_FILE: z.string().optional(),
+  /** > 0: lock each head in COMPLIANCE mode for this many days (the bucket must have object lock). */
+  S3_LOCK_DAYS: z.coerce.number().int().min(0).max(3650).optional(),
   /** This process's consumer name in the group `audit`. Keep it stable across restarts. */
   CONSUMER: z.string().regex(/^[a-z0-9-]{1,40}$/).default('audit-1'),
   CLAIM_IDLE_MS: ms(DEFAULTS.claimIdleMs),
@@ -32,7 +40,8 @@ export async function openAudit(cfg: AuditConfig): Promise<AuditDeps> {
   const log = createLogger('audit');
   const store = new PgAuditStore(cfg.DATABASE_URL);
   const signer = Signer.fromFile(cfg.SIGNING_KEY_FILE);
-  const heads = new DirHeadStore(cfg.HEADS_DIR);
+  const heads: HeadStore = s3HeadStoreFromConfig(cfg) ?? new DirHeadStore(cfg.HEADS_DIR);
+  log.info({ heads: heads.kind }, 'signed heads store');
   const opts: ConsumerOptions = {
     ...DEFAULTS,
     claimIdleMs: cfg.CLAIM_IDLE_MS,

@@ -1,10 +1,86 @@
-# Phase 3: the sandbox VM. STUB.
+# The sandbox VM (the VX1, 2 dedicated vCPU, 8 GB): sandbox-manager and its egress proxy. Nothing else runs here,
+# and it holds no keys and no database.
 #
-# Nothing on this VM runs in Compose. sandbox-manager runs as a systemd service together with
-# its egress proxy (manager API on 8200, VPC only; proxy on 8201, sandbox bridge only). It starts
-# a fresh, throwaway sandbox per task and kills it when the task ends or a page misbehaves.
-# The firewall is deploy/nftables/sandbox.nft. This file exists so that every VM has a
-# compose file to look at, and so `docker compose -f deploy/compose.sandbox.yml config` passes.
+#   docker compose -f deploy/compose.sandbox.yml --env-file /etc/vha/deploy.env up -d --wait
+#
+# - Every sandbox runs on gVisor: SANDBOX_BACKEND=gvisor starts each one with `--runtime runsc` (systrap), the backend
+#   the VX1 spike passed 16/16 with (planning/spike/RESULTS.md). The manager and the proxy themselves are host
+#   processes in containers on runc: the manager drives Docker through its socket (which a gVisor container can't
+#   reach), and the proxy must keep the host uid 10002 so the host firewall (deploy/nftables/sandbox.nft, `meta skuid`)
+#   can stop it reaching private, metadata and VPC addresses. Both share uid 10002: the proxy's control socket is
+#   mode 0600, so the manager needs the same uid to use it.
+# - Slots from the spike: at most 2 starting at once (one per vCPU), at most 12 live (about 308 MB each).
+# - The manager listens only on the VPC address (SANDBOX_VPC_IP). The proxy listens only on the sandbox bridge's
+#   gateway; only sandboxes can reach it. Both use the host network for that reason.
+# - The sandbox network `vha-sbx` (bridge vha-sbx, no container-to-container traffic) is made by deploy.sh with
+#   `docker network create`, because Compose creates only the networks its own services join.
+# - The state folder and the proxy's control socket are bind mounts at the SAME path on the host, because the
+#   manager passes host paths (the empty resolv.conf) to `docker run`.
 name: vha-sandbox
 
-services: {}
+x-host: &host
+  image: vha/sandbox-host:${VHA_TAG:?set VHA_TAG (the git hash deploy.sh built)}
+  restart: unless-stopped
+  init: true
+  read_only: true
+  network_mode: host
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  user: "10002:10002"
+  logging: { driver: json-file, options: { max-size: "20m", max-file: "3" } }
+
+services:
+  egress-proxy:
+    <<: *host
+    entrypoint: ["/usr/local/bin/egress-proxy"]
+    command: ["serve", "--listen", "${SBX_GATEWAY:-172.30.78.1}:8201", "--control", "/run/vha-egress/control.sock"]
+    volumes: ["/run/vha-egress:/run/vha-egress"]
+    mem_limit: 256m
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/vha-egress/control.sock"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  sandbox-manager:
+    <<: *host
+    # The docker group, for the socket. Whoever holds the socket is root on this VM: that is why nothing else runs
+    # here, the manager answers only control's VPC address and holds no key.
+    group_add: ["${DOCKER_GID:-988}"]
+    command: ["serve"]
+    environment:
+      SANDBOX_MANAGER_ADDR: "${SANDBOX_VPC_IP:?set SANDBOX_VPC_IP}:8200"
+      SANDBOX_BACKEND: gvisor
+      SANDBOX_RUNTIME: runsc
+      SANDBOX_SLOTS: "${SANDBOX_SLOTS:-12}"
+      SANDBOX_STARTING: "${SANDBOX_STARTING:-2}"
+      SANDBOX_NETWORK: vha-sbx
+      SANDBOX_PROXY_URL: "http://${SBX_GATEWAY:-172.30.78.1}:8201"
+      SANDBOX_PROXY_CONTROL: /run/vha-egress/control.sock
+      SANDBOX_BROWSE_IMAGE: "${SANDBOX_BROWSE_IMAGE:-vha-browse:${VHA_TAG}}"
+      SANDBOX_COMPUTE_IMAGE: "${SANDBOX_COMPUTE_IMAGE:-vha-engine-compute:${VHA_TAG}}"
+      SANDBOX_CHROMIUM_SANDBOX: "on"
+      SANDBOX_INSTANCE: vha
+      SANDBOX_STATE_DIR: /var/lib/vha-sandbox
+      DOCKER_HOST: unix:///var/run/docker.sock
+    # The caller list (runner:<sha256 of runner's token>) is not a secret but comes from control's secrets run;
+    # it is a file so a rotation needs no Compose edit.
+    env_file:
+      - path: "${VHA_SECRETS:-/etc/vha/secrets}/sandbox-manager/env"
+        required: false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /run/vha-egress:/run/vha-egress
+      - /var/lib/vha-sandbox:/var/lib/vha-sandbox
+    tmpfs: ["/tmp:size=16m"]
+    mem_limit: 256m
+    pids_limit: 256
+    depends_on:
+      egress-proxy: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://${SANDBOX_VPC_IP}:8200/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s

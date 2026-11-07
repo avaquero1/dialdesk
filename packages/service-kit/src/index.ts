@@ -12,3 +12,4 @@ export * from './valkey.ts';
 /** ISO time now, the format every Timestamp in the contracts uses. */
 export const now = () => new Date().toISOString();
 export * from './sandbox.ts';
+export * from './s3.ts';
