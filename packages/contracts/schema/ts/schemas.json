@@ -1726,6 +1726,34 @@
             "plan_hash": {
               "type": "string"
             },
+            "provenance": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "as_of": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "description": "When the source quoted it (ISO 8601)."
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "What it was read from, e.g. a market id (\"kalshi:KXNFLGAME-26NOV08CINATL-CIN\")."
+                  }
+                },
+                "required": [
+                  "as_of",
+                  "source"
+                ],
+                "additionalProperties": false,
+                "description": "Where and when one named input was read."
+              },
+              "description": "Where and when each arg read straight from `numbers` was read, by arg name\n(from the input's `provenance`). Empty when the input had none."
+            },
             "refs": {
               "type": "object",
               "properties": {},

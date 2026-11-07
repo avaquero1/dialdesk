@@ -192,6 +192,13 @@
             },
             "plan": {
               "$ref": "#/$defs/Plan"
+            },
+            "provenance": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Provenance"
+              },
+              "description": "Where and when each named input was read, by key in `numbers` (e.g. a price's\nmarket and quote time). Copied onto the receipts of the ops that read it.",
+              "type": "object"
             }
           },
           "required": [
@@ -367,6 +374,29 @@
           "required": [
             "t",
             "v"
+          ],
+          "type": "object"
+        },
+        "Provenance": {
+          "additionalProperties": false,
+          "description": "Where and when one named input was read.",
+          "properties": {
+            "as_of": {
+              "description": "When the source quoted it (ISO 8601).",
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "source": {
+              "description": "What it was read from, e.g. a market id (\"kalshi:KXNFLGAME-26NOV08CINATL-CIN\").",
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "as_of"
           ],
           "type": "object"
         },
@@ -814,6 +844,29 @@
           ],
           "type": "object"
         },
+        "Provenance": {
+          "additionalProperties": false,
+          "description": "Where and when one named input was read.",
+          "properties": {
+            "as_of": {
+              "description": "When the source quoted it (ISO 8601).",
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "source": {
+              "description": "What it was read from, e.g. a market id (\"kalshi:KXNFLGAME-26NOV08CINATL-CIN\").",
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "as_of"
+          ],
+          "type": "object"
+        },
         "ProxyLogEntry": {
           "description": "One connection the sandbox asked the egress proxy for.",
           "properties": {
@@ -904,6 +957,13 @@
             },
             "plan_hash": {
               "type": "string"
+            },
+            "provenance": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Provenance"
+              },
+              "description": "Where and when each arg read straight from `numbers` was read, by arg name\n(from the input's `provenance`). Empty when the input had none.",
+              "type": "object"
             },
             "refs": {
               "additionalProperties": {

@@ -34,6 +34,23 @@ export const SearchReceipt = z
   })
   .strict();
 
+/**
+ * Whether an event's Kalshi and Polymarket markets are the same game with the same YES, so their prices compare.
+ * markets decides it by code from both exchanges' own names for the game; when it can't be sure, it says why.
+ */
+export const GamePairing = z.discriminatedUnion('paired', [
+  z
+    .object({
+      paired: z.literal(true),
+      kalshi: MarketId,
+      polymarket: MarketId,
+      yes_means: z.string().max(80).describe('what YES means on both, e.g. "Bengals win" (the away team)'),
+    })
+    .strict(),
+  z.object({ paired: z.literal(false), reason: z.string().max(200).describe('plain words, fit to show the user') }).strict(),
+]);
+export type GamePairing = z.infer<typeof GamePairing>;
+
 const mid = z.object({ market_id: MarketId });
 // 503: the exchange (or every source) is down and markets has nothing cached for it yet. With a cached copy it answers
 // 200 with `stale: true` instead.
@@ -72,7 +89,15 @@ export const MARKETS = api('markets', {
     path: '/events/:event_key',
     callers: ['agent', 'runner'],
     params: z.object({ event_key: EventKey }),
-    response: z.object({ event_key: EventKey, title: z.string(), starts_at: Timestamp.nullable(), markets: z.array(Market) }).strict(),
+    response: z
+      .object({
+        event_key: EventKey,
+        title: z.string(),
+        starts_at: Timestamp.nullable(),
+        markets: z.array(Market),
+        pairing: GamePairing.optional().describe("the two markets a gap compares, or why there's none"),
+      })
+      .strict(),
     errors: [404, 503],
     summary: "One event's markets on both exchanges (for gap).",
   },

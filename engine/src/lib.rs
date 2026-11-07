@@ -32,6 +32,22 @@ pub struct EngineInput {
     /// usable by every op except as `expected_value`'s probability.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub origins: BTreeMap<String, Origin>,
+    /// Where and when each named input was read, by key in `numbers` (e.g. a price's
+    /// market and quote time). Copied onto the receipts of the ops that read it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub provenance: BTreeMap<String, Provenance>,
+}
+
+/// Where and when one named input was read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Provenance {
+    /// What it was read from, e.g. a market id ("kalshi:KXNFLGAME-26NOV08CINATL-CIN").
+    #[schemars(length(min = 1, max = 200))]
+    pub source: String,
+    /// When the source quoted it (ISO 8601).
+    #[schemars(length(min = 1, max = 40))]
+    pub as_of: String,
 }
 
 /// Where a named input came from. There is no "model" origin: a model's number can
@@ -184,6 +200,10 @@ pub struct Receipt {
     /// when no input was tagged.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub origins: Vec<Origin>,
+    /// Where and when each arg read straight from `numbers` was read, by arg name
+    /// (from the input's `provenance`). Empty when the input had none.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub provenance: BTreeMap<String, Provenance>,
     /// How many records the number rests on (base_rate_history).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sample_size: Option<u32>,
@@ -291,6 +311,22 @@ fn check_plan(input: &EngineInput) -> Vec<OpError> {
             ));
         }
     }
+    for (key, p) in &input.provenance {
+        if !input.numbers.contains_key(key) {
+            errs.push(OpError::new(
+                "plan",
+                "bad_plan",
+                format!("provenance names {key:?}, which is not in numbers"),
+            ));
+        }
+        if p.source.is_empty() || p.source.len() > 200 || p.as_of.is_empty() || p.as_of.len() > 40 {
+            errs.push(OpError::new(
+                "plan",
+                "bad_plan",
+                format!("provenance of {key:?}: source 1-200 chars, as_of 1-40"),
+            ));
+        }
+    }
     let mut seen = BTreeSet::new();
     for call in &plan.ops {
         if !valid_id(&call.id) {
@@ -312,9 +348,17 @@ fn check_plan(input: &EngineInput) -> Vec<OpError> {
     errs
 }
 
-/// The input hash covers the numbers and their origins.
+/// The input hash covers the numbers and their origins, and their provenance when
+/// there is any (so an input without provenance hashes as it always has).
 pub fn input_hash(input: &EngineInput) -> String {
-    hash_json(&serde_json::json!({"numbers": &input.numbers, "origins": &input.origins}))
+    if input.provenance.is_empty() {
+        return hash_json(
+            &serde_json::json!({"numbers": &input.numbers, "origins": &input.origins}),
+        );
+    }
+    hash_json(
+        &serde_json::json!({"numbers": &input.numbers, "origins": &input.origins, "provenance": &input.provenance}),
+    )
 }
 
 /// Runs a plan. Never panics on bad input: problems become `errors`.
@@ -358,6 +402,13 @@ pub fn run(input: &EngineInput) -> EngineResult {
                     args: out.receipt_args,
                     refs: call.args.clone(),
                     origins: out.trace.origins.iter().copied().collect(),
+                    provenance: call
+                        .args
+                        .iter()
+                        .filter_map(|(arg, key)| {
+                            input.provenance.get(key).map(|p| (arg.clone(), p.clone()))
+                        })
+                        .collect(),
                     sample_size: out.sample_size,
                     formula: call.op.formula().into(),
                     value,

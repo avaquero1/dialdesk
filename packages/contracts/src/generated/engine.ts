@@ -96,6 +96,22 @@ export interface Point {
   v: number;
 }
 /**
+ * Where and when one named input was read.
+ *
+ * This interface was referenced by `__Root`'s JSON-Schema
+ * via the `definition` "Provenance".
+ */
+export interface Provenance {
+  /**
+   * When the source quoted it (ISO 8601).
+   */
+  as_of: string;
+  /**
+   * What it was read from, e.g. a market id ("kalshi:KXNFLGAME-26NOV08CINATL-CIN").
+   */
+  source: string;
+}
+/**
  * One resolved market: its price before it resolved, and how it resolved.
  *
  * This interface was referenced by `__Root`'s JSON-Schema
@@ -136,6 +152,13 @@ export interface EngineInput {
     [k: string]: Origin;
   };
   plan: Plan;
+  /**
+   * Where and when each named input was read, by key in `numbers` (e.g. a price's
+   * market and quote time). Copied onto the receipts of the ops that read it.
+   */
+  provenance?: {
+    [k: string]: Provenance;
+  };
 }
 /**
  * One computed number. Values are rounded to 9 decimal places.
@@ -199,6 +222,13 @@ export interface Receipt {
    */
   origins?: Origin[];
   plan_hash: string;
+  /**
+   * Where and when each arg read straight from `numbers` was read, by arg name
+   * (from the input's `provenance`). Empty when the input had none.
+   */
+  provenance?: {
+    [k: string]: Provenance;
+  };
   /**
    * The plan's refs, by arg name: a key in `numbers` or an earlier op's id.
    */
