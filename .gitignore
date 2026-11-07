@@ -10,3 +10,4 @@ deploy/.dev/
 coverage/
 .logs/
 .data/
+containment-out/

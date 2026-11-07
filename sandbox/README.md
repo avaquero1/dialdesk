@@ -97,5 +97,8 @@ once per row, keeping a count per job in its run state, and writes no sandbox ro
 - `make containment-local` (Docker, `make images`): not root, no secret inside, the process, memory and time caps, no
   route out but the proxy and no DNS, a fresh sandbox per job, an off-list host and the metadata address refused and
   logged, held until release or kill, busy past the slot cap, compute with no network.
+- `make containment` (the sandbox machine, as root, `SANDBOX_BACKEND=gvisor`): the same checks on gVisor behind the host proxy
+  and nftables, plus the poisoned page's callouts and destroy time, and the scoreboard. Set-up and how to run it:
+  `deploy/sandbox-host/README.md`.
 - `make e2e`: the research run reads the fixture pages in real sandboxes; the poisoned page's callouts are refused and
   logged, and its sandbox is killed.

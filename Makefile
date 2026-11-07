@@ -132,8 +132,17 @@ health:
 stop-fakes:
 	@for f in .logs/*.pid; do kill $$(cat $$f) 2>/dev/null || true; rm -f $$f; done
 
+# The containment tests on the sandbox machine (as root, after deploy/sandbox-host/setup.sh): the same checks as
+# containment-local on gVisor, behind the host proxy and nftables. SANDBOX_BACKEND=gvisor must be set explicitly.
+# The full output and the scoreboard go to CONTAINMENT_OUT.
+CONTAINMENT_OUT ?= containment-out
 containment:
-	@echo "make containment runs on the real sandbox machine (Phase 3). Not built yet." && exit 1
+	@test "$$SANDBOX_BACKEND" = gvisor || { echo "make containment: set SANDBOX_BACKEND=gvisor explicitly"; exit 2; }
+	@mkdir -p $(CONTAINMENT_OUT)
+	SANDBOX_TOPOLOGY=host CONTAINMENT_SCORE=$(CONTAINMENT_OUT)/score.json npx vitest run --project containment \
+	  --reporter=default --reporter=json --outputFile.json=$(CONTAINMENT_OUT)/vitest.json; s=$$?; \
+	  npx tsx sandbox/test/scoreboard.ts $(CONTAINMENT_OUT)/vitest.json $(CONTAINMENT_OUT)/score.json > $(CONTAINMENT_OUT)/scoreboard.md; b=$$?; \
+	  cat $(CONTAINMENT_OUT)/scoreboard.md; [ $$s -eq 0 ] && [ $$b -eq 0 ]
 
 # The compute sandbox image (engine/Dockerfile): the static engine binary alone, run with --network none.
 ENGINE_IMAGE := vha-engine-compute

@@ -2,10 +2,12 @@
  * The local containment tests: real sandboxes on Docker (runc by default; SANDBOX_BACKEND=gvisor for runsc), the real
  * egress proxy, the real manager. Every attack probe runs in a fresh sandbox made with exactly a browse job's flags
  * (`sandbox-manager probe`); the browse checks go through the manager's HTTP API with real Chromium.
- * `make containment-local` runs this file. On the sandbox machine, `make containment` runs the same checks.
+ * `make containment-local` runs this file. On the sandbox machine, `make containment` runs the same checks on gVisor
+ * (SANDBOX_TOPOLOGY=host: the host proxy and nftables of deploy/sandbox-host) and writes the scoreboard's numbers to
+ * $CONTAINMENT_SCORE (sandbox/test/scoreboard.ts turns them into the table for the slides).
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -23,6 +25,11 @@ const hasComputeImage = (() => {
     return false;
   }
 })();
+
+// The numbers for the scoreboard, measured by the checks below.
+const score: Record<string, number | string | boolean> = {};
+const MANIFEST = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'fixtures', 'site', 'MANIFEST.json'), 'utf8')) as
+  { url: string; poisoned: boolean; callouts: string[] }[];
 
 let t: Topology;
 let m: Manager;
@@ -54,6 +61,8 @@ async function browse(urls: string[], allowlist: string[], hold = true): Promise
   expect(r.status, JSON.stringify(r.json)).toBe(202);
   return settle(job_id);
 }
+
+type TrustRow = { action: string; at: string; subject_id: string; ids?: Record<string, unknown>; sizes?: Record<string, number> };
 
 async function settle(job_id: string): Promise<Job> {
   for (let i = 0; i < 300; i++) {
@@ -89,9 +98,10 @@ beforeAll(async () => {
 afterAll(() => {
   m?.stop();
   t?.down();
+  if (process.env.CONTAINMENT_SCORE) writeFileSync(process.env.CONTAINMENT_SCORE, `${JSON.stringify({ backend: t?.env.SANDBOX_BACKEND, ...score }, null, 2)}\n`);
 });
 
-describe('containment on the local docker backend', () => {
+describe(`containment on the ${process.env.SANDBOX_BACKEND ?? 'docker'} backend`, () => {
   it('not root: uid 10001, no capabilities, no-new-privileges, no Docker socket, no host folders, read-only root', async () => {
     const r = await probe(t, ['whoami']);
     const w = r.lines.at(-1)!;
@@ -115,6 +125,7 @@ describe('containment on the local docker backend', () => {
     expect(f.peakProcesses).toBeLessThanOrEqual(256);
     expect(f.refused).toBeGreaterThan(0);
     expect(r.gone_after).toBe(true);
+    Object.assign(score, { forkbomb_peak: f.peakProcesses, forkbomb_cap: 256 });
   });
 
   it('the memory cap kills a memory hog', async () => {
@@ -124,6 +135,7 @@ describe('containment on the local docker backend', () => {
     expect(mb).toBeGreaterThan(256);
     expect(mb).toBeLessThanOrEqual(1024);
     expect(r.gone_after).toBe(true);
+    Object.assign(score, { memhog_mb: mb, memhog_cap_mb: 1024, memhog_oom_killed: r.oom_killed, memhog_exit: r.exit_code ?? -1 });
   });
 
   it('the time cap ends an infinite loop', async () => {
@@ -131,6 +143,7 @@ describe('containment on the local docker backend', () => {
     expect(r.timed_out).toBe(true);
     expect(r.ms).toBeLessThan(4000 + 3000);
     expect(r.gone_after).toBe(true);
+    Object.assign(score, { loop_kill_ms: r.ms, loop_cap_ms: 4000 });
   });
 
   it('no route out but the proxy port, and no DNS', async () => {
@@ -141,6 +154,7 @@ describe('containment on the local docker backend', () => {
     expect(x.resolver).not.toMatch(/^resolved/);
     expect(x.resolvConf).toBe('');
     expect(Object.values(x.udp53).every((v) => v !== 'answered')).toBe(true);
+    score.routes_blocked = ['public_ip', 'public_dns_tcp', 'metadata', 'private_10', 'private_192', 'proxy_other_port'].length;
   });
 
   it('a fresh sandbox per job: the next one finds nothing the last one wrote', async () => {
@@ -184,7 +198,44 @@ describe('containment on the local docker backend', () => {
     expect((await api('POST', `/jobs/${a.job_id}/release`)).json.state).toBe('released');
     expect((await api('POST', `/jobs/${b.job_id}/kill`, { reason: 'test', audit_row_id: null })).json.state).toBe('killed');
     expect(liveSandboxes(t)).toEqual([]);
-    expect((await api('GET', '/sandboxes')).json).toMatchObject({ backend: 'docker', slots_total: 2, slots_used: 0 });
+    expect((await api('GET', '/sandboxes')).json).toMatchObject({ backend: t.env.SANDBOX_BACKEND, slots_total: 2, slots_used: 0 });
+  });
+
+  it("the poisoned page: every callout refused, the sandbox held, killed and destroyed, the trust log ending with sandbox.destroyed", async () => {
+    const page = MANIFEST.find((p) => p.poisoned)!;
+    const host = new URL(page.url).hostname;
+    const t0 = Date.now();
+    const p = await browse([page.url], [host]);
+    score.create_to_read_ms = Date.now() - t0;
+    score.chromium_sandbox = t.env.SANDBOX_CHROMIUM_SANDBOX ?? 'default';
+    expect(p.state).toBe('held');
+    expect(p.pages[0]).toMatchObject({ status: 200 });
+    expect(liveSandboxes(t)).toHaveLength(1);
+    // The metadata address as an IP literal; every name off the allowlist (the DNS name that carries data too) is
+    // refused before any lookup.
+    for (const c of page.callouts) {
+      const reasons = refused(p, c).map((e) => e.reason);
+      expect(reasons, `${c} in ${p.proxy_log.map((e) => `${e.host}:${e.reason}`).join(' ')}`).toContain(/^\d+(\.\d+){3}$/.test(c) ? 'ip_literal' : 'not_on_allowlist');
+    }
+    const k0 = Date.now();
+    const k = await api('POST', `/jobs/${p.job_id}/kill`, { reason: 'poison', audit_row_id: null });
+    expect(k.json.state).toBe('killed');
+    score.kill_answer_ms = Date.now() - k0;
+    let rows: TrustRow[] = [];
+    for (let i = 0; i < 200; i++) {
+      rows = ((await api('GET', `/jobs/${p.job_id}`)).json as { trust_log?: TrustRow[] }).trust_log ?? [];
+      if (rows.at(-1)?.action === 'sandbox.destroyed') break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    score.kill_to_destroyed_row_ms = Date.now() - k0;
+    expect(rows.map((r) => r.action)).toEqual(['sandbox.created', 'sandbox.killed', 'proxy.refused', 'sandbox.destroyed']);
+    expect(liveSandboxes(t)).toEqual([]);
+    const refusedRow = rows.find((r) => r.action === 'proxy.refused')!;
+    Object.assign(score, {
+      poisoned_callouts: page.callouts.length,
+      poisoned_callouts_refused: page.callouts.filter((c) => refused(p, c).length > 0).length,
+      poisoned_requests_refused: refusedRow.sizes?.requests ?? 0,
+    });
   });
 
   it('compute runs the engine image with no network', async () => {
