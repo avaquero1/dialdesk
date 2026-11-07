@@ -1352,7 +1352,8 @@
                 "missing_receipt",
                 "bare_digit",
                 "secret",
-                "bad_link"
+                "bad_link",
+                "unchecked"
               ]
             },
             "where": {
