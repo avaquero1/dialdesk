@@ -63,6 +63,7 @@ export function routes(deps: Deps, hooks: RouteHooks = {}): Handlers<typeof EDGE
     board: (_i, ctx) => need('board')(BOARD.getBoard, { params: { account_id: acc(ctx) } }),
     setLayout: ({ body }, ctx) => need('board')(BOARD.setLayout, { params: { account_id: acc(ctx) }, body }),
     chat: ({ body }, ctx) => need('agent')(AGENT.chat, { body: { ...body, account_id: acc(ctx) } }),
+    conversation: ({ params }, ctx) => need('agent')(AGENT.getConversation, { params, query: { account_id: acc(ctx) } }),
     accept: ({ params }, ctx) => need('board')(BOARD.accept, { params, body: { account_id: acc(ctx) } }),
     reject: ({ params }, ctx) => need('board')(BOARD.reject, { params, body: { account_id: acc(ctx) } }),
     resize: ({ params, body }, ctx) => need('board')(BOARD.resize, { params, body: { ...body, account_id: acc(ctx) } }),

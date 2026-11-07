@@ -112,6 +112,20 @@
   },
   {
     "service": "edge",
+    "name": "conversation",
+    "method": "GET",
+    "path": "/api/chat/:conversation_id",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "A conversation so far: the chat reloads with the board."
+  },
+  {
+    "service": "edge",
     "name": "accept",
     "method": "POST",
     "path": "/api/proposals/:proposal_id/accept",

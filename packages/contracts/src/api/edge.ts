@@ -11,7 +11,7 @@ import { Place } from '../widget.ts';
 import { EngineReceipt } from '../rust.ts';
 import { RunTraceStep } from '../result.ts';
 import { Account, Email, Password } from './accounts.ts';
-import { ChatReply } from './agent.ts';
+import { ChatReply, ChatTurn } from './agent.ts';
 import { Board, Proposal, Widget } from './board.ts';
 import { Connection } from './connections.ts';
 import { Spend } from './models.ts';
@@ -79,6 +79,15 @@ export const EDGE = api('edge', {
     response: ChatReply,
     errors: [400, 429],
     summary: 'One chat turn (guarded).',
+  },
+  conversation: {
+    method: 'GET',
+    path: '/api/chat/:conversation_id',
+    callers: ['browser'],
+    params: z.object({ conversation_id: ConversationId }),
+    response: z.object({ conversation_id: ConversationId, turns: z.array(ChatTurn) }).strict(),
+    errors: [404],
+    summary: 'A conversation so far: the chat reloads with the board.',
   },
   accept: {
     method: 'POST',
