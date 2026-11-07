@@ -9,20 +9,23 @@ export function readFixture<T = unknown>(rel: string): T {
   return JSON.parse(readFileSync(join(FIXTURES_DIR, rel), 'utf8')) as T;
 }
 
+/** Kalshi's live shape (checked 2026-11-07): prices are dollar strings, counts fixed-point strings. No integer cents. */
 export interface KalshiMarket {
   ticker: string;
   event_ticker: string;
   title: string;
-  yes_bid: number;
-  yes_ask: number;
-  last_price: number;
-  previous_price: number;
-  volume: number;
+  yes_bid_dollars: string;
+  yes_ask_dollars: string;
+  last_price_dollars: string;
+  previous_price_dollars: string;
+  volume_fp: string;
   close_time: string;
 }
+/** Gamma's shape. A game's market is a moneyline: `outcomes` are the two teams, away first. */
 export interface PolyMarket {
   slug: string;
   question: string;
+  outcomes: string;
   outcomePrices: string;
   bestBid?: number;
   bestAsk?: number;
@@ -50,7 +53,7 @@ export const fixtures = {
   pairs: () => readFixture<Pair[]>('markets/pairs.json'),
   kalshiMarket: (ticker: string) => readFixture<{ market: KalshiMarket }>(`markets/kalshi/market-${ticker}.json`).market,
   kalshiCandles: (ticker: string) =>
-    readFixture<{ candlesticks: { end_period_ts: number; price: { close: number } }[] }>(`markets/kalshi/candlesticks-${ticker}.json`).candlesticks,
+    readFixture<{ ticker: string; candlesticks: { end_period_ts: number; price: { close_dollars?: string | null; previous_dollars?: string | null } }[] }>(`markets/kalshi/candlesticks-${ticker}.json`).candlesticks,
   polyMarkets: () => readFixture<PolyMarket[]>('markets/polymarket/markets.json'),
   polyHistory: (slug: string) => readFixture<{ history: { t: number; p: number }[] }>(`markets/polymarket/prices-history-${slug}.json`).history,
   kalshiBalance: () => readFixture<{ balance: number }>('markets/kalshi/portfolio-balance.json'),

@@ -1,6 +1,8 @@
 import { MARKETS, SOURCE_CATALOG, newId, type Candidate, type Market } from '@app/contracts';
 import { HttpError, now, type Handlers } from '@app/service-kit';
-import { fixtures } from '@app/testkit';
+import { fixtures, readFixture } from '@app/testkit';
+import { KalshiCandles, KalshiMarketRaw, kalshiPoints, kalshiToMarket } from './kalshi.ts';
+import { PolyMarketRaw, polyToMarket } from './polymarket.ts';
 
 export type FakeDeps = Record<string, never>;
 export async function fakeDepsFromEnv(): Promise<FakeDeps> {
@@ -10,49 +12,17 @@ export async function fakeDepsFromEnv(): Promise<FakeDeps> {
 /** Fixture-backed markets: the made-up Kalshi and Polymarket JSON in fixtures/markets, and the fixture site. */
 export function fake(_deps: FakeDeps = {}): Handlers<typeof MARKETS> {
   const pairs = fixtures.pairs();
-  const poly = new Map(fixtures.polyMarkets().map((m) => [m.slug, m]));
+  const poly = new Map<string, unknown>(fixtures.polyMarkets().map((m) => [m.slug, m]));
   const asOf = now();
   const markets = new Map<string, Market>();
+  // The fixtures have the exchanges' live shapes; the fake reads them with the same parsers as the real service.
   for (const p of pairs) {
-    const league = p.league.toLowerCase() as Market['league'];
-    const k = fixtures.kalshiMarket(p.kalshi_ticker);
-    markets.set(`kalshi:${k.ticker}`, {
-      market_id: `kalshi:${k.ticker}`,
-      exchange: 'kalshi',
-      event_key: p.event_key,
-      title: k.title,
-      category: 'sports',
-      league,
-      yes_price_cents: k.last_price,
-      yes_bid_cents: k.yes_bid,
-      yes_ask_cents: k.yes_ask,
-      previous_price_cents: k.previous_price,
-      volume: k.volume,
-      close_time: k.close_time,
-      as_of: asOf,
-      stale: false,
-    });
-    const pm = poly.get(p.polymarket_slug);
-    if (pm) {
-      const yes = Math.round(Number((JSON.parse(pm.outcomePrices) as string[])[0]) * 100);
-      const move = Math.round((pm.oneDayPriceChange ?? 0) * 100);
-      markets.set(`polymarket:${pm.slug}`, {
-        market_id: `polymarket:${pm.slug}`,
-        exchange: 'polymarket',
-        event_key: p.event_key,
-        title: pm.question,
-        category: 'sports',
-        league,
-        yes_price_cents: yes,
-        yes_bid_cents: pm.bestBid !== undefined ? Math.round(pm.bestBid * 100) : null,
-        yes_ask_cents: pm.bestAsk !== undefined ? Math.round(pm.bestAsk * 100) : null,
-        previous_price_cents: yes - move,
-        volume: pm.volumeNum,
-        close_time: pm.endDate,
-        as_of: asOf,
-        stale: false,
-      });
-    }
+    const k = KalshiMarketRaw.parse(readFixture<{ market: unknown }>(`markets/kalshi/market-${p.kalshi_ticker}.json`).market);
+    const km = kalshiToMarket(k, { asOf, eventKey: p.event_key });
+    if (km) markets.set(km.market_id, km);
+    const raw = poly.get(p.polymarket_slug);
+    const pm = raw ? polyToMarket(PolyMarketRaw.parse(raw), { asOf, eventKey: p.event_key }) : null;
+    if (pm) markets.set(pm.market_id, pm);
   }
   const get = (id: string) => {
     const m = markets.get(id);
@@ -78,7 +48,7 @@ export function fake(_deps: FakeDeps = {}): Handlers<typeof MARKETS> {
       const m = get(params.market_id);
       const raw =
         m.exchange === 'kalshi'
-          ? fixtures.kalshiCandles(m.market_id.slice(7)).map((c) => ({ t: c.end_period_ts, price_cents: c.price.close }))
+          ? kalshiPoints(KalshiCandles.parse(readFixture(`markets/kalshi/candlesticks-${m.market_id.slice(7)}.json`)))
           : fixtures.polyHistory(m.market_id.slice(11)).map((h) => ({ t: h.t, price_cents: Math.round(h.p * 100) }));
       const last = raw.at(-1)?.t ?? 0;
       return { market_id: m.market_id, points: raw.filter((p) => p.t >= last - query.window_s), as_of: asOf };

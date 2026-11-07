@@ -54,6 +54,19 @@ lines.push('# Blank = the default: key file /run/secrets/vultr-inference, caps $
 put('MODELS_VULTR_KEY_FILE', example ? '' : (process.env.MODELS_VULTR_KEY_FILE ?? ''));
 for (const k of ['DAILY_CAP_USD', 'ACCOUNT_DAILY_USD', 'ACCOUNT_DAILY_TOKENS', 'ACCOUNT_RPM', 'KILL', 'KEY_FINGERPRINTS']) put(envKey('models', k), '');
 
+lines.push(
+  '',
+  '# --- markets: cache times in seconds (the defaults are shown) and where it reads the Brave key. The key itself never goes here.',
+  '# MARKETS_QUOTE_TTL_S=15        (10-30)',
+  '# MARKETS_LIST_TTL_S=30',
+  '# MARKETS_HISTORY_TTL_S=60',
+  '# MARKETS_FEED_TTL_S=600',
+  '# MARKETS_SEARCH_TTL_S=1800     (one Brave search per game per 30 min, shared by every follower)',
+  '# MARKETS_FEED_MAX_AGE_H=96',
+  '# MARKETS_SOURCE_ENV=prod       (fixture: read the fixture rows of the source catalog instead)',
+  '# MARKETS_BRAVE_KEY_FILE=      (an absolute path; the default is ~/.config/siren/secrets/brave-search)',
+);
+
 lines.push('', '# --- run a service as its in-memory fake: <SVC>_FAKE=1 (npm run fake -w services/<svc> sets it)');
 lines.push(`# ports: ${Object.entries(PORTS).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 lines.push('LOG_LEVEL=info', '');

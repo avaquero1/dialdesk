@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Text removed for the fixture</title>
+    <copyright>Copyright (c) 2026 Roto Sports, Inc, All rights reserved.</copyright>
+    <description>Text removed for the fixture</description>
+    <category>Text removed for the fixture</category>
+    <language>en-us</language>
+    <ttl>10</ttl>
+    <image>
+      <title>Text removed for the fixture</title>
+      <width>120</width>
+      <height>30</height>
+      <link>https://www.rotowire.com</link>
+      <url>https://assets.rotowire.com/images/logo_roto_small.gif</url>
+    </image>
+    <link>https://www.rotowire.com</link>
+    <item>
+        <guid>nfl646306</guid>
+        <title>Text removed for the fixture</title>
+        <link>https://www.rotowire.com//football/player/terrance-ferguson-18497</link>
+        <description>Text removed for the fixture</description>
+        <pubDate>Fri, 06 Nov 2026 2:30:00 PM PST</pubDate>
+    </item>
+    <item>
+        <guid>nfl646305</guid>
+        <title>Text removed for the fixture</title>
+        <link>https://www.rotowire.com//football/player/drew-lock-13736</link>
+        <description>Text removed for the fixture (names: Cardinals, Seahawks)</description>
+        <pubDate>Fri, 06 Nov 2026 2:26:00 PM PST</pubDate>
+    </item>
+    <item>
+        <guid>nfl646304</guid>
+        <title>Text removed for the fixture</title>
+        <link>https://www.rotowire.com//football/player/michael-wilson-16957</link>
+        <description>Text removed for the fixture</description>
+        <pubDate>Fri, 06 Nov 2026 2:19:00 PM PST</pubDate>
+    </item>
+    <item>
+        <guid>nfl646303</guid>
+        <title>Text removed for the fixture</title>
+        <link>https://www.rotowire.com//football/player/christian-mccaffrey-11690</link>
+        <description>Text removed for the fixture (names: Raiders)</description>
+        <pubDate>Fri, 06 Nov 2026 2:12:00 PM PST</pubDate>
+    </item>
+    <item>
+        <guid>nfl646302</guid>
+        <title>Text removed for the fixture</title>
+        <link>https://www.rotowire.com//football/player/mike-evans-9253</link>
+        <description>Text removed for the fixture (names: Raiders)</description>
+        <pubDate>Fri, 06 Nov 2026 2:06:00 PM PST</pubDate>
+    </item>
+  </channel>
+</rss>
