@@ -20,7 +20,7 @@ import { RunKind, RunTraceStep } from './result.ts';
 
 export const BULL_PREFIX = 'bull';
 export const QUEUES = {
-  /** board -> runner: one widget run. */
+  /** board -> runner (and runner's scheduler -> runner): one widget run. */
   widgetRuns: 'widget-runs',
   /** connections -> connections: refresh one connected account's balances and positions. */
   accountRefresh: 'account-refresh',
@@ -56,7 +56,8 @@ export const AccountRefreshJob = z
 export type AccountRefreshJob = z.infer<typeof AccountRefreshJob>;
 
 export const JOBS = {
-  [QUEUES.widgetRuns]: { schema: WidgetRunJob, producers: ['board'], consumers: ['runner'] },
+  // board enqueues on accept, refresh, clear and movement; runner's scheduler enqueues the cadence runs (reason "schedule").
+  [QUEUES.widgetRuns]: { schema: WidgetRunJob, producers: ['board', 'runner'], consumers: ['runner'] },
   [QUEUES.accountRefresh]: { schema: AccountRefreshJob, producers: ['connections'], consumers: ['connections'] },
 } as const;
 
