@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { AUDIT, LogEntry, newId, type SignedHead } from '@app/contracts';
+import { AUDIT, Exchange, LogEntry, TRUST_ACTIONS as A, newId, type SignedHead, type TrustConnection } from '@app/contracts';
 import type { z } from 'zod';
 import { HttpError, now, type Handlers } from '@app/service-kit';
 
@@ -34,19 +34,40 @@ export function createFakeAudit() {
     signature: Buffer.from('fake-signature').toString('base64'),
     pushed_at: null,
   });
-  const count = (action: string, account_id: string) => rows.filter((r) => r.entry.action === action && r.entry.account_id === account_id).length;
+  const today = (account_id: string) => {
+    const day = now().slice(0, 10);
+    return rows.filter((r) => r.entry.account_id === account_id && r.entry.at.slice(0, 10) === day);
+  };
+  const count = (action: string, account_id: string) => today(account_id).filter((r) => r.entry.action === action).length;
+  const refused = (account_id: string) =>
+    today(account_id)
+      .filter((r) => r.entry.action === A.proxyRefused)
+      .reduce((n, r) => n + (r.entry.sizes.requests ?? 1), 0);
+  const connected = (account_id: string) => {
+    const by = new Map<string, z.infer<typeof TrustConnection> | null>();
+    for (const r of rows) {
+      const e = r.entry;
+      if (e.account_id !== account_id || !e.subject_id) continue;
+      if (e.action === A.connectionRemoved) by.set(e.subject_id, null);
+      if (e.action !== A.connectionChecked) continue;
+      const exchange = Exchange.safeParse(e.ids.exchange);
+      by.set(e.subject_id, e.outcome === 'ok' && exchange.success ? { connection_id: e.subject_id, exchange: exchange.data, scope: e.ids.scope ?? 'read', checked_at: e.at } : null);
+    }
+    return [...by.values()].filter((c) => c !== null);
+  };
 
   const handlers: Handlers<typeof AUDIT> = {
     trust: ({ query }) => ({
       day: now().slice(0, 10),
-      sandboxes_created: count('sandbox.created', query.account_id),
-      sandboxes_destroyed: count('sandbox.destroyed', query.account_id),
-      sandboxes_killed: count('sandbox.killed', query.account_id),
-      proxy_refused: count('proxy.refused', query.account_id),
-      runs_poisoned: count('run.poisoned', query.account_id),
+      sandboxes_created: count(A.sandboxCreated, query.account_id),
+      sandboxes_destroyed: count(A.sandboxDestroyed, query.account_id),
+      sandboxes_killed: count(A.sandboxKilled, query.account_id),
+      proxy_refused: refused(query.account_id),
+      runs_poisoned: count(A.runPoisoned, query.account_id),
       consents: rows
-        .filter((r) => r.entry.account_id === query.account_id && r.entry.action.startsWith('consent.'))
+        .filter((r) => r.entry.account_id === query.account_id && r.entry.action.startsWith(A.consentPrefix))
         .map((r) => ({ action: r.entry.action, at: r.entry.at, subject_id: r.entry.subject_id })),
+      connected: connected(query.account_id),
       head: head(),
     }),
     head: () => head(),

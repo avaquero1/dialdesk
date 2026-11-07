@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AccountId, AuditRowId, Timestamp } from '../common.ts';
+import { AccountId, AuditRowId, ConnectionId, Exchange, Timestamp } from '../common.ts';
 import { api } from '../endpoint.ts';
 import { LogEntry } from '../bus.ts';
 
@@ -25,6 +25,37 @@ export const AuditRow = z
   })
   .strict();
 
+/**
+ * The log actions the trust page counts. Each service logs them with `bus.log(logEntry(...))`; audit counts rows per
+ * account and UTC day (consents and connections: all time).
+ * - `sandbox.created` / `sandbox.destroyed` / `sandbox.killed`: subject_id = the sandbox id.
+ * - `proxy.refused`: one row per job with `sizes.requests` = how many requests the proxy refused (a row without it counts 1).
+ * - `run.poisoned`: subject_id = the widget, `ids.sandbox_id`.
+ * - `connection.scope_checked`: subject_id = the connection id, `ids.exchange`, `ids.scope` (e.g. "read"), outcome `ok` when the
+ *   scope was proven, `refused` when the key was refused; `hashes.key_fingerprint`, never the key. `connection.removed` ends it.
+ * - `consent.<what>`: every consent the user gave, subject_id = what it is about.
+ */
+export const TRUST_ACTIONS = {
+  sandboxCreated: 'sandbox.created',
+  sandboxDestroyed: 'sandbox.destroyed',
+  sandboxKilled: 'sandbox.killed',
+  proxyRefused: 'proxy.refused',
+  runPoisoned: 'run.poisoned',
+  connectionChecked: 'connection.scope_checked',
+  connectionRemoved: 'connection.removed',
+  consentPrefix: 'consent.',
+} as const;
+
+/** A connected account as the log shows it: the latest scope check, never a key. */
+export const TrustConnection = z
+  .object({
+    connection_id: ConnectionId,
+    exchange: Exchange,
+    scope: z.string().max(40).describe('the scope the check proved, e.g. "read"'),
+    checked_at: Timestamp,
+  })
+  .strict();
+
 export const TrustCounts = z
   .object({
     day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -34,6 +65,7 @@ export const TrustCounts = z
     proxy_refused: z.number().int().min(0),
     runs_poisoned: z.number().int().min(0),
     consents: z.array(z.object({ action: z.string(), at: Timestamp, subject_id: z.string().nullable() }).strict()),
+    connected: z.array(TrustConnection).default([]).describe('connected accounts and their scope, from connection.scope_checked rows'),
     head: SignedHead,
   })
   .strict();
