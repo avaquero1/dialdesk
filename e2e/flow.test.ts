@@ -13,8 +13,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { liveSandboxes, startManager, topologyUp, type Manager, type Topology } from '../sandbox/dev/topology.ts';
-import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, EDGE, MARKETS, MODELS, POISONED_NOTE, type Board, type ChatReply, type WidgetRunJob } from '@app/contracts';
-import { MemoryBus, buildApp, createClient, createLogger, hashToken, sandboxClient, type SandboxClient } from '@app/service-kit';
+import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, EDGE, MARKETS, MODELS, POISONED_NOTE, widgetRunJobId, type Board, type ChatReply, type WidgetRunJob } from '@app/contracts';
+import { MemoryBus, buildApp, createClient, createLogger, hashToken, sandboxClient, type Call, type SandboxClient } from '@app/service-kit';
 import { fakeApp, fixtures, pageText, testCallers, TEST_TOKENS } from '@app/testkit';
 import { fake as accounts } from '../services/accounts/src/fake.ts';
 import { createReal as agentReal } from '../services/agent/src/real.ts';
@@ -79,11 +79,20 @@ const edgeApp = fakeApp('edge', EDGE, fe.handlers, fe.sessionCheck);
 
 // runner, on the same fakes. Real sandboxes return the page text; on the stub (no Chromium) it comes from the fixture site.
 const runnerBus = new MemoryBus();
+/** Step 4e: markets offers runner only this page (the poisoned one), so nothing clean is read. */
+let onlyUrl: string | null = null;
+const runnerMarkets = as('runner', apps.markets);
+const marketsForRunner: Call = (async (e, input) => {
+  const out = (await runnerMarkets(e, input as never)) as unknown;
+  if (!onlyUrl || (e as unknown) !== MARKETS.candidates) return out;
+  const c = out as { candidates: { url: string }[] };
+  return { ...c, candidates: c.candidates.filter((x) => x.url === onlyUrl) };
+}) as Call;
 const runnerStore = new MemoryStore();
 const scheduler = new Scheduler(runnerStore, async (j) => void queue.push(j));
 const runnerDeps = (): RunnerDeps => ({
   board: as('runner', apps.board),
-  markets: as('runner', apps.markets),
+  markets: marketsForRunner,
   models: as('runner', apps.models),
   connections: as('runner', apps.connections),
   sandbox,
@@ -284,12 +293,19 @@ describe('e2e on fakes', () => {
     expect(list.backend).toBe(STUB ? 'stub' : 'docker');
     // Nothing is left held: every browse sandbox got its verdict.
     expect(list.sandboxes.filter((x) => x.state === 'held')).toEqual([]);
+    // The trust page counts the manager's own rows (JobStatus.trust_log), forwarded by runner once each.
     const trust = await browser(EDGE.trust, {});
     expect(trust.counts.sandboxes_killed).toBe(1);
     expect(trust.counts.runs_poisoned).toBe(1);
-    // Every sandbox runner started (browse and compute) ended: destroyed after its job, or killed.
+    // Every sandbox runner started (browse and compute) was destroyed, the killed one too (killed, then destroyed).
     expect(trust.counts.sandboxes_created).toBeGreaterThan(1);
-    expect(trust.counts.sandboxes_created).toBe(trust.counts.sandboxes_destroyed + trust.counts.sandboxes_killed);
+    expect(trust.counts.sandboxes_created).toBe(trust.counts.sandboxes_destroyed);
+    const rows = audit.rows.filter((r) => r.entry.account_id === s.account_id && /^(sandbox|proxy)\./.test(r.entry.action));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.entry.service === 'sandbox-manager')).toBe(true);
+    // No double count: one sandbox.created row per sandbox.
+    const created = rows.filter((r) => r.entry.action === 'sandbox.created').map((r) => r.entry.subject_id);
+    expect(new Set(created).size).toBe(created.length);
     expect((await browser(EDGE.auditVerify, {})).ok).toBe(true);
   });
 
@@ -330,6 +346,60 @@ describe('e2e on fakes', () => {
     expect(rows.map((r) => r.action)).toEqual(['sandbox.created', 'sandbox.killed', 'proxy.refused', 'sandbox.destroyed']);
     expect(rows[2]!.sizes?.requests).toBe(k.proxy_log.filter((e) => !e.allowed).length);
     expect(rows[1]!.ids?.reason).toBe(k.kill_reason);
+    // Every callout the manifest lists for the page was refused, the DNS name too: the proxy refuses it before any
+    // lookup, and the sandbox has no DNS of its own.
+    const page = fixtures.manifest().find((p) => p.poisoned)!;
+    for (const host of page.callouts) expect(refused(host).length, `${host} in ${k.proxy_log.map((e) => e.host).join(' ')}`).toBeGreaterThan(0);
+    expect(refused('73657373696f6e2d6b6579.lookup.offlist.fixture.test')).toContain('not_on_allowlist');
+    // Held, then killed: the reader and the guard worked while the box waited; the kill came after the read.
+    const run = s.research!;
+    const poisonedStep = run.steps.find((x) => x.status === 'poisoned')!;
+    const readStep = run.steps.find((x) => x.step === 'read' && x.sandbox?.sandbox_id === k.sandbox_id)!;
+    expect(readStep.sandbox!.state).toBe('held');
+    expect(poisonedStep.sandbox!.state).toBe('killed');
+    expect(Date.parse(rows[1]!.at)).toBeGreaterThanOrEqual(Date.parse(readStep.at) - 1000);
+    // The trust page's refused count is the manager's proxy.refused rows, summed.
+    const all = await Promise.all(run.steps.filter((x) => x.step === 'read' && x.source).map((x) => sandbox.getJob(`${run.run_id}:read:${x.source!.candidate_id}`)));
+    const refusedAll = all.reduce((n, j) => n + j.proxy_log.filter((e) => !e.allowed).length, 0);
+    expect((await browser(EDGE.trust, {})).counts.proxy_refused).toBe(refusedAll);
+  });
+
+  it('4e. a refresh that reads only the poisoned page: its box is destroyed, and the widget keeps its last clean numbers, blocked', async () => {
+    const before = (await browser(EDGE.board, {})).widgets.find((x) => x.spec.widget_id === s.widget_id)!.result!;
+    expect(before.facts.length).toBeGreaterThan(0);
+    const page = fixtures.manifest().find((p) => p.poisoned)!;
+    const window_start = Math.floor(Date.now() / 60_000) * 60 + 3600;
+    queue.push({ job_id: widgetRunJobId(s.widget_id!, 'research', window_start), widget_id: s.widget_id!, account_id: s.account_id!, kind: 'research', window_start, reason: 'refresh' });
+    onlyUrl = page.url;
+    let runs: RunRecord[];
+    try {
+      runs = await drain();
+    } finally {
+      onlyUrl = null;
+    }
+    expect(runs.map((r) => r.status)).toEqual(['poisoned']);
+    const run = runs[0]!;
+    expect(run.steps.filter((x) => x.step === 'read').map((x) => x.source!.url)).toEqual([page.url]);
+    expect(run.steps.find((x) => x.step === 'summary')).toMatchObject({ status: 'skipped', note: 'kept the last clean result' });
+    const k = await sandbox.getJob(`${run.run_id}:read:${run.steps.find((x) => x.step === 'read')!.source!.candidate_id}`);
+    expect(k).toMatchObject({ state: 'killed', kill_reason: 'poison' });
+    expect((k.trust_log ?? []).at(-1)?.action).toBe('sandbox.destroyed');
+
+    const w = (await browser(EDGE.board, {})).widgets.find((x) => x.spec.widget_id === s.widget_id)!;
+    expect(w.state).toBe('blocked');
+    const r = w.result!;
+    expect(r.run_id).toBe(run.run_id);
+    expect(r.numbers).toEqual(before.numbers);
+    expect(r.facts).toEqual(before.facts);
+    expect(r.summary).toEqual(before.summary);
+    expect(r.blocked.map((b) => [b.domain, b.note])).toEqual([['fanpost.fixture.test', POISONED_NOTE]]);
+    expect(JSON.stringify(r)).not.toMatch(/ignore your previous instructions/i);
+    const trust = await browser(EDGE.trust, {});
+    expect(trust.counts.sandboxes_killed).toBe(2);
+    expect(trust.counts.runs_poisoned).toBe(2);
+    expect(trust.counts.sandboxes_created).toBe(trust.counts.sandboxes_destroyed);
+    if (!STUB) expect(liveSandboxes(topo!)).toEqual([]);
+    expect((await sandbox.sandboxes()).sandboxes.filter((x) => x.state === 'held')).toEqual([]);
   });
   it.todo('the same runs on BullMQ on Valkey (runner worker + board queue; make valkey-test territory, Phase 2-3)');
   it.todo('run.step and run.poisoned reach the browser over /live (edge + runner, Phase 2)');

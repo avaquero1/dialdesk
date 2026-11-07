@@ -69,10 +69,26 @@ sandbox-manager probe [--allow a,b] [--wall S] -- whoami   # one attack probe in
 | `SANDBOX_STATE_DIR` | a temp folder | Holds the empty `resolv.conf` |
 | `SANDBOX_MANAGER_DEV` | unset | `1` allows http URLs and `SANDBOX_DEV_SPKI` (the fixture certificate pin) |
 
+### Hold, then kill (the demo values)
+
+A browse job with `hold: true` stays **held** after its pages load: the sandbox is still alive while runner's reader and guard
+check the page. Then runner releases it (clean) or kills it (`poison`, with the `run.poisoned` audit row's id). Either way the
+sandbox is destroyed and the job's `trust_log` ends with `sandbox.destroyed`.
+
+| Limit | Value | What happens |
+|---|---|---|
+| `wall_s` (browse) | 30 s | Loading the pages takes longer: killed, `wall_timeout` |
+| `hold_s` | **60 s** (the demo value) | No verdict in time: the manager kills it, `hold_timeout` |
+| driver `--max-life` | `wall_s + hold_s + 10` = 100 s | The driver inside the sandbox exits on its own, even if the manager is gone |
+
+So no browse sandbox lives longer than 100 s. The hold's hard cap (a longer hold for a slow guard model) stays open in the
+architecture; 60 s is what the demo uses.
+
 Each `JobStatus` carries `trust_log`: the trust page's rows for that job, in the shape of `TRUST_ACTIONS`
 (`packages/contracts/src/api/audit.ts`). `sandbox.created`, `sandbox.killed` (ids: reason, audit_row_id) and `sandbox.destroyed`,
 each with subject_id = the sandbox id, and one `proxy.refused` with `sizes.requests` when the proxy refused anything. The manager
-never writes to the log itself: the caller adds account_id and appends each row as service `sandbox-manager`.
+never writes to the log itself: the caller adds account_id and appends each row as service `sandbox-manager` (runner does this
+once per row, keeping a count per job in its run state, and writes no sandbox rows of its own).
 
 ## Tests
 
