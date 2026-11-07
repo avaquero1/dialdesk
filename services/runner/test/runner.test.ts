@@ -7,7 +7,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { BOARD, CONNECTIONS, MARKETS, MODELS, POISONED_NOTE, TRUST_ACTIONS, newId, widgetRunJobId, type CompleteBody, type LogEntry, type RunKind, type Widget, type WidgetRunJob } from '@app/contracts';
+import { BOARD, CONNECTIONS, MARKETS, MODELS, POISONED_NOTE, TRUST_ACTIONS, newId, widgetRunJobId, type CompleteBody, type LogEntry, type RunKind, type SbxJobStatus as SbxJob, type Widget, type WidgetRunJob } from '@app/contracts';
 import { MemoryBus, NoRetry, SandboxBusy, createClient, hashToken, sandboxClient, type Call, type SandboxClient } from '@app/service-kit';
 import { fakeApp, fixtures, pageText, TEST_TOKENS } from '@app/testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -181,34 +181,71 @@ describe.skipIf(!have)('runner', () => {
     for (const f of r.facts) expect(r.sources.find((s) => s.candidate_id === f.candidate_id)!.status).toBe('read');
   });
 
-  it('the audit rows use the trust names: one proxy.refused per job with its count, runs started and results published', async () => {
+  it("the sandbox rows are the manager's trust_log, forwarded once each with account_id as sandbox-manager (no double count)", async () => {
     const rows: LogEntry[] = [];
+    // The stub's proxy refuses nothing: add two refusals to the held job, and the manager's proxy.refused row at teardown.
+    const at = () => new Date().toISOString();
+    const withRefused = (j: SbxJob): SbxJob => {
+      if (j.kind !== 'browse' || !(j.trust_log ?? []).some((r) => r.action === TRUST_ACTIONS.sandboxDestroyed)) return j;
+      const t = [...j.trust_log!];
+      t.splice(t.length - 1, 0, { action: TRUST_ACTIONS.proxyRefused, at: at(), subject_id: j.sandbox_id, outcome: 'refused', ids: { job_id: j.job_id }, sizes: { requests: 2 } });
+      return { ...j, trust_log: t };
+    };
+    let polls = 0;
     const refusing: SandboxClient = {
       ...sandbox,
       getJob: async (id) => {
-        const j = await sandbox.getJob(id);
+        polls++;
+        const j = withRefused(await sandbox.getJob(id));
         if (j.kind !== 'browse' || j.state !== 'held') return j;
-        const at = new Date().toISOString();
-        const no = (host: string, reason: 'blocked_range' | 'not_on_allowlist') => ({ at, sandbox_id: j.sandbox_id, host, port: 443, allowed: false, reason });
+        const no = (host: string, reason: 'blocked_range' | 'not_on_allowlist') => ({ at: at(), sandbox_id: j.sandbox_id, host, port: 443, allowed: false, reason });
         return { ...j, proxy_log: [...j.proxy_log, no('169.254.169.254', 'blocked_range'), no('collect.exfil.fixture.test', 'not_on_allowlist')] };
       },
-      // The stub answers held at once; go through getJob so the refusals show.
+      // The stub answers held at once; go through getJob so the refusals show (and the job is polled more than once).
       createJob: async (req) => ({ ...(await sandbox.createJob(req)), state: 'queued' }),
+      release: async (id) => withRefused(await sandbox.release(id)),
+      kill: async (id, reason, row) => withRefused(await sandbox.kill(id, reason, row)),
     };
     const d = deps({ sandbox: refusing, audit: async (e) => (rows.push(e), audit.append(e).row_id) });
-    const { byTitle } = await freshBoard();
+    const { account_id, byTitle } = await freshBoard();
     const rec = await handleRun(d, jobFor(byTitle('Bills news'), 'research'), ctx());
     const n = (a: string) => rows.filter((r) => r.action === a);
     const reads = rec.steps.filter((x) => x.step === 'read' && x.status === 'ok').length;
+    expect(polls).toBeGreaterThan(reads);
     expect(n(TRUST_ACTIONS.proxyRefused)).toHaveLength(reads);
     expect(n(TRUST_ACTIONS.proxyRefused).every((r) => r.sizes.requests === 2)).toBe(true);
+    // One created and one destroyed row per sandbox (browse + compute); the poisoned one is killed, then destroyed too.
     expect(n(TRUST_ACTIONS.sandboxCreated)).toHaveLength(reads + 1);
-    expect(n(TRUST_ACTIONS.sandboxDestroyed).length + n(TRUST_ACTIONS.sandboxKilled).length).toBe(reads + 1);
+    expect(n(TRUST_ACTIONS.sandboxDestroyed)).toHaveLength(reads + 1);
+    expect(n(TRUST_ACTIONS.sandboxKilled).map((r) => r.ids.reason)).toEqual(['poison']);
+    expect(new Set(n(TRUST_ACTIONS.sandboxCreated).map((r) => r.subject_id)).size).toBe(reads + 1);
+    // Every sandbox row came from the manager, not from runner, and carries the account.
+    const sbx = rows.filter((r) => r.action.startsWith('sandbox.') || r.action.startsWith('proxy.'));
+    expect(sbx.every((r) => r.service === 'sandbox-manager' && r.account_id === account_id && r.ids.run_id === rec.run_id)).toBe(true);
+    expect(rows.filter((r) => r.service === 'runner' && (r.action.startsWith('sandbox.') || r.action.startsWith('proxy.')))).toEqual([]);
+    // The kill row links the run.poisoned row that asked for it.
+    expect(n(TRUST_ACTIONS.sandboxKilled)[0]!.ids.audit_row_id).toEqual(expect.any(String));
     expect(n(TRUST_ACTIONS.runPoisoned)[0]!.ids.sandbox_id).toMatch(/^sbx-/);
     expect(n('run.started')).toHaveLength(1);
     expect(n('result.published')[0]!.ids.result_id).toMatch(/^res_/);
     expect(rec.steps.find((x) => x.step === 'read')!.proxy!.refused).toBe(2);
     expect(JSON.stringify(rows)).not.toMatch(/ignore your previous instructions|exfil\.fixture/i);
+  });
+
+  it('forwarding is idempotent: the same trust_log seen again (a retry, a second poll) logs nothing new', async () => {
+    const rows: LogEntry[] = [];
+    // Queued at first: runner polls the job (and its trust_log) several times before it ends.
+    const polled: SandboxClient = { ...sandbox, createJob: async (req) => ({ ...(await sandbox.createJob(req)), state: 'queued' }) };
+    const d = deps({ sandbox: polled, audit: async (e) => (rows.push(e), audit.append(e).row_id) });
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Chiefs beat the Bills');
+    const job = jobFor(w, 'numbers');
+    const rec = await handleRun(d, job, ctx());
+    const first = rows.filter((r) => r.service === 'sandbox-manager').map((r) => r.action);
+    expect(first).toEqual([TRUST_ACTIONS.sandboxCreated, TRUST_ACTIONS.sandboxDestroyed]);
+    expect((rec.outputs as { trust?: Record<string, number> }).trust).toEqual({ [`${rec.run_id}:math`]: 2 });
+    await handleRun(d, job, ctx());
+    expect(rows.filter((r) => r.service === 'sandbox-manager').map((r) => r.action)).toEqual(first);
   });
 
   it('the planner sees ids, domains and dates only; a plan outside the catalog is refused for the default', async () => {

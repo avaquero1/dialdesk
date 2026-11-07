@@ -102,6 +102,8 @@ export interface RunnerDeps {
   onWidgetGone?: (widget_id: string) => Promise<void>;
   /** Poll interval for sandbox jobs. */
   pollMs?: number;
+  /** Default TEARDOWN_WAIT_MS. */
+  teardownWaitMs?: number;
   timeouts?: Partial<(typeof RUN_RULES)['timeoutsMs']>;
 }
 
@@ -109,6 +111,11 @@ const FAIL_REASONS = ['timeout', 'busy', 'exchange_down', 'model_error', 'guard_
 type FailReason = (typeof FAIL_REASONS)[number];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** The rows sandbox-manager may put in the audit log through runner (TRUST_ACTIONS); anything else it sends is dropped. */
+const SANDBOX_ROWS = new Set<string>([A.sandboxCreated, A.sandboxKilled, A.proxyRefused, A.sandboxDestroyed]);
+const OUTCOMES = new Set(['ok', 'refused', 'blocked', 'poisoned', 'killed', 'failed']);
+/** How long runner waits for a finished job's `sandbox.destroyed` row (the manager destroys after the job ends). */
+export const TEARDOWN_WAIT_MS = 5_000;
 const now = () => new Date().toISOString();
 
 /** Runs `fn` but gives up after `ms` with NoRetry(reason). */
@@ -182,6 +189,8 @@ interface Outputs {
   reads?: Record<string, ReadOutcome>;
   math?: { result: EngineResult; as_of: string; stale: boolean };
   summary?: { template: string } | null;
+  /** How many of each sandbox job's trust_log rows are in the audit log already (so a retry never logs one twice). */
+  trust?: Record<string, number>;
 }
 
 class Run {
@@ -235,6 +244,38 @@ class Run {
     if (st.status === 'ok' || st.status === 'skipped' || st.status === 'poisoned') this.rec.last_step = st.step;
     await this.save();
     await this.emit('run.step', { account_id: this.account_id, at: st.at, step: st });
+  }
+  /**
+   * The manager's trust rows for a job (JobStatus.trust_log) go to the audit log, each once, in order: account_id added,
+   * as service sandbox-manager. These are the trust page's sandbox counts; runner writes no sandbox rows of its own.
+   */
+  async forward(j: SbxJobStatus) {
+    const rows = j.trust_log ?? [];
+    const sent = (this.out.trust ??= {});
+    const from = sent[j.job_id] ?? 0;
+    if (rows.length <= from) return;
+    for (let i = from; i < rows.length; i++) {
+      const r = rows[i]!;
+      const outcome = r.outcome && OUTCOMES.has(r.outcome) ? (r.outcome as LogEntry['outcome']) : null;
+      if (SANDBOX_ROWS.has(r.action))
+        await this.audit(r.action, { at: r.at, subject_id: r.subject_id ?? null, outcome, ids: { run_id: this.run_id, ...r.ids }, sizes: r.sizes ?? {} }, 'sandbox-manager');
+      sent[j.job_id] = i + 1;
+    }
+    await this.save();
+  }
+  /** A job that has ended: wait (briefly) for the manager's `sandbox.destroyed` row, then forward what came back. */
+  async ended(job_id: string, j: SbxJobStatus | null): Promise<SbxJobStatus | null> {
+    const end = Date.now() + (this.d.teardownWaitMs ?? TEARDOWN_WAIT_MS);
+    for (;;) {
+      if (j && (j.trust_log ?? []).some((r) => r.action === A.sandboxDestroyed)) break;
+      if (Date.now() > end) break;
+      if (j) await sleep(this.d.pollMs ?? 50);
+      const next = await this.d.sandbox.getJob(job_id).catch(() => null);
+      if (!next) break;
+      j = next;
+    }
+    if (j) await this.forward(j);
+    return j;
   }
   async save() {
     await this.d.store.save(this.rec);
@@ -304,15 +345,15 @@ class Run {
     const job_id = `${this.run_id}:math`;
     // Busy: the job waits on the queue without spending an attempt, and resumes here (reads are already saved).
     const created = await this.createJob({ job_id, run_id: this.run_id, widget_id: spec.widget_id, kind: 'compute', compute: { engine_input: { plan: p, numbers: mn.numbers, origins: mn.origins } } }, 0);
-    await this.audit(A.sandboxCreated, { subject_id: created.sandbox_id, ids: { run_id: this.run_id, job_id, kind: 'compute' } }, 'sandbox-manager');
-    const j = await this.settle(job_id, created, this.t.compute);
-    if (!j) {
+    await this.forward(created);
+    const settled = await this.settle(job_id, created, this.t.compute);
+    if (!settled) {
       await this.endSandbox(job_id, 'kill', 'timeout');
       await this.step({ step: 'math', status: 'failed', note: 'compute timed out' }, t0);
       throw new NoRetry('timeout', 'compute timed out');
     }
-    // The manager destroys a compute sandbox when its job ends; the row goes in from here (it never calls control).
-    await this.audit(j.state === 'killed' ? A.sandboxKilled : A.sandboxDestroyed, { subject_id: j.sandbox_id, outcome: j.state === 'killed' ? 'killed' : 'ok', ids: { run_id: this.run_id, job_id, kind: 'compute' } }, 'sandbox-manager');
+    // The manager destroys a compute sandbox when its job ends; its rows come back with the job.
+    const j = (await this.ended(job_id, settled)) ?? settled;
     const er = j.state === 'done' ? EngineResult.safeParse(j.compute_result) : null;
     if (!er?.success) {
       await this.step({ step: 'math', status: 'failed', sandbox: { sandbox_id: j.sandbox_id, state: 'destroyed' }, note: `compute ${j.state}` }, t0);
@@ -514,7 +555,7 @@ class Run {
       return { status: 'failed', why };
     }
     this.held.add(job_id);
-    await this.audit(A.sandboxCreated, { subject_id: j.sandbox_id, ids: { run_id: this.run_id, job_id, kind: 'browse' } }, 'sandbox-manager');
+    await this.forward(j);
     const settled = await this.settle(job_id, j, this.t.browse);
     if (!settled || settled.state !== 'held') {
       await this.endSandbox(job_id, 'kill', 'timeout');
@@ -522,11 +563,9 @@ class Run {
       return { status: 'failed', why: 'browse' };
     }
     j = settled;
-    // Moment 1: what the proxy refused comes back with the job and goes to the audit log.
+    // Moment 1: what the proxy refused comes back with the job (the trace counts it; the manager's proxy.refused row goes
+    // to the audit log when the sandbox is destroyed). Hosts stay in the job's proxy log.
     const refused = j.proxy_log.filter((p) => !p.allowed);
-    // One row per job (TRUST_ACTIONS): how many, and the first refusal's reason. Hosts stay in the job's proxy log.
-    if (refused.length)
-      await this.audit(A.proxyRefused, { subject_id: j.sandbox_id, outcome: 'refused', ids: { run_id: this.run_id, job_id, reason: refused[0]!.reason }, sizes: { requests: refused.length } }, 'sandbox-manager');
     const page = j.pages[0];
     if (page?.screenshot_png_b64) {
       try {
@@ -577,7 +616,7 @@ class Run {
       const row = await this.audit(A.runPoisoned, { subject_id: spec.widget_id, outcome: 'poisoned', ids: { run_id: this.run_id, sandbox_id: j.sandbox_id, candidate_id: c.candidate_id, verdict_id: verdict.verdict_id } });
       const k = await this.d.sandbox.kill(job_id, 'poison', row);
       this.held.delete(job_id);
-      await this.audit(A.sandboxKilled, { subject_id: k.sandbox_id, outcome: 'killed', ids: { run_id: this.run_id, job_id, reason: 'poison' } }, 'sandbox-manager');
+      await this.ended(job_id, k);
       await this.emit('run.poisoned', { account_id: this.account_id, at: now(), widget_id: spec.widget_id, run_id: this.run_id, reason: 'poison', sandbox_id: k.sandbox_id, audit_row_id: row });
       await this.step({ step: 'extract', status: 'poisoned', sandbox: { sandbox_id: k.sandbox_id, state: 'killed' }, verdict_id: verdict.verdict_id, audit_row_id: row, note: POISONED_NOTE }, t1);
       return { status: 'blocked', blocked: { candidate_id: c.candidate_id, domain: c.domain, reason: 'poison', note: POISONED_NOTE, killed_at: k.updated_at, audit_row_id: row } };
@@ -604,7 +643,8 @@ class Run {
   async endSandbox(job_id: string, how: 'release' | 'kill', reason = 'timeout') {
     const r = await (how === 'release' ? this.d.sandbox.release(job_id) : this.d.sandbox.kill(job_id, reason)).catch(() => null);
     this.held.delete(job_id);
-    if (r) await this.audit(how === 'release' ? A.sandboxDestroyed : A.sandboxKilled, { subject_id: r.sandbox_id, outcome: how === 'kill' ? 'killed' : 'ok', ids: { run_id: this.run_id, job_id, reason: how === 'kill' ? reason : 'released' } }, 'sandbox-manager');
+    // Refused (the job already ended on its own, e.g. wall_timeout): its rows are still the manager's to forward.
+    await this.ended(job_id, r);
   }
 
   async reads(spec: DisplaySpec, chosen: Candidate[]) {
