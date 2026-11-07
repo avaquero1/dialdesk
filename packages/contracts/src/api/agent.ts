@@ -9,6 +9,11 @@ export const ChatTurn = z
     role: z.enum(['user', 'agent']),
     text: z.string().max(4000),
     chips: z.array(ToolChip),
+    picks: z
+      .array(z.string().min(1).max(40))
+      .max(12)
+      .optional()
+      .describe('agent turns: tap-to-pick answers written by code (leagues, then teams); a tap sends the text as the next message'),
     verdict_id: VerdictId.nullable().describe('agent turns: the chat verdict'),
     at: Timestamp,
   })
