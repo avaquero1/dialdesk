@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust install dev-secrets infra-up infra-down fakes health stop-fakes containment valkey-test
+.PHONY: check typecheck lint gen gen-check contracts e2e rust install dev-secrets infra-up infra-down fakes health stop-fakes containment valkey-test engine-image engine-image-check
 
 check: rust gen-check typecheck lint contracts e2e
 	@echo "make check: all green"
@@ -73,3 +73,13 @@ stop-fakes:
 
 containment:
 	@echo "make containment runs on the real sandbox machine (Phase 3). Not built yet." && exit 1
+
+# The compute sandbox image (engine/Dockerfile): the static engine binary alone, run with --network none.
+ENGINE_IMAGE := vha-engine-compute
+engine-image:
+	DOCKER_BUILDKIT=1 docker build -q -f engine/Dockerfile --build-arg GIT_HASH=$$(git rev-parse --short=12 HEAD) \
+	  -t $(ENGINE_IMAGE):$$(git rev-parse --short=12 HEAD) -t $(ENGINE_IMAGE):dev .
+	@docker image inspect $(ENGINE_IMAGE):dev --format '$(ENGINE_IMAGE):dev {{.Id}} {{.Size}} bytes'
+
+engine-image-check: engine-image
+	engine/image-check.sh $(ENGINE_IMAGE):dev

@@ -1,0 +1,12 @@
+# Only the Rust workspace goes into the build context.
+*
+!Cargo.toml
+!Cargo.lock
+!engine/Cargo.toml
+!engine/build.rs
+!engine/src/**
+!engine/tests/**
+!sandbox/manager/Cargo.toml
+!sandbox/manager/src/**
+!sandbox/proxy/Cargo.toml
+!sandbox/proxy/src/**

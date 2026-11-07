@@ -30,3 +30,24 @@ the share of resolved markets priced in the band that resolved YES. Its receipt 
 `refs` for them, the formula, the origins its inputs trace to, and the same hashes and version.
 
 The git hash comes from `git rev-parse` at build time, or from `ENGINE_GIT_HASH` when set (the compute image).
+
+## The compute sandbox image
+
+`engine/Dockerfile` builds `vha-engine-compute`: the static (musl) engine binary alone on `scratch`, run as uid 65534.
+About 450 KB. It has no shell, no libc and no network code, and it runs with no network:
+
+```sh
+make engine-image          # vha-engine-compute:<git hash> and :dev; the git hash comes in as a build arg
+make engine-image-check    # runs it with the flags below and checks the output against the native build
+docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --pids-limit 8 --memory 64m --memory-swap 64m --cpus 0.5 vha-engine-compute:dev < input.json
+```
+
+The base image is pinned by digest. The sandbox manager should run the image by its id or digest, never by tag.
+
+## Tests
+
+`cargo test -p engine`: unit tests (`src/tests.rs`), the CLI (`tests/cli.rs`) and the property suite (`tests/props.rs`,
+proptest): probabilities and ratios stay in 0..=1, price, probability and odds round-trip, EV's sign is right and its
+probability is sourced, the gap is symmetric, base rates match a plain count, and arbitrary plans never panic and
+give receipts that hash exactly what ran.
