@@ -13,6 +13,7 @@
   "dependencies": {
     "@app/contracts": "*",
     "@app/guard": "*",
-    "@app/service-kit": "*"
+    "@app/service-kit": "*",
+    "postgres": "^4.1.0"
   }
 }

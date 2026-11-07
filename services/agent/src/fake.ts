@@ -34,7 +34,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof AGENT> {
       const hue = m.includes('warmer') ? 32 : m.includes('cooler') ? 210 : Number(/hue (\d+)/.exec(m)?.[1] ?? NaN);
       const args = Number.isFinite(hue) ? { hue } : { mode: /dark/.test(m) ? 'dark' : /light/.test(m) ? 'light' : 'system' };
       const label = 'hue' in args ? `set_look · hue ${args.hue}°` : `set_look · ${args.mode}`;
-      return { text: 'Done.', chips: [{ tool: 'set_look', args, status: 'proposed', proposal_id: null, label }] };
+      return { text: 'Done.', chips: [{ tool: 'set_look', args, status: 'applied', proposal_id: null, label }] };
     }
     if (/chiefs|bills|nba|nfl/.test(m)) {
       let proposal_id: string | null = null;
