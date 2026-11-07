@@ -6,7 +6,9 @@
 | `db-init.sql` | One login role (`svc_<name>`) and one schema per data-storing service: accounts, board, agent, runner, markets, connections, models, audit. Passwords come from `DB_PASSWORD_<NAME>` through psql's `\getenv`. Safe to run again (that also rotates passwords). Runs as the container's init script and on managed Postgres with `psql -v ON_ERROR_STOP=1 -f deploy/db-init.sql`. |
 | `fixtures.Caddyfile` | Static file server for `fixtures/site` (no directory listings). |
 | `Caddyfile` | The control VM's only public listener: TCP 443 (no port 80, no HTTP/3, no admin API; the certificate comes over TLS-ALPN-01). Serves the web app from `/srv/web`, sends `/api/*` (bodies capped at 64 KB) and `/live` to `edge:8080`, and sets a CSP with no inline scripts. `caddy adapt --validate` passes; `services/edge/test/caddy.test.ts` guards its promises. |
-| `nftables/control.nft`, `nftables/sandbox.nft` | Stub firewall rules, **not applied**. Phase 3 tests and enables them. |
+| `nftables/sandbox.nft` | The sandbox machine's firewall, applied by `sandbox-host/setup.sh` with a timed rollback. |
+| `nftables/control.nft` | Stub firewall rules for the control VM, **not applied**. The deploy tests and enables them. |
+| `sandbox-host/` | The sandbox machine in one script: `push.sh` (from a dev PC), `setup.sh`, `smoke.sh`, `run-containment.sh` (`make containment`). See its README. |
 | `compose.control.yml`, `compose.sandbox.yml` | Phase 3 stubs: which containers run on which VM. Only `config` is expected to pass. |
 
 ## Dev infrastructure

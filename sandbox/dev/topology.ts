@@ -13,7 +13,7 @@
  * dev settings exist. Every name here starts with the topology's name, and down() removes all of it.
  *
  * SANDBOX_TOPOLOGY=host is that machine's test topology (`make containment`, as root on the sandbox machine, with
- * deploy/sandbox-host set up): the network is a bridge like the production one (vhasbx-t, icc off) under the same
+ * deploy/sandbox-host set up): the network is a bridge like the production one (vha-sbx-t, icc off) under the same
  * nftables table, the proxy is the installed binary running on the host as the proxy's own user (a transient systemd
  * unit), and the fixture site listens on 127.0.0.1 only, let through for the proxy's user by one element of the
  * table's dev_fixtures set that down() removes again.
@@ -31,7 +31,7 @@ export const HOST = process.env.SANDBOX_TOPOLOGY === 'host';
 // Host mode: must match deploy/sandbox-host (the bridge prefix and the table are in deploy/nftables/sandbox.nft).
 const HOST_PROXY_USER = process.env.SANDBOX_HOST_PROXY_USER ?? 'vha-egress';
 const HOST_SUBNET = process.env.SANDBOX_HOST_TEST_SUBNET ?? '172.30.79';
-const HOST_BRIDGE = 'vhasbx-t';
+const HOST_BRIDGE = 'vha-sbx-t';
 const HOST_FIXTURES_PORT = 18443;
 const NFT_TABLE = ['inet', 'vha_sandbox'];
 export const BROWSE_IMAGE = process.env.SANDBOX_BROWSE_IMAGE ?? 'vha-browse:dev';

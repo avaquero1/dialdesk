@@ -1,16 +1,22 @@
 #!/usr/sbin/nft -f
-# The sandbox VM's host firewall (the VX1). Loaded by vha-nft.service (deploy.sh installs it):
+# The sandbox VM's host firewall (the VX1). Loaded with its machine values from sandbox-vars.nft:
 #   nft -I /etc/vha/nft -f /etc/vha/nft/sandbox.nft
-# sandbox-vars.nft (addresses) is written by deploy.sh from deploy.env. It replaces the spike's `table inet spike`
-# (deploy.sh stops spike-nft.service first) and keeps the spike's tested rules, including the uid-10002 reply rule.
+# deploy/sandbox-host/setup.sh writes sandbox-vars.nft (example: example-sandbox-vars.nft), loads this file with a timed
+# rollback, and vha-nft.service loads it at boot. It replaces the spike's `table inet spike` and keeps the spike's tested
+# rules, including the proxy's reply rule. Tested on the VX1 by `make containment` (S1.3.1).
 #
 # - Inbound: the manager port (8200) only from control's VPC address; SSH from the admin address and from control.
-#   The sandboxes on vha-sbx reach the host only at the proxy (gateway:8201); their DNS and anything else is dropped.
-# - Forward: nothing leaves vha-sbx and nothing new enters it. A sandbox's only way out is the proxy.
-# - Output: the proxy's user (uid 10002, shared with the manager for the control socket) may answer the sandboxes and
-#   control, and may open only TCP 443 (and DNS) to public addresses: never private, link-local (169.254.169.254),
-#   carrier NAT, multicast or the VPC.
-# - Docker's own iptables rules stay as they are (this is a separate table; a packet must pass both).
+#   The sandboxes, on any vha-sbx* bridge (vha-sbx in production, vha-sbx-t for the test topology), reach the host only
+#   at the proxy's port; their DNS and anything else is dropped.
+# - Forward: nothing leaves a sandbox bridge and nothing new enters one. A sandbox's only way out is the proxy.
+# - Output:
+#   - The proxy's user (PROXY_UID) may answer the sandboxes, and may open only TCP 443 (and DNS) to public addresses:
+#     never private, loopback, link-local (169.254.169.254), carrier NAT, multicast or the VPC.
+#   - The manager's user (MANAGER_UID, a different user: it is in the docker group) never connects out. It talks to
+#     Docker and the proxy over Unix sockets, and only answers on loopback and to control over the VPC.
+#   - dev_fixtures is empty in production; the test topology adds its fixture site (127.0.0.1 . port) for one run.
+# - Docker's own iptables rules stay as they are (this is a separate table; a packet must pass both). ufw is turned off
+#   by setup.sh: its default "deny incoming" would drop the sandboxes' packets to the proxy.
 
 include "sandbox-vars.nft"
 
@@ -22,6 +28,8 @@ table inet vha_sandbox {
 	counter sbx_dns_drop {
 	}
 	counter sbx_host_drop {
+	}
+	counter manager_out_drop {
 	}
 	counter proxy_private_drop {
 	}
@@ -42,6 +50,9 @@ table inet vha_sandbox {
 		flags interval
 		elements = { ::1/128, fc00::/7, fe80::/10, ff00::/8 }
 	}
+	set dev_fixtures {
+		type ipv4_addr . inet_service
+	}
 
 	chain input {
 		type filter hook input priority filter - 10; policy drop;
@@ -57,16 +68,16 @@ table inet vha_sandbox {
 		icmp type { echo-request, destination-unreachable, time-exceeded } limit rate 10/second accept
 		icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
 		# The sandboxes: the proxy, and nothing else on the host.
-		iifname "vha-sbx" ip daddr $SBX_GATEWAY tcp dport 8201 accept
-		iifname "vha-sbx" meta l4proto { tcp, udp } th dport 53 counter name sbx_dns_drop drop
-		iifname "vha-sbx" counter name sbx_host_drop drop
+		iifname "vha-sbx*" tcp dport 8201 accept
+		iifname "vha-sbx*" meta l4proto { tcp, udp } th dport 53 counter name sbx_dns_drop drop
+		iifname "vha-sbx*" counter name sbx_host_drop drop
 		counter name input_drop drop
 	}
 
 	chain forward {
 		type filter hook forward priority filter - 10; policy drop;
-		iifname "vha-sbx" counter name sbx_forward_drop drop
-		oifname "vha-sbx" counter name sbx_forward_drop drop
+		iifname "vha-sbx*" counter name sbx_forward_drop drop
+		oifname "vha-sbx*" counter name sbx_forward_drop drop
 		ct state established,related accept
 		# Image builds on this VM (BuildKit RUN steps use the default bridge). No sandbox joins docker0.
 		iifname "docker0" accept
@@ -74,10 +85,13 @@ table inet vha_sandbox {
 
 	chain output {
 		type filter hook output priority filter - 10; policy accept;
-		meta skuid $PROXY_UID oifname "lo" accept
-		# Replies: to the sandboxes (their subnet is inside 172.16/12) and the manager's to control. Without this the
-		# proxy's SYN-ACKs are dropped (found on the VX1 in the spike, step 2).
+		meta skuid $MANAGER_UID oifname "lo" accept
+		meta skuid $MANAGER_UID oifname $VPC_IF ct direction reply accept
+		meta skuid $MANAGER_UID counter name manager_out_drop drop
+		# Replies to the sandboxes (their subnet is inside 172.16/12). Without this the proxy's SYN-ACKs are dropped
+		# (found on the VX1 in the spike, step 2).
 		meta skuid $PROXY_UID ct direction reply accept
+		meta skuid $PROXY_UID ip daddr . tcp dport @dev_fixtures accept
 		meta skuid $PROXY_UID ip daddr @blocked4 counter name proxy_private_drop drop
 		meta skuid $PROXY_UID ip6 daddr @blocked6 counter name proxy_private_drop drop
 		meta skuid $PROXY_UID tcp dport 443 accept

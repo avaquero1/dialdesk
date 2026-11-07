@@ -1,0 +1,18 @@
+# sandbox-manager and egress-proxy as static musl binaries, built on the sandbox machine (no Rust toolchain on the host):
+#   docker build -f deploy/sandbox-host/Dockerfile.bins --output type=local,dest=<dir> .
+# Same pinned base as engine/Dockerfile.
+FROM rust:1.99-alpine@sha256:44819b27be4c97b0e4d7203bd2e02c4820f97700211b6a37fb4c246a2de59383 AS build
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY engine engine
+COPY sandbox/manager sandbox/manager
+COPY sandbox/proxy sandbox/proxy
+ARG GIT_HASH=unknown
+ENV ENGINE_GIT_HASH=${GIT_HASH} \
+    CARGO_PROFILE_RELEASE_STRIP=true
+RUN --mount=type=cache,id=vha-engine-cargo,target=/usr/local/cargo/registry \
+    cargo build --release --locked -p sandbox-manager -p egress-proxy \
+ && mkdir /out && cp target/release/sandbox-manager target/release/egress-proxy /out/
+
+FROM scratch
+COPY --from=build /out/ /
