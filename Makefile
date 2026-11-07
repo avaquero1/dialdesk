@@ -61,12 +61,14 @@ dev-secrets:
 	npx tsx scripts/dev-secrets.ts
 
 # The bus on a real Valkey: its own Compose project and port (so it never touches vha-dev), removed afterwards.
-# Pub/sub, the log stream and its consumer group, BullMQ with retries, and every service's ACL allow and deny.
+# Pub/sub, the log stream and its consumer group, BullMQ with retries, every service's ACL allow and deny, and runner's
+# real worker fed by the scheduler (on the fakes and sandbox-manager's stub backend, so it builds that binary first).
 VALKEY_TEST_PORT ?= 56393
 VALKEY_TEST := VALKEY_DEV_PORT=$(VALKEY_TEST_PORT) docker compose -p vha-valkey-test -f deploy/compose.dev.yml --env-file .env
 valkey-test:
+	cargo build -q -p sandbox-manager
 	$(VALKEY_TEST) up -d --wait valkey
-	VALKEY_TEST=1 VALKEY_TEST_PORT=$(VALKEY_TEST_PORT) npx vitest run --project contracts packages/service-kit/test/valkey.test.ts; \
+	VALKEY_TEST=1 VALKEY_TEST_PORT=$(VALKEY_TEST_PORT) npx vitest run --project contracts packages/service-kit/test/valkey.test.ts services/runner/test/valkey-worker.test.ts; \
 	  s=$$?; $(VALKEY_TEST) down -v; exit $$s
 
 # audit on a real Postgres 17 and Valkey 8.1, as svc_audit and svc-audit: the chain, signed heads, verify catching a

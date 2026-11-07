@@ -20,10 +20,10 @@ describe.skipIf(!url)('agent: the Postgres conversation store', () => {
     await admin?.end();
   });
 
-  it('migrates, keeps turns in order with chips and templates, and returns the last N', async () => {
+  it('migrates, keeps turns in order with chips, picks and templates, and returns the last N', async () => {
     await admin!.unsafe(`drop schema if exists ${SCHEMA} cascade; create schema ${SCHEMA}`);
     const applied = await migrate({ databaseUrl: url!, schema: SCHEMA, dir: fileURLToPath(new URL('../migrations', import.meta.url)), log: createLogger('agent', 'silent') });
-    expect(applied).toEqual(['0001_init.sql', '0002_conversations.sql']);
+    expect(applied).toEqual(['0001_init.sql', '0002_conversations.sql', '0003_turn_picks.sql']);
     const store = new PgConversationStore(sql!);
     await store.create({ conversation_id: 'cnv_pgtest0001', account_id: 'acc_pgtest0001', widget_id: null });
     expect(await store.get('cnv_pgtest0001')).toEqual({ conversation_id: 'cnv_pgtest0001', account_id: 'acc_pgtest0001', widget_id: null });
@@ -34,6 +34,8 @@ describe.skipIf(!url)('agent: the Postgres conversation store', () => {
       text: role === 'agent' ? 'The market says 61%.' : `message ${i}`,
       template: role === 'agent' ? 'The market says {n1}.' : null,
       chips: role === 'agent' ? [{ tool: 'set_look', args: { hue: 32 }, status: 'applied', proposal_id: null, label: 'set_look · hue 32°' }] : [],
+      // the first agent turn carries first-visit picks; the others have none (the field stays absent)
+      ...(role === 'agent' && i === 1 && { picks: ['NFL', 'NBA'] }),
       verdict_id: role === 'agent' ? 'vrd_pgtest0001' : null,
       at: new Date(Date.UTC(2026, 10, 7, 12, 0, i)).toISOString(),
     });
@@ -41,6 +43,9 @@ describe.skipIf(!url)('agent: the Postgres conversation store', () => {
     const all = await store.turns('cnv_pgtest0001');
     expect(all.map((t) => t.turn_id)).toEqual([0, 1, 2, 3, 4, 5].map((i) => `trn_pgtest${String(i).padStart(4, '0')}`));
     expect(all[1]).toEqual(turn(1, 'agent'));
+    expect(all[1]!.picks).toEqual(['NFL', 'NBA']);
+    expect(all[3]).toEqual(turn(3, 'agent'));
+    expect('picks' in all[3]!).toBe(false);
     expect((await store.turns('cnv_pgtest0001', 2)).map((t) => t.turn_id)).toEqual(['trn_pgtest0004', 'trn_pgtest0005']);
   });
 });

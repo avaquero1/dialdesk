@@ -17,6 +17,7 @@ import {
   createWorker,
   sandboxClient,
   type Handlers,
+  type Logger,
 } from '@app/service-kit';
 import { handleRun, type RunnerDeps } from './run.ts';
 import { Scheduler } from './scheduler.ts';
@@ -30,6 +31,26 @@ export function getRunHandlers(store: Store): Handlers<typeof RUNNER> {
       return toRunState(r);
     },
   };
+}
+
+/** The widget-runs worker: each job is one handleRun on `deps`. `opts` is for tests (faster rules). */
+export function consumeWidgetRuns(deps: RunnerDeps, valkey: string, log: Logger, opts: Parameters<typeof createWorker>[4] = {}) {
+  return createWorker(
+    QUEUES.widgetRuns,
+    valkey,
+    'runner',
+    async (job, ctx) => {
+      const t0 = Date.now();
+      try {
+        const r = await handleRun(deps, job, ctx);
+        log.info({ job_id: job.job_id, run_id: r.run_id, status: r.status, ms: Date.now() - t0 }, 'run ended');
+      } catch (e) {
+        log.warn({ job_id: job.job_id, attempt: ctx.attempt, err: e instanceof Error ? e.name : 'error', msg: e instanceof Error ? e.message.slice(0, 200) : '' }, 'run did not finish');
+        throw e;
+      }
+    },
+    opts,
+  );
 }
 
 export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeof RUNNER>> {
@@ -61,16 +82,7 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
     onRunEnd: (w, job) => scheduler.noteRun(w, job),
     onWidgetGone: (id) => scheduler.forget(id),
   };
-  createWorker(QUEUES.widgetRuns, valkey, 'runner', async (job, ctx) => {
-    const t0 = Date.now();
-    try {
-      const r = await handleRun(deps, job, ctx);
-      log.info({ job_id: job.job_id, run_id: r.run_id, status: r.status, ms: Date.now() - t0 }, 'run ended');
-    } catch (e) {
-      log.warn({ job_id: job.job_id, attempt: ctx.attempt, err: e instanceof Error ? e.name : 'error', msg: e instanceof Error ? e.message.slice(0, 200) : '' }, 'run did not finish');
-      throw e;
-    }
-  });
+  consumeWidgetRuns(deps, valkey, log);
   const tickMs = Number(cfg.SCHEDULE_TICK_MS ?? 30_000) || 30_000;
   setInterval(() => {
     scheduler.tick().then(

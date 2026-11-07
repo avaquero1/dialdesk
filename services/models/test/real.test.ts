@@ -204,6 +204,26 @@ describe('models real mode: the key file', () => {
       ['model.call', 'ok', 'glm-5.3'],
     ]);
   });
+
+  it('logs every call as model.call: ids, a hash of the prompt and sizes, never the prompt or the answer', async () => {
+    const bus = new MemoryBus();
+    const app = await makeApp({}, { bus });
+    const prompt = 'Which NFL teams do you follow? secret-prompt-words-7f3a';
+    const r = await post(app, body('chat', ACC, prompt), 'agent');
+    expect(r.status).toBe(200);
+    const answer: string = (await j(r)).content ?? '';
+    expect((await post(app, body('nope', ACC, prompt), 'agent')).status).toBe(400); // a bad body never reaches the log
+    expect(bus.entries).toHaveLength(1);
+    const e = bus.entries[0]!;
+    expect(e).toMatchObject({ service: 'models', action: 'model.call', account_id: ACC, outcome: 'ok', ids: { role: 'chat', model: 'glm-5.3' } });
+    expect(Object.keys(e.hashes)).toEqual(['prompt']);
+    expect(Object.keys(e.sizes).sort()).toEqual(['cost_microusd', 'input_tokens', 'output_tokens']);
+    expect(e.sizes.input_tokens).toBeGreaterThan(0);
+    const all = JSON.stringify(bus.entries);
+    expect(all).not.toContain('secret-prompt-words');
+    expect(all).not.toContain('NFL teams');
+    if (answer.length > 8) expect(all).not.toContain(answer);
+  });
 });
 
 describe('models real mode: caps and the kill switch', () => {

@@ -40,7 +40,7 @@ export class MemoryConversationStore implements ConversationStore {
   }
 }
 
-type TurnRow = { turn_id: string; role: ChatTurn['role']; text: string; template: string | null; chips: ToolChip[]; verdict_id: string | null; at: Date };
+type TurnRow = { turn_id: string; role: ChatTurn['role']; text: string; template: string | null; chips: ToolChip[]; picks: string[] | null; verdict_id: string | null; at: Date };
 
 /** svc_agent's pool. The role is limited to 5 connections; migrations use one at start. */
 export const connect = (url: string, schema = 'agent') =>
@@ -57,13 +57,13 @@ export class PgConversationStore implements ConversationStore {
   }
   async append(id: string, t: StoredTurn) {
     await this.sql`
-      insert into turns (turn_id, conversation_id, role, text, template, chips, verdict_id, at)
-      values (${t.turn_id}, ${id}, ${t.role}, ${t.text}, ${t.template}, ${this.sql.json(t.chips as never)}, ${t.verdict_id}, ${t.at})`;
+      insert into turns (turn_id, conversation_id, role, text, template, chips, picks, verdict_id, at)
+      values (${t.turn_id}, ${id}, ${t.role}, ${t.text}, ${t.template}, ${this.sql.json(t.chips as never)}, ${t.picks ? this.sql.json(t.picks) : null}, ${t.verdict_id}, ${t.at})`;
   }
   async turns(id: string, limit = 1000) {
     const rows = await this.sql<TurnRow[]>`
       select * from (
-        select seq, turn_id, role, text, template, chips, verdict_id, at from turns
+        select seq, turn_id, role, text, template, chips, picks, verdict_id, at from turns
         where conversation_id = ${id} order by seq desc limit ${limit}
       ) t order by seq`;
     return rows.map((r) => ({
@@ -72,6 +72,7 @@ export class PgConversationStore implements ConversationStore {
       text: r.text,
       template: r.template,
       chips: r.chips,
+      ...(r.picks && { picks: r.picks }),
       verdict_id: r.verdict_id,
       at: r.at.toISOString(),
     }));

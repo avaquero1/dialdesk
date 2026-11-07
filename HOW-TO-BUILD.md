@@ -82,7 +82,8 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
   real step when your piece lands. It needs Docker, the sandbox images (`make images`) and the Rust binaries (`make rust`);
   `E2E_SANDBOX=stub make e2e` runs it without Docker.
 - `make valkey-test`: the bus on a real Valkey 8.1 in its own Compose project (`vha-valkey-test`, port 56393): pub/sub, the log
-  stream's consumer group, BullMQ retries, and every service's ACL allow and deny. Not part of `make check` (it needs Docker
+  stream's consumer group, BullMQ retries, every service's ACL allow and deny, and runner's real worker running the
+  scheduler's enqueues on the fakes (`services/runner/test/valkey-worker.test.ts`). Not part of `make check` (it needs Docker
   and `make dev-secrets`). Run it when you touch `bus.ts`, `valkey.ts` or `queues.ts`. The ACL file comes from `valkeyAclRule()`: after a
   rule change, regenerate it with `npx tsx scripts/dev-secrets.ts --force` (every token changes).
 - `make audit-test`: audit on a real Postgres 17 and Valkey 8.1 in its own Compose project (`vha-audit-test`, ports 55434 and 56394),
