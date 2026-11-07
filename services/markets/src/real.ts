@@ -10,6 +10,7 @@ import { mentions, parseFeed } from './feeds.ts';
 import { eventKeyOf, kalshiEventOf, parseEventKey, parseKalshiTicker, polymarketSlugsOf, titleOf, type Game } from './games.ts';
 import { kalshiClient, kalshiPoints, kalshiToMarket, type KalshiEventRaw } from './kalshi.ts';
 import { gameStart, polymarketClient, polyToMarket, type PolyMarketRaw } from './polymarket.ts';
+import { pairGame } from './pairing.ts';
 import { memoryStore, postgresStore, type SearchRecord, type SearchStore } from './store.ts';
 import { GAME_SERIES, type GameLeague } from './teams.ts';
 import { UpstreamError, httpGet, type Fetch } from './upstream.ts';
@@ -257,7 +258,14 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
         if (k.status === 'rejected' || p.status === 'rejected') throw down('the exchanges');
         throw new HttpError(404, 'not_found', 'no market for this event');
       }
-      return { event_key: eventKeyOf(g), title: titleOf(g), starts_at: starts, markets };
+      const event_key = eventKeyOf(g);
+      const pairing =
+        k.status === 'rejected'
+          ? { paired: false as const, reason: "Kalshi isn't answering right now." }
+          : p.status === 'rejected'
+            ? { paired: false as const, reason: "Polymarket isn't answering right now." }
+            : pairGame(event_key, k.value.value?.markets ?? [], p.value?.raw ?? null);
+      return { event_key, title: titleOf(g), starts_at: starts, markets, pairing };
     },
 
     candidates: async ({ params, query }) => {

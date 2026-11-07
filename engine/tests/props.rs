@@ -5,8 +5,8 @@
 use std::collections::BTreeMap;
 
 use engine::{
-    EngineInput, EngineResult, OpCall, OpName, Origin, Plan, Point, Receipt, Resolved, Unit, Value,
-    hash_json, run,
+    EngineInput, EngineResult, OpCall, OpName, Origin, Plan, Point, Provenance, Receipt, Resolved,
+    Unit, Value, hash_json, run,
 };
 use proptest::prelude::*;
 
@@ -35,6 +35,7 @@ fn input(ops: Vec<OpCall>, numbers: Vec<(&str, Value)>, origins: &[(&str, Origin
         },
         numbers: numbers.into_iter().map(|(k, v)| (k.into(), v)).collect(),
         origins: origins.iter().map(|(k, o)| (k.to_string(), *o)).collect(),
+        provenance: Default::default(),
     }
 }
 
@@ -298,6 +299,34 @@ proptest! {
         prop_assert_eq!(gap("k", "k"), 0.0);
     }
 
+    // 7b. Two prices: the gap's receipt carries both prices, where and when each was read, and the plan's hash;
+    // provenance changes the input hash, and an input without it hashes as before.
+    #[test]
+    fn gap_receipt_has_both_prices_and_their_provenance(k in price(), p in price(), ks in 0u32..1_000_000, ps in 0u32..1_000_000) {
+        let ops = vec![call("n1", "gap", &[("a_cents", "kalshi_price"), ("b_cents", "polymarket_price")])];
+        let origins = [("kalshi_price", Origin::Market), ("polymarket_price", Origin::Market)];
+        let bare = input(ops, vec![("kalshi_price", num(k)), ("polymarket_price", num(p))], &origins);
+        let mut with = bare.clone();
+        let prov = |source: String, s: u32| Provenance { source, as_of: format!("2026-11-07T22:{:02}:{:02}.{:03}Z", s / 60_000 % 60, s / 1000 % 60, s % 1000) };
+        with.provenance.insert("kalshi_price".into(), prov(format!("kalshi:KXNFLGAME-26NOV08CINATL-CIN{ks}"), ks));
+        with.provenance.insert("polymarket_price".into(), prov(format!("polymarket:nfl-cin-atl-2026-11-08-{ps}"), ps));
+        let (a, b) = (run(&bare), run(&with));
+        prop_assert!(a.ok && b.ok);
+        prop_assert_eq!(a.numbers[0].value, b.numbers[0].value);
+        prop_assert!((b.numbers[0].value - (p - k)).abs() <= TOL);
+        let r = &b.receipts[0];
+        prop_assert_eq!(&r.provenance["a_cents"], &with.provenance["kalshi_price"]);
+        prop_assert_eq!(&r.provenance["b_cents"], &with.provenance["polymarket_price"]);
+        prop_assert_eq!(r.args.len(), 2);
+        prop_assert_eq!(&r.refs["a_cents"], "kalshi_price");
+        prop_assert_eq!(&r.plan_hash, &hash_json(&with.plan));
+        prop_assert_eq!(&r.origins, &vec![Origin::Market]);
+        prop_assert!(a.receipts[0].provenance.is_empty());
+        prop_assert_eq!(&a.input_hash, &hash_json(&serde_json::json!({"numbers": &bare.numbers, "origins": &bare.origins})));
+        prop_assert_ne!(&a.input_hash, &b.input_hash);
+        prop_assert_eq!(&a.plan_hash, &b.plan_hash);
+    }
+
     // 8. base_rate
     #[test]
     fn base_rate_is_a_ratio(total in 1u32..10_000, frac in 0.0f64..=1.0) {
@@ -496,6 +525,7 @@ fn any_input() -> impl Strategy<Value = EngineInput> {
             },
             numbers,
             origins,
+            provenance: Default::default(),
         }
     })
 }

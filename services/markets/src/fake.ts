@@ -1,4 +1,4 @@
-import { MARKETS, SOURCE_CATALOG, newId, type Candidate, type Market } from '@app/contracts';
+import { MARKETS, SOURCE_CATALOG, newId, type Candidate, type GamePairing, type Market } from '@app/contracts';
 import { HttpError, now, type Handlers } from '@app/service-kit';
 import { fixtures, readFixture } from '@app/testkit';
 import { KalshiCandles, KalshiMarketRaw, kalshiPoints, kalshiToMarket } from './kalshi.ts';
@@ -24,6 +24,15 @@ export function fake(_deps: FakeDeps = {}): Handlers<typeof MARKETS> {
     const pm = raw ? polyToMarket(PolyMarketRaw.parse(raw), { asOf, eventKey: p.event_key }) : null;
     if (pm) markets.set(pm.market_id, pm);
   }
+  // The fixture pairs are declared by hand; a pair counts when both markets exist and say the same team wins on YES.
+  const fakePairing = (p: { kalshi_ticker: string; polymarket_slug: string }): GamePairing => {
+    const k = markets.get(`kalshi:${p.kalshi_ticker}`);
+    const pm = markets.get(`polymarket:${p.polymarket_slug}`);
+    const yes = (m: Market | undefined) => m?.title.split(': ')[1];
+    if (!k || !pm) return { paired: false, reason: `${k ? 'Polymarket' : 'Kalshi'} has no market for this game.` };
+    if (!yes(k) || yes(k) !== yes(pm)) return { paired: false, reason: "The two markets' YES may mean different teams win." };
+    return { paired: true, kalshi: k.market_id, polymarket: pm.market_id, yes_means: yes(k)! };
+  };
   const get = (id: string) => {
     const m = markets.get(id);
     if (!m) throw new HttpError(404, 'not_found', 'no such market');
@@ -56,7 +65,7 @@ export function fake(_deps: FakeDeps = {}): Handlers<typeof MARKETS> {
     event: ({ params }) => {
       const p = pairs.find((x) => x.event_key === params.event_key);
       if (!p) throw new HttpError(404, 'not_found', 'no such event');
-      return { event_key: p.event_key, title: p.title, starts_at: p.starts_at, markets: [...markets.values()].filter((m) => m.event_key === p.event_key) };
+      return { event_key: p.event_key, title: p.title, starts_at: p.starts_at, markets: [...markets.values()].filter((m) => m.event_key === p.event_key), pairing: fakePairing(p) };
     },
     candidates: ({ params, query }) => {
       const m = get(params.market_id);

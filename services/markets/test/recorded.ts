@@ -86,6 +86,17 @@ export function weekendFetch() {
     const series = u.searchParams.get('series_ticker');
     if (u.hostname === 'api.elections.kalshi.com' && u.pathname.endsWith('/events') && (series === 'KXNFLGAME' || series === 'KXNBAGAME'))
       return json(live(`weekend/events-${series}.json`));
+    const evPath = /^\/trade-api\/v2\/events\/(KXN[A-Z]+GAME)-([A-Z0-9]+)$/.exec(u.pathname);
+    if (u.hostname === 'api.elections.kalshi.com' && evPath) {
+      const page = JSON.parse(live(`weekend/events-${evPath[1]}.json`)) as { events: { event_ticker: string; markets?: unknown[] }[] };
+      const ev = page.events.find((e) => e.event_ticker === `${evPath[1]}-${evPath[2]}`);
+      return ev ? json(JSON.stringify({ event: ev, markets: ev.markets ?? [] })) : new Response('{"error":"not found"}', { status: 404 });
+    }
+    if (u.hostname === 'gamma-api.polymarket.com' && u.pathname.startsWith('/markets/slug/')) {
+      const all = JSON.parse(live('weekend/markets-by-slug.json')) as { slug: string }[];
+      const m = all.find((x) => x.slug === decodeURIComponent(u.pathname.slice('/markets/slug/'.length)));
+      return m ? json(JSON.stringify(m)) : new Response('{"error":"not found"}', { status: 404 });
+    }
     if (u.hostname === 'gamma-api.polymarket.com' && u.pathname === '/markets') {
       const want = new Set(u.searchParams.getAll('slug'));
       const all = JSON.parse(live('weekend/markets-by-slug.json')) as { slug: string }[];

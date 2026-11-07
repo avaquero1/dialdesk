@@ -96,6 +96,8 @@ export interface MarketNumbers {
   numbers: Record<string, Value>;
   /** Where each input came from: market for prices, history for series, user for the widget's own settings. */
   origins: Origins;
+  /** Where and when each input was read (gap: both prices' markets and quote times), copied onto the receipts. */
+  provenance?: NonNullable<EngineInput['provenance']>;
   quotes: Market[];
   /** The oldest market time among the quotes. */
   as_of: string;
@@ -164,6 +166,50 @@ export function runnablePlan(plan: EnginePlan, numbers: Record<string, unknown>)
     }
   }
   return { plan_version: 1, ops };
+}
+
+/** A gap widget's plan, always: Polymarket's YES price minus Kalshi's, both from the event's pair. */
+export const GAP_PLAN: EnginePlan = { plan_version: 1, ops: [{ id: 'n1', op: 'gap', args: { a_cents: 'kalshi_price', b_cents: 'polymarket_price' } }] };
+
+/**
+ * A gap widget's inputs. The two prices come from the pair markets made for the widget's event (both YES meaning the
+ * same team wins), never from whichever ids the spec lists, and each carries where and when it was read: the engine
+ * copies that onto the receipt. `skip` is the reason in plain words when the game isn't paired.
+ */
+export async function gapNumbers(markets: Call, spec: DisplaySpec): Promise<{ plan: EnginePlan; mn: MarketNumbers } | { skip: string }> {
+  let event_key = spec.params.event_keys?.[0];
+  if (!event_key) {
+    for (const market_id of spec.market_ids) {
+      const m = await markets(MARKETS.get, { params: { market_id } }).catch(() => null);
+      if (m?.event_key) {
+        event_key = m.event_key;
+        break;
+      }
+    }
+  }
+  if (!event_key) return { skip: "Not compared: this widget doesn't name a game." };
+  let ev;
+  try {
+    ev = await markets(MARKETS.event, { params: { event_key } });
+  } catch (e) {
+    if (e instanceof CallError && e.status === 404) return { skip: "Not compared: neither exchange lists this game." };
+    if (e instanceof CallError && e.status === 503) {
+      const none = { numbers: {}, origins: {}, quotes: [], as_of: new Date().toISOString(), stale: true };
+      return { plan: GAP_PLAN, mn: { ...none, down: spec.market_ids.length ? [...spec.market_ids] : ['kalshi', 'polymarket'] } };
+    }
+    throw e;
+  }
+  const pairing = ev.pairing;
+  if (!pairing) return { skip: "Not compared: we couldn't check that both exchanges mean the same team on YES." };
+  if (!pairing.paired) return { skip: `Not compared: ${pairing.reason}` };
+  const k = ev.markets.find((m) => m.market_id === pairing.kalshi);
+  const p = ev.markets.find((m) => m.market_id === pairing.polymarket);
+  if (!k || !p) return { skip: 'Not compared: one of the two prices is missing.' };
+  const numbers: Record<string, Value> = { kalshi_price: k.yes_price_cents, polymarket_price: p.yes_price_cents };
+  const origins: Origins = { kalshi_price: 'market', polymarket_price: 'market' };
+  const provenance = { kalshi_price: { source: k.market_id, as_of: k.as_of }, polymarket_price: { source: p.market_id, as_of: p.as_of } };
+  const as_of = [k.as_of, p.as_of].sort()[0]!;
+  return { plan: GAP_PLAN, mn: { numbers, origins, provenance, quotes: [k, p], as_of, stale: k.stale || p.stale, down: [] } };
 }
 
 /** Positions shown per widget, at most. */

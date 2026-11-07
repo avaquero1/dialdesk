@@ -131,6 +131,47 @@ describe.skipIf(!have)('runner', () => {
     expect(d.bus.events).toHaveLength(4);
   });
 
+  it('two prices: the gap of the paired game through the engine, each price with its market and time on the receipt', async () => {
+    const d = deps();
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Gap');
+    const rec = await handleRun(d, jobFor(w, 'numbers'), ctx());
+    expect(rec.status).toBe('done');
+    expect(rec.steps.map((s) => [s.step, s.status])).toEqual([['math', 'ok'], ['guard', 'ok'], ['publish', 'ok']]);
+    const r = (await current(w)).result!;
+    const ev = await via('runner', marketsApp)(MARKETS.event, { params: { event_key: 'nfl-2026w10-kc-buf' } });
+    const pair = ev.pairing;
+    if (!pair?.paired) throw new Error('the fixture game should pair');
+    const k = ev.markets.find((m) => m.market_id === pair.kalshi)!;
+    const p = ev.markets.find((m) => m.market_id === pair.polymarket)!;
+    expect(r.numbers.map((n) => [n.op, n.value, n.unit])).toEqual([['gap', p.yes_price_cents - k.yes_price_cents, 'points']]);
+    const receipt = r.receipts[0]!;
+    expect(receipt.args).toEqual({ a_cents: k.yes_price_cents, b_cents: p.yes_price_cents });
+    expect(receipt.refs).toEqual({ a_cents: 'kalshi_price', b_cents: 'polymarket_price' });
+    expect(receipt.provenance).toEqual({ a_cents: { source: k.market_id, as_of: k.as_of }, b_cents: { source: p.market_id, as_of: p.as_of } });
+    expect(receipt.origins).toEqual(['market']);
+    expect(receipt.formula).toBe('gap = b_cents - a_cents');
+    expect(r.numbers[0]!.receipt_id).toBe(receipt.id);
+  });
+
+  it("two prices: a game that isn't paired gets no number, and the widget says why in words", async () => {
+    const markets = via('runner', marketsApp);
+    const unpaired: Call = (async (e, input) => {
+      const out = await markets(e, input as never);
+      return (e as unknown) === MARKETS.event ? { ...(out as object), pairing: { paired: false, reason: 'Polymarket names the teams in another order, so its YES may mean the other team wins.' } } : out;
+    }) as Call;
+    const d = deps({ markets: unpaired });
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Gap');
+    const rec = await handleRun(d, jobFor(w, 'numbers'), ctx());
+    expect(rec.status).toBe('done');
+    const math = rec.steps.find((s) => s.step === 'math')!;
+    expect(math).toMatchObject({ status: 'skipped', note: expect.stringMatching(/^Not compared: Polymarket names the teams/) });
+    const r = (await current(w)).result!;
+    expect(r.numbers).toEqual([]);
+    expect(r.summary).toEqual({ template: math.note, slots: {} });
+  });
+
   it("positions: numbers from connections only with the user's consent (403 = not connected), tagged `connection`", async () => {
     const { account_id, byTitle } = await freshBoard();
     const w = byTitle('Positions');

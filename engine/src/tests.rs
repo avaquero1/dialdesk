@@ -495,3 +495,34 @@ fn huge_results_stay_finite_or_are_refused() {
         "f64::MAX * 100 overflows before / 100"
     );
 }
+
+#[test]
+fn provenance_must_name_an_input() {
+    let mut i = input(
+        json!([{"id": "n1", "op": "gap", "args": {"a_cents": "k", "b_cents": "p"}}]),
+        json!({"k": 61, "p": 63}),
+    );
+    i.provenance.insert(
+        "x".into(),
+        Provenance {
+            source: "kalshi:K".into(),
+            as_of: "2026-11-07T22:30:09Z".into(),
+        },
+    );
+    let r = run(&i);
+    assert!(!r.ok);
+    assert!(
+        r.errors
+            .iter()
+            .any(|e| e.code == "bad_plan" && e.message.contains("provenance"))
+    );
+    i.provenance.clear();
+    i.provenance.insert(
+        "k".into(),
+        Provenance {
+            source: String::new(),
+            as_of: "2026-11-07T22:30:09Z".into(),
+        },
+    );
+    assert!(!run(&i).ok);
+}

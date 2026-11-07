@@ -51,7 +51,7 @@ import {
   type SandboxClient,
 } from '@app/service-kit';
 import { z } from 'zod';
-import { allowedOps, defaultPlan, marketNumbers, numberKeys, planProblem, positionNumbers, runnablePlan, type MarketNumbers } from './plans.ts';
+import { allowedOps, defaultPlan, gapNumbers, marketNumbers, numberKeys, planProblem, positionNumbers, runnablePlan, type MarketNumbers } from './plans.ts';
 import { toRunState, type RunRecord, type Store } from './store.ts';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
@@ -191,6 +191,8 @@ interface Outputs {
   summary?: { template: string } | null;
   /** How many of each sandbox job's trust_log rows are in the audit log already (so a retry never logs one twice). */
   trust?: Record<string, number>;
+  /** gap: why the game's two markets weren't compared, in plain words. */
+  unpaired?: string;
 }
 
 class Run {
@@ -332,6 +334,15 @@ class Run {
       }
       use = pn.plan;
       mn = pn.mn;
+    } else if (spec.type === 'gap') {
+      const gn = await gapNumbers(this.d.markets, spec);
+      if ('skip' in gn) {
+        await this.step({ step: 'math', status: 'skipped', note: gn.skip }, t0);
+        this.out.unpaired = gn.skip;
+        return null;
+      }
+      use = gn.plan;
+      mn = gn.mn;
     } else mn = await marketNumbers(this.d.markets, spec, plan);
     if (spec.market_ids.length && mn.down.length === spec.market_ids.length) {
       await this.step({ step: 'math', status: 'failed', note: 'every exchange is down and nothing is cached' }, t0);
@@ -344,7 +355,7 @@ class Run {
     }
     const job_id = `${this.run_id}:math`;
     // Busy: the job waits on the queue without spending an attempt, and resumes here (reads are already saved).
-    const created = await this.createJob({ job_id, run_id: this.run_id, widget_id: spec.widget_id, kind: 'compute', compute: { engine_input: { plan: p, numbers: mn.numbers, origins: mn.origins } } }, 0);
+    const created = await this.createJob({ job_id, run_id: this.run_id, widget_id: spec.widget_id, kind: 'compute', compute: { engine_input: { plan: p, numbers: mn.numbers, origins: mn.origins, ...(mn.provenance ? { provenance: mn.provenance } : {}) } } }, 0);
     await this.forward(created);
     const settled = await this.settle(job_id, created, this.t.compute);
     if (!settled) {
@@ -425,7 +436,17 @@ class Run {
   async numbers(w: Widget, spec: DisplaySpec) {
     const plan = w.profile && w.profile.last_math_plan && !planProblem(spec, w.profile.last_math_plan) ? w.profile.last_math_plan : defaultPlan(spec);
     const m = await this.math(spec, plan);
-    if (!m) return;
+    if (!m) {
+      // A game that isn't paired says so on the widget, in words: no number, no gap.
+      const why = this.out.unpaired;
+      if (why)
+        await this.publish(
+          { summary: { template: why, slots: {} }, facts: [], sources: [], numbers: [], receipts: [] },
+          { blocked: [], as_of: now(), stale: false },
+          'numbers',
+        );
+      return;
+    }
     const er = m.result;
     // A numbers run keeps the widget's research part (facts, sources, blocked) and its summary when every slot still
     // has a number of the same op; the slots then point at the new receipts.
