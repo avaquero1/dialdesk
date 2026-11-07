@@ -766,7 +766,9 @@
       "runner"
     ],
     "status": 200,
-    "errors": [],
+    "errors": [
+      503
+    ],
     "summary": "Find markets (the agent proposes widgets from these)."
   },
   {
@@ -781,7 +783,8 @@
     ],
     "status": 200,
     "errors": [
-      404
+      404,
+      503
     ],
     "summary": "One market, cached 10-30 s. quote_market reads this; board reads it for a new widget's first paint."
   },
@@ -795,7 +798,8 @@
     ],
     "status": 200,
     "errors": [
-      404
+      404,
+      503
     ],
     "summary": "Price history for movement, volatility and the 7-day line."
   },
@@ -810,7 +814,8 @@
     ],
     "status": 200,
     "errors": [
-      404
+      404,
+      503
     ],
     "summary": "One event's markets on both exchanges (for gap)."
   },
@@ -824,7 +829,8 @@
     ],
     "status": 200,
     "errors": [
-      404
+      404,
+      503
     ],
     "summary": "Step 0, code only: candidate links for a market from the catalog, feeds and Brave, shared by every follower."
   },

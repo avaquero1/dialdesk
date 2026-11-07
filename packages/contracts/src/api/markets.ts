@@ -35,6 +35,8 @@ export const SearchReceipt = z
   .strict();
 
 const mid = z.object({ market_id: MarketId });
+// 503: the exchange (or every source) is down and markets has nothing cached for it yet. With a cached copy it answers
+// 200 with `stale: true` instead.
 
 export const MARKETS = api('markets', {
   list: {
@@ -43,6 +45,7 @@ export const MARKETS = api('markets', {
     callers: ['agent', 'runner'],
     query: z.object({ category: MarketCategory.optional(), league: League.optional(), q: z.string().max(80).optional() }),
     response: z.object({ markets: z.array(Market) }).strict(),
+    errors: [503],
     summary: 'Find markets (the agent proposes widgets from these).',
   },
   get: {
@@ -51,7 +54,7 @@ export const MARKETS = api('markets', {
     callers: ['agent', 'runner', 'board'],
     params: mid,
     response: Market,
-    errors: [404],
+    errors: [404, 503],
     summary: "One market, cached 10-30 s. quote_market reads this; board reads it for a new widget's first paint.",
   },
   history: {
@@ -61,7 +64,7 @@ export const MARKETS = api('markets', {
     params: mid,
     query: z.object({ window_s: z.coerce.number().int().min(3600).max(30 * 86400) }),
     response: z.object({ market_id: MarketId, points: z.array(PricePoint), as_of: Timestamp }).strict(),
-    errors: [404],
+    errors: [404, 503],
     summary: 'Price history for movement, volatility and the 7-day line.',
   },
   event: {
@@ -70,7 +73,7 @@ export const MARKETS = api('markets', {
     callers: ['agent', 'runner'],
     params: z.object({ event_key: EventKey }),
     response: z.object({ event_key: EventKey, title: z.string(), starts_at: Timestamp.nullable(), markets: z.array(Market) }).strict(),
-    errors: [404],
+    errors: [404, 503],
     summary: "One event's markets on both exchanges (for gap).",
   },
   candidates: {
@@ -80,7 +83,7 @@ export const MARKETS = api('markets', {
     params: mid,
     query: z.object({ extra_domains: z.string().max(2000).optional().describe("comma-separated: the widget's user-added domains") }),
     response: z.object({ market_id: MarketId, candidates: z.array(Candidate), receipts: z.array(SearchReceipt) }).strict(),
-    errors: [404],
+    errors: [404, 503],
     summary: 'Step 0, code only: candidate links for a market from the catalog, feeds and Brave, shared by every follower.',
   },
 });
