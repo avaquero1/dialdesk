@@ -134,8 +134,8 @@
     linear-gradient(0deg,
       oklch(.8 .12 calc(var(--hz) - 6)) 0%,
       oklch(.62 .15 calc(var(--hz) - 22)) 2.6%,
-      oklch(.43 .13 calc(var(--hz) - 84)) 9%,
-      oklch(.32 .105 calc(var(--hz) - 104)) 24%,
+      oklch(.41 .12 calc(var(--hz) - 74)) 9%,
+      oklch(.31 .1 calc(var(--hz) - 88)) 24%,
       oklch(.235 .095 calc(var(--hue) + 30)) 52%,
       oklch(.18 .078 calc(var(--hue) + 22)) 100%);
 
@@ -160,7 +160,7 @@
   --ink-6: #8BD392;
 
   /* widget = indigo smoke, lit faintly from below */
-  --glass-widget-bg: linear-gradient(180deg, oklch(.27 .06 calc(var(--hue) + 34) / .5), oklch(.3 .08 calc(var(--hz) - 84) / .56));
+  --glass-widget-bg: linear-gradient(180deg, oklch(.27 .06 calc(var(--hue) + 34) / .5), oklch(.3 .08 calc(var(--hz) - 74) / .56));
   --glass-widget-blur: 32px;
   --glass-widget-sat: 160%;
   --glass-widget-rim: rgba(255, 255, 255, .1);
@@ -169,7 +169,7 @@
   --glass-widget-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 36%), radial-gradient(92% 44% at 50% 120%, oklch(.62 .13 calc(var(--hz) - 12) / .24), transparent 72%);
 
   /* panel = denser */
-  --glass-panel-bg: linear-gradient(180deg, oklch(.24 .056 calc(var(--hue) + 34) / .72), oklch(.27 .07 calc(var(--hz) - 84) / .78));
+  --glass-panel-bg: linear-gradient(180deg, oklch(.24 .056 calc(var(--hue) + 34) / .72), oklch(.27 .07 calc(var(--hz) - 74) / .78));
   --glass-panel-blur: 40px;
   --glass-panel-sat: 160%;
   --glass-panel-rim: rgba(255, 255, 255, .11);
@@ -178,7 +178,7 @@
   --glass-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 34%), radial-gradient(96% 38% at 50% 122%, oklch(.62 .13 calc(var(--hz) - 12) / .22), transparent 72%);
 
   /* chip = clear drops */
-  --glass-chip-bg: oklch(.92 .03 calc(var(--hz) - 80) / .1);
+  --glass-chip-bg: oklch(.92 .03 calc(var(--hz) - 74) / .1);
   --glass-chip-blur: 0px;
   --glass-chip-sat: 100%;
   --glass-chip-rim: rgba(255, 255, 255, .17);

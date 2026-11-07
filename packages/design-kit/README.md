@@ -14,7 +14,9 @@ else reads them.
 
 The only stored look is `Look` in `packages/contracts`: `{ theme, mode, hue }`.
 
-- `theme`: a theme id (`THEME_IDS`). The candidates are narrowed later by shortening `THEME_IDS` and removing files here.
+- `theme`: a theme id (`THEME_IDS`). The app ships 7 themes (agent-mail, mercury, stadium-night, deep-sea, ice, obsidian,
+  daybreak): one file each here. `THEME_IDS` still lists the 5 retired ids, so a stored look that names one stays valid and
+  falls back to the first theme.
 - `mode`: `light`, `dark` or `system`. System follows `prefers-color-scheme`, live.
 - `hue`: a whole number 0–360, or `null` for the theme's own hue (`--hue-default`).
 

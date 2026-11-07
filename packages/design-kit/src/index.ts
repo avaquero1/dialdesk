@@ -13,17 +13,12 @@ export const THEMES_DIR = join(KIT_DIR, 'css', 'themes');
 /** Display names by file number. A file without a number gets its slug in title case. */
 const NAMES: Record<string, string> = {
   '01': 'Agent Mail',
-  '02': 'Clear Water',
   '03': 'Mercury',
   '04': 'Stadium Night',
   '05': 'Deep Sea',
   '06': 'Ice',
-  '07': 'Aurora',
-  '08': 'Prism',
   '09': 'Obsidian',
-  '10': 'Rain',
   '11': 'Daybreak',
-  '12': 'Ink in Water',
 };
 const SMALL = new Set(['in', 'of', 'the', 'and']);
 const titleCase = (slug: string) =>
