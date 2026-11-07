@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust install dev-secrets infra-up infra-down fakes health stop-fakes containment
+.PHONY: check typecheck lint gen gen-check contracts e2e rust install dev-secrets infra-up infra-down fakes health stop-fakes containment valkey-test
 
 check: rust gen-check typecheck lint contracts e2e
 	@echo "make check: all green"
@@ -38,6 +38,15 @@ e2e: rust
 
 dev-secrets:
 	npx tsx scripts/dev-secrets.ts
+
+# The bus on a real Valkey: its own Compose project and port (so it never touches vha-dev), removed afterwards.
+# Pub/sub, the log stream and its consumer group, BullMQ with retries, and every service's ACL allow and deny.
+VALKEY_TEST_PORT ?= 56393
+VALKEY_TEST := VALKEY_DEV_PORT=$(VALKEY_TEST_PORT) docker compose -p vha-valkey-test -f deploy/compose.dev.yml --env-file .env
+valkey-test:
+	$(VALKEY_TEST) up -d --wait valkey
+	VALKEY_TEST=1 VALKEY_TEST_PORT=$(VALKEY_TEST_PORT) npx vitest run --project contracts packages/service-kit/test/valkey.test.ts; \
+	  s=$$?; $(VALKEY_TEST) down -v; exit $$s
 
 # Local infra only (Postgres, Valkey, fixtures). The services run natively with tsx.
 infra-up:

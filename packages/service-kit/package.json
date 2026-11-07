@@ -8,7 +8,9 @@
   "dependencies": {
     "@app/contracts": "*",
     "@hono/node-server": "^2.1.6",
+    "bullmq": "6.4.2",
     "hono": "^4.13.17",
+    "ioredis": "6.0.0",
     "pino": "^10.4.0",
     "postgres": "^4.1.0",
     "zod": "^4.6.7"

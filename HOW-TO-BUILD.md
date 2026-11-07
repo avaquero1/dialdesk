@@ -32,6 +32,13 @@ Never edit another piece's folder. Never commit in the main checkout. No remote:
 - **Errors:** `throw new HttpError(404, 'not_found', '…')`. The status must be in the endpoint's `errors`.
 - **Logs:** `ctx.log` (pino, JSON). Never log a body, a key, a token or page text. `console.log` fails lint.
 - **The audit log:** `bus.log(logEntry('board', 'widget.accepted', {...}))`: ids, hashes and sizes only.
+- **The bus in real mode:** `const bus = busFromConfig('board', cfg)` (a `ValkeyBus` on `<SVC>_VALKEY_URL`); fakes keep `MemoryBus`.
+  `bus.emit(...)` publishes on `events.<name>`, `bus.log(...)` appends to `log:actions`, `bus.subscribe(['run.step'], fn)` listens
+  (edge: `'all'`). audit reads the stream with `LogStreamReader`.
+- **Queues:** `createQueue(QUEUES.widgetRuns, cfg.VALKEY_URL, 'board').enqueue(job)` with `job_id = widgetRunJobId(...)`;
+  `createWorker(QUEUES.widgetRuns, cfg.VALKEY_URL, 'runner', async (job, { signal, attempt }) => {...})`. In the handler, throw
+  `NoRetry('poison')` to fail without a retry, `RetryLater(ms)` (or let `SandboxBusy` through) to wait without spending an attempt;
+  any other error is retried per `QUEUE_RULES`. The abort `signal` fires at the timeout. `RUN_RULES` has the step timeouts.
 
 ## 3. Adding or changing an endpoint (needs the contracts owner)
 
@@ -73,6 +80,10 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
 - `make e2e`: the end-to-end flow on fakes (`e2e/flow.test.ts`): sign up, the chat builds a widget, a run fills it
   with numbers and receipts, a poisoned page gets its sandbox killed. Pending steps are `it.todo`: turn yours into a
   real step when your piece lands. It needs `target/debug/sandbox-manager` (`make rust` builds it).
+- `make valkey-test`: the bus on a real Valkey 8.1 in its own Compose project (`vha-valkey-test`, port 56393): pub/sub, the log
+  stream's consumer group, BullMQ retries, and every service's ACL allow and deny. Not part of `make check` (it needs Docker
+  and `make dev-secrets`). Run it when you touch `bus.ts`, `valkey.ts` or `queues.ts`. The ACL file comes from `valkeyAclRule()`: after a
+  rule change, regenerate it with `npx tsx scripts/dev-secrets.ts --force` (every token changes).
 - Your own unit tests: `services/<name>/test/*.test.ts` (picked up by the contracts project) or Rust `#[test]`s.
 
 ## 6. Landing

@@ -1,8 +1,8 @@
 import { EVENTS, LogEntry, type EventName, type EventPayload } from '@app/contracts';
 
 /**
- * Events and the log stream, as an interface. Fakes and tests use MemoryBus; Phase 1 adds the Valkey one
- * (pub/sub on `events.<name>`, XADD to LOG_STREAM) behind the same interface. Both validate before sending.
+ * Events and the log stream, as an interface. Fakes and tests use MemoryBus; real mode uses ValkeyBus
+ * (valkey.ts: pub/sub on `events.<name>`, XADD to LOG_STREAM), from `busFromConfig`. Both validate before sending.
  */
 export interface Bus {
   emit<E extends EventName>(event: E, payload: EventPayload<E>): Promise<void>;
