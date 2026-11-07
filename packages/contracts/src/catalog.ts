@@ -12,6 +12,7 @@ export const EngineOp = z.enum([
   'volatility',
   'gap',
   'base_rate',
+  'base_rate_history',
   'position_value',
   'pnl',
 ]);

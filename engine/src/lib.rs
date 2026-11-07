@@ -28,14 +28,55 @@ pub struct EngineInput {
     pub plan: Plan,
     /// Named inputs. Op args refer to them by key.
     pub numbers: BTreeMap<String, Value>,
+    /// Where each named input came from, by key in `numbers`. An untagged input is
+    /// usable by every op except as `expected_value`'s probability.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub origins: BTreeMap<String, Origin>,
 }
 
-/// A named input: a single number or a time series.
+/// Where a named input came from. There is no "model" origin: a model's number can
+/// never be tagged, so it can never be `expected_value`'s probability.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Origin {
+    /// The user's own number (the widget's "your probability" control).
+    User,
+    /// An exchange's price, from markets.
+    Market,
+    /// Resolved markets from history, from markets.
+    History,
+    /// The user's connected account (positions), from connections.
+    Connection,
+}
+
+impl Origin {
+    /// Origins `expected_value` accepts for its probability.
+    pub fn sources_probability(self) -> bool {
+        matches!(self, Origin::User | Origin::Market | Origin::History)
+    }
+}
+
+/// A named input: a single number, a price series, or a history of resolved markets.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum Value {
     Number(f64),
     Series(Vec<Point>),
+    History(Vec<Resolved>),
+}
+
+/// One resolved market: its price before it resolved, and how it resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Resolved {
+    /// Unix seconds when the price was taken.
+    pub t: i64,
+    /// YES price in cents (0..=100) before it resolved.
+    pub price_cents: f64,
+    /// 1 when it resolved YES, 0 when NO.
+    pub outcome: f64,
 }
 
 /// One point of a price series.
@@ -89,13 +130,17 @@ pub enum OpName {
     Gap,
     /// args: hits, total. hits / total.
     BaseRate,
+    /// args: history, lo_cents (optional), hi_cents (optional). Share of resolved
+    /// markets priced in lo..=hi that resolved YES; the receipt holds the sample size.
+    BaseRateHistory,
     /// args: count, price_cents. Dollars.
     PositionValue,
     /// args: count, avg_price_cents, price_cents. Dollars.
     Pnl,
 }
 
-/// Everything one run produced. `ok` is true when there are no errors.
+/// Everything one run produced: the plan as run, its hash and the input hash, the
+/// numbers and their receipts. `ok` is true when there are no errors.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct EngineResult {
     pub ok: bool,
@@ -103,8 +148,11 @@ pub struct EngineResult {
     pub git_hash: String,
     /// sha256 hex of the plan's canonical JSON.
     pub plan_hash: String,
-    /// sha256 hex of the `numbers` map's canonical JSON.
+    /// sha256 hex of the canonical JSON of {"numbers", "origins"}.
     pub input_hash: String,
+    // The plan as run; `plan_hash` is its hash. (A doc comment here would make the
+    // generated TS type a duplicate `Plan1`: a description beside a $ref.)
+    pub plan: Plan,
     pub numbers: Vec<NumberOut>,
     pub receipts: Vec<Receipt>,
     pub errors: Vec<OpError>,
@@ -129,6 +177,16 @@ pub struct Receipt {
     pub op: OpName,
     /// The resolved inputs, by arg name.
     pub args: BTreeMap<String, ReceiptArg>,
+    /// The plan's refs, by arg name: a key in `numbers` or an earlier op's id.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub refs: BTreeMap<String, String>,
+    /// Every origin the inputs trace back to (through earlier ops), sorted. Empty
+    /// when no input was tagged.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub origins: Vec<Origin>,
+    /// How many records the number rests on (base_rate_history).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_size: Option<u32>,
     /// Human-readable formula, e.g. "p = price_cents / 100".
     pub formula: String,
     pub value: f64,
@@ -147,7 +205,7 @@ pub enum ReceiptArg {
     Series(SeriesSummary),
 }
 
-/// A series on a receipt: its size, span and hash instead of every point.
+/// A series or history on a receipt: its size, time span and hash instead of every point.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SeriesSummary {
     pub points: u32,
@@ -162,7 +220,7 @@ pub struct SeriesSummary {
 pub struct OpError {
     /// The op's id, or "plan" for a plan-level error.
     pub op_id: String,
-    /// One of: bad_arg, missing_input, out_of_range, bad_plan.
+    /// One of: bad_arg, missing_input, out_of_range, bad_plan, unsourced_probability.
     pub code: String,
     pub message: String,
 }
@@ -224,6 +282,15 @@ fn check_plan(input: &EngineInput) -> Vec<OpError> {
             format!("more than {MAX_OPS} ops"),
         ));
     }
+    for key in input.origins.keys() {
+        if !input.numbers.contains_key(key) {
+            errs.push(OpError::new(
+                "plan",
+                "bad_plan",
+                format!("origins names {key:?}, which is not in numbers"),
+            ));
+        }
+    }
     let mut seen = BTreeSet::new();
     for call in &plan.ops {
         if !valid_id(&call.id) {
@@ -245,16 +312,22 @@ fn check_plan(input: &EngineInput) -> Vec<OpError> {
     errs
 }
 
+/// The input hash covers the numbers and their origins.
+pub fn input_hash(input: &EngineInput) -> String {
+    hash_json(&serde_json::json!({"numbers": &input.numbers, "origins": &input.origins}))
+}
+
 /// Runs a plan. Never panics on bad input: problems become `errors`.
 pub fn run(input: &EngineInput) -> EngineResult {
     let plan_hash = hash_json(&input.plan);
-    let input_hash = hash_json(&input.numbers);
+    let input_hash = input_hash(input);
     let mut res = EngineResult {
         ok: false,
         engine_version: ENGINE_VERSION.into(),
         git_hash: GIT_HASH.into(),
         plan_hash,
         input_hash,
+        plan: input.plan.clone(),
         numbers: vec![],
         receipts: vec![],
         errors: check_plan(input),
@@ -263,11 +336,12 @@ pub fn run(input: &EngineInput) -> EngineResult {
         return res;
     }
 
-    // Outputs of ops run so far: Some(value), or None when the op failed.
-    let mut done: BTreeMap<&str, Option<f64>> = BTreeMap::new();
+    // Outputs of ops run so far: Some(output), or None when the op failed.
+    let mut done: BTreeMap<&str, Option<ops::Done>> = BTreeMap::new();
     for call in &input.plan.ops {
-        match ops::eval(call, &input.numbers, &done) {
-            Ok((value, args)) => {
+        match ops::eval(call, input, &done) {
+            Ok(out) => {
+                let value = out.value;
                 let rid = receipt_id(&res.plan_hash, &call.id);
                 let unit = call.op.unit();
                 res.numbers.push(NumberOut {
@@ -281,7 +355,10 @@ pub fn run(input: &EngineInput) -> EngineResult {
                     id: rid,
                     op_id: call.id.clone(),
                     op: call.op,
-                    args,
+                    args: out.receipt_args,
+                    refs: call.args.clone(),
+                    origins: out.trace.origins.iter().copied().collect(),
+                    sample_size: out.sample_size,
                     formula: call.op.formula().into(),
                     value,
                     unit,
@@ -290,7 +367,14 @@ pub fn run(input: &EngineInput) -> EngineResult {
                     engine_version: ENGINE_VERSION.into(),
                     git_hash: GIT_HASH.into(),
                 });
-                done.insert(&call.id, Some(value));
+                done.insert(
+                    &call.id,
+                    Some(ops::Done {
+                        value,
+                        unit,
+                        trace: out.trace,
+                    }),
+                );
             }
             Err(e) => {
                 res.errors.push(e);

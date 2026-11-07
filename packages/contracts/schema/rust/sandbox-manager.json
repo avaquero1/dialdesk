@@ -183,6 +183,13 @@
               "description": "Named inputs. Op args refer to them by key.",
               "type": "object"
             },
+            "origins": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Origin"
+              },
+              "description": "Where each named input came from, by key in `numbers`. An untagged input is\nusable by every op except as `expected_value`'s probability.",
+              "type": "object"
+            },
             "plan": {
               "$ref": "#/$defs/Plan"
             }
@@ -278,6 +285,11 @@
               "type": "string"
             },
             {
+              "const": "base_rate_history",
+              "description": "args: history, lo_cents (optional), hi_cents (optional). Share of resolved\nmarkets priced in lo..=hi that resolved YES; the receipt holds the sample size.",
+              "type": "string"
+            },
+            {
               "const": "position_value",
               "description": "args: count, price_cents. Dollars.",
               "type": "string"
@@ -285,6 +297,31 @@
             {
               "const": "pnl",
               "description": "args: count, avg_price_cents, price_cents. Dollars.",
+              "type": "string"
+            }
+          ]
+        },
+        "Origin": {
+          "description": "Where a named input came from. There is no \"model\" origin: a model's number can\nnever be tagged, so it can never be `expected_value`'s probability.",
+          "oneOf": [
+            {
+              "const": "user",
+              "description": "The user's own number (the widget's \"your probability\" control).",
+              "type": "string"
+            },
+            {
+              "const": "market",
+              "description": "An exchange's price, from markets.",
+              "type": "string"
+            },
+            {
+              "const": "history",
+              "description": "Resolved markets from history, from markets.",
+              "type": "string"
+            },
+            {
+              "const": "connection",
+              "description": "The user's connected account (positions), from connections.",
               "type": "string"
             }
           ]
@@ -333,6 +370,33 @@
           ],
           "type": "object"
         },
+        "Resolved": {
+          "additionalProperties": false,
+          "description": "One resolved market: its price before it resolved, and how it resolved.",
+          "properties": {
+            "outcome": {
+              "description": "1 when it resolved YES, 0 when NO.",
+              "format": "double",
+              "type": "number"
+            },
+            "price_cents": {
+              "description": "YES price in cents (0..=100) before it resolved.",
+              "format": "double",
+              "type": "number"
+            },
+            "t": {
+              "description": "Unix seconds when the price was taken.",
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "t",
+            "price_cents",
+            "outcome"
+          ],
+          "type": "object"
+        },
         "Value": {
           "anyOf": [
             {
@@ -344,9 +408,15 @@
                 "$ref": "#/$defs/Point"
               },
               "type": "array"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/Resolved"
+              },
+              "type": "array"
             }
           ],
-          "description": "A named input: a single number or a time series."
+          "description": "A named input: a single number, a price series, or a history of resolved markets."
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -399,7 +469,7 @@
     "JobStatus": {
       "$defs": {
         "EngineResult": {
-          "description": "Everything one run produced. `ok` is true when there are no errors.",
+          "description": "Everything one run produced: the plan as run, its hash and the input hash, the\nnumbers and their receipts. `ok` is true when there are no errors.",
           "properties": {
             "engine_version": {
               "type": "string"
@@ -414,7 +484,7 @@
               "type": "string"
             },
             "input_hash": {
-              "description": "sha256 hex of the `numbers` map's canonical JSON.",
+              "description": "sha256 hex of the canonical JSON of {\"numbers\", \"origins\"}.",
               "type": "string"
             },
             "numbers": {
@@ -425,6 +495,9 @@
             },
             "ok": {
               "type": "boolean"
+            },
+            "plan": {
+              "$ref": "#/$defs/Plan"
             },
             "plan_hash": {
               "description": "sha256 hex of the plan's canonical JSON.",
@@ -443,6 +516,7 @@
             "git_hash",
             "plan_hash",
             "input_hash",
+            "plan",
             "numbers",
             "receipts",
             "errors"
@@ -554,11 +628,38 @@
           ],
           "type": "object"
         },
+        "OpCall": {
+          "additionalProperties": false,
+          "description": "One op call.",
+          "properties": {
+            "args": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Arg name -> a key in `numbers`, or the id of an earlier op.",
+              "type": "object"
+            },
+            "id": {
+              "description": "Slot-safe id, unique in the plan, e.g. \"n1\". Must not equal a key in `numbers`.",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$",
+              "type": "string"
+            },
+            "op": {
+              "$ref": "#/$defs/OpName"
+            }
+          },
+          "required": [
+            "id",
+            "op",
+            "args"
+          ],
+          "type": "object"
+        },
         "OpError": {
           "description": "Why an op (or the whole plan) did not produce a number.",
           "properties": {
             "code": {
-              "description": "One of: bad_arg, missing_input, out_of_range, bad_plan.",
+              "description": "One of: bad_arg, missing_input, out_of_range, bad_plan, unsourced_probability.",
               "type": "string"
             },
             "message": {
@@ -620,6 +721,11 @@
               "type": "string"
             },
             {
+              "const": "base_rate_history",
+              "description": "args: history, lo_cents (optional), hi_cents (optional). Share of resolved\nmarkets priced in lo..=hi that resolved YES; the receipt holds the sample size.",
+              "type": "string"
+            },
+            {
               "const": "position_value",
               "description": "args: count, price_cents. Dollars.",
               "type": "string"
@@ -627,6 +733,31 @@
             {
               "const": "pnl",
               "description": "args: count, avg_price_cents, price_cents. Dollars.",
+              "type": "string"
+            }
+          ]
+        },
+        "Origin": {
+          "description": "Where a named input came from. There is no \"model\" origin: a model's number can\nnever be tagged, so it can never be `expected_value`'s probability.",
+          "oneOf": [
+            {
+              "const": "user",
+              "description": "The user's own number (the widget's \"your probability\" control).",
+              "type": "string"
+            },
+            {
+              "const": "market",
+              "description": "An exchange's price, from markets.",
+              "type": "string"
+            },
+            {
+              "const": "history",
+              "description": "Resolved markets from history, from markets.",
+              "type": "string"
+            },
+            {
+              "const": "connection",
+              "description": "The user's connected account (positions), from connections.",
               "type": "string"
             }
           ]
@@ -657,6 +788,29 @@
             "url",
             "status",
             "text"
+          ],
+          "type": "object"
+        },
+        "Plan": {
+          "additionalProperties": false,
+          "description": "The ops to run, in order. Later ops may read earlier ops' outputs.",
+          "properties": {
+            "ops": {
+              "items": {
+                "$ref": "#/$defs/OpCall"
+              },
+              "type": "array"
+            },
+            "plan_version": {
+              "description": "Must be 1.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "plan_version",
+            "ops"
           ],
           "type": "object"
         },
@@ -741,8 +895,31 @@
             "op_id": {
               "type": "string"
             },
+            "origins": {
+              "description": "Every origin the inputs trace back to (through earlier ops), sorted. Empty\nwhen no input was tagged.",
+              "items": {
+                "$ref": "#/$defs/Origin"
+              },
+              "type": "array"
+            },
             "plan_hash": {
               "type": "string"
+            },
+            "refs": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "The plan's refs, by arg name: a key in `numbers` or an earlier op's id.",
+              "type": "object"
+            },
+            "sample_size": {
+              "description": "How many records the number rests on (base_rate_history).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "unit": {
               "$ref": "#/$defs/Unit"
@@ -780,7 +957,7 @@
           "description": "A resolved input as recorded on a receipt."
         },
         "SeriesSummary": {
-          "description": "A series on a receipt: its size, span and hash instead of every point.",
+          "description": "A series or history on a receipt: its size, time span and hash instead of every point.",
           "properties": {
             "first_t": {
               "format": "int64",

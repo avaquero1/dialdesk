@@ -627,6 +627,11 @@
                         },
                         {
                           "type": "string",
+                          "const": "base_rate_history",
+                          "description": "args: history, lo_cents (optional), hi_cents (optional). Share of resolved\nmarkets priced in lo..=hi that resolved YES; the receipt holds the sample size."
+                        },
+                        {
+                          "type": "string",
                           "const": "position_value",
                           "description": "args: count, price_cents. Dollars."
                         },
@@ -744,6 +749,7 @@
                   "volatility",
                   "gap",
                   "base_rate",
+                  "base_rate_history",
                   "position_value",
                   "pnl"
                 ]
@@ -1491,6 +1497,11 @@
                 },
                 {
                   "type": "string",
+                  "const": "base_rate_history",
+                  "description": "args: history, lo_cents (optional), hi_cents (optional). Share of resolved\nmarkets priced in lo..=hi that resolved YES; the receipt holds the sample size."
+                },
+                {
+                  "type": "string",
                   "const": "position_value",
                   "description": "args: count, price_cents. Dollars."
                 },
@@ -1595,7 +1606,7 @@
                       "points"
                     ],
                     "additionalProperties": {},
-                    "description": "A series on a receipt: its size, span and hash instead of every point."
+                    "description": "A series or history on a receipt: its size, time span and hash instead of every point."
                   }
                 ],
                 "description": "A resolved input as recorded on a receipt."
@@ -1663,6 +1674,11 @@
                 },
                 {
                   "type": "string",
+                  "const": "base_rate_history",
+                  "description": "args: history, lo_cents (optional), hi_cents (optional). Share of resolved\nmarkets priced in lo..=hi that resolved YES; the receipt holds the sample size."
+                },
+                {
+                  "type": "string",
                   "const": "position_value",
                   "description": "args: count, price_cents. Dollars."
                 },
@@ -1677,8 +1693,58 @@
             "op_id": {
               "type": "string"
             },
+            "origins": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "const": "user",
+                    "description": "The user's own number (the widget's \"your probability\" control)."
+                  },
+                  {
+                    "type": "string",
+                    "const": "market",
+                    "description": "An exchange's price, from markets."
+                  },
+                  {
+                    "type": "string",
+                    "const": "history",
+                    "description": "Resolved markets from history, from markets."
+                  },
+                  {
+                    "type": "string",
+                    "const": "connection",
+                    "description": "The user's connected account (positions), from connections."
+                  }
+                ],
+                "description": "Where a named input came from. There is no \"model\" origin: a model's number can\nnever be tagged, so it can never be `expected_value`'s probability."
+              },
+              "description": "Every origin the inputs trace back to (through earlier ops), sorted. Empty\nwhen no input was tagged."
+            },
             "plan_hash": {
               "type": "string"
+            },
+            "refs": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "The plan's refs, by arg name: a key in `numbers` or an earlier op's id."
+            },
+            "sample_size": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How many records the number rests on (base_rate_history)."
             },
             "unit": {
               "oneOf": [

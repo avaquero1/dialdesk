@@ -88,16 +88,147 @@ fn odds_to_probability() {
     );
 }
 
+/// Runs a plan with origins and returns the last op's value, or the first error code.
+fn last(
+    ops: serde_json::Value,
+    numbers: serde_json::Value,
+    origins: serde_json::Value,
+) -> Result<f64, String> {
+    let res = run(&serde_json::from_value(json!({
+        "plan": {"plan_version": 1, "ops": ops}, "numbers": numbers, "origins": origins,
+    }))
+    .expect("test input parses"));
+    match (res.numbers.last(), res.errors.first()) {
+        (_, Some(e)) => Err(e.code.clone()),
+        (Some(n), None) => Ok(n.value),
+        _ => panic!("no number and no error"),
+    }
+}
+
 #[test]
 fn expected_value() {
-    let args = json!({"price_cents": "c", "probability": "p"});
+    let ev = |p: &str| json!([{"id": "n1", "op": "expected_value", "args": {"price_cents": "c", "probability": p}}]);
+    let user = json!({"p": "user"});
     assert_eq!(
-        one("expected_value", args.clone(), json!({"c": 57, "p": 0.62})),
+        last(ev("p"), json!({"c": 57, "p": 0.62}), user.clone()),
         Ok(5.0)
     );
     assert_eq!(
-        one("expected_value", args, json!({"c": 57, "p": 1.2})),
+        last(ev("p"), json!({"c": 57, "p": 1.2}), user),
         Err("out_of_range".into())
+    );
+}
+
+#[test]
+fn expected_value_needs_a_sourced_probability() {
+    let ev = |p: &str| json!({"id": "ev", "op": "expected_value", "args": {"price_cents": "c", "probability": p}});
+    let nums = json!({"c": 57, "p": 0.62, "poly": 60, "pos": 0.5});
+    // Untagged (what a model's number would be) and connection-tagged are refused.
+    assert_eq!(
+        last(json!([ev("p")]), nums.clone(), json!({})),
+        Err("unsourced_probability".into())
+    );
+    assert_eq!(
+        last(
+            json!([ev("pos")]),
+            nums.clone(),
+            json!({"pos": "connection"})
+        ),
+        Err("unsourced_probability".into())
+    );
+    // The user's number, or another exchange's price through implied_probability.
+    assert_eq!(
+        last(json!([ev("p")]), nums.clone(), json!({"p": "user"})),
+        Ok(5.0)
+    );
+    let via =
+        json!([{"id": "q", "op": "implied_probability", "args": {"price_cents": "poly"}}, ev("q")]);
+    assert_eq!(
+        last(via.clone(), nums.clone(), json!({"poly": "market"})),
+        Ok(3.0)
+    );
+    // The same chain with an untagged price is refused: origins follow through ops.
+    assert_eq!(
+        last(via, nums.clone(), json!({})),
+        Err("unsourced_probability".into())
+    );
+    // A probability from an op that is not a probability (a gap in points) is refused.
+    let gap =
+        json!([{"id": "g", "op": "gap", "args": {"a_cents": "c", "b_cents": "poly"}}, ev("g")]);
+    assert_eq!(
+        last(gap, nums.clone(), json!({"c": "market", "poly": "market"})),
+        Err("unsourced_probability".into())
+    );
+    // An origin for a key that is not in numbers is a bad plan.
+    assert_eq!(
+        last(json!([ev("p")]), nums, json!({"p": "user", "zz": "user"})),
+        Err("bad_plan".into())
+    );
+}
+
+#[test]
+fn base_rate_history() {
+    let h = json!([
+        {"t": 1, "price_cents": 62, "outcome": 1},
+        {"t": 2, "price_cents": 65, "outcome": 0},
+        {"t": 3, "price_cents": 68, "outcome": 1},
+        {"t": 4, "price_cents": 30, "outcome": 0},
+    ]);
+    let op =
+        |args: serde_json::Value| json!([{"id": "b", "op": "base_rate_history", "args": args}]);
+    let nums = json!({"h": h, "lo": 60, "hi": 70, "x": 90});
+    assert_eq!(
+        last(op(json!({"history": "h"})), nums.clone(), json!({})),
+        Ok(0.5)
+    );
+    let banded = op(json!({"history": "h", "lo_cents": "lo", "hi_cents": "hi"}));
+    let res = run(&serde_json::from_value(
+        json!({"plan": {"plan_version": 1, "ops": banded}, "numbers": nums}),
+    )
+    .unwrap());
+    assert_eq!(res.numbers[0].value, 0.666666667);
+    assert_eq!(res.receipts[0].sample_size, Some(3));
+    assert_eq!(res.receipts[0].refs["lo_cents"], "lo");
+    // An empty band, an inverted band, a bad outcome and an empty history are out of range.
+    assert_eq!(
+        last(
+            op(json!({"history": "h", "lo_cents": "x"})),
+            nums.clone(),
+            json!({})
+        ),
+        Err("out_of_range".into())
+    );
+    assert_eq!(
+        last(
+            op(json!({"history": "h", "lo_cents": "hi", "hi_cents": "lo"})),
+            nums,
+            json!({})
+        ),
+        Err("out_of_range".into())
+    );
+    let bad = json!({"h": [{"t": 1, "price_cents": 50, "outcome": 0.5}]});
+    assert_eq!(
+        last(op(json!({"history": "h"})), bad, json!({})),
+        Err("out_of_range".into())
+    );
+    assert_eq!(
+        last(op(json!({"history": "h"})), json!({"h": []}), json!({})),
+        Err("out_of_range".into())
+    );
+    // A price series is not a history.
+    let s = json!({"h": [{"t": 1, "v": 50}]});
+    assert_eq!(
+        last(op(json!({"history": "h"})), s, json!({})),
+        Err("bad_arg".into())
+    );
+    // A history-based base rate is a sourced probability for EV.
+    let chain = json!([
+        {"id": "b", "op": "base_rate_history", "args": {"history": "h"}},
+        {"id": "ev", "op": "expected_value", "args": {"price_cents": "c", "probability": "b"}},
+    ]);
+    assert_eq!(
+        last(chain, json!({"h": h, "c": 45}), json!({"h": "history"})),
+        Ok(5.0)
     );
 }
 

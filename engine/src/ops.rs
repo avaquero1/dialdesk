@@ -1,11 +1,14 @@
 //! The op set: arg specs, units, formulas and the math itself.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{OpCall, OpError, OpName, Point, ReceiptArg, SeriesSummary, Value, hash_json};
+use crate::{
+    EngineInput, OpCall, OpError, OpName, Origin, Point, ReceiptArg, Resolved, SeriesSummary,
+    Value, hash_json,
+};
 
 /// The unit of a computed number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -27,32 +30,72 @@ pub enum Unit {
 enum Kind {
     Num,
     Series,
+    History,
 }
+
+/// One arg of an op: its name, kind, and whether the plan must give it.
+type ArgSpec = (&'static str, Kind, bool);
 
 enum Arg<'a> {
     Num(f64),
     Series(&'a [Point]),
+    History(&'a [Resolved]),
 }
 
 type Fail = (&'static str, String);
 
+/// Where a value's inputs came from, followed through earlier ops.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Trace {
+    pub origins: BTreeSet<Origin>,
+    /// True when some input (or an input of an earlier op) had no origin.
+    pub untagged: bool,
+}
+
+impl Trace {
+    fn add(&mut self, other: &Trace) {
+        self.origins.extend(other.origins.iter().copied());
+        self.untagged |= other.untagged;
+    }
+}
+
+/// The output of an op that ran, as later ops see it.
+pub(crate) struct Done {
+    pub value: f64,
+    pub unit: Unit,
+    pub trace: Trace,
+}
+
+/// What `eval` hands back for one op.
+pub(crate) struct Out {
+    pub value: f64,
+    pub receipt_args: BTreeMap<String, ReceiptArg>,
+    pub trace: Trace,
+    pub sample_size: Option<u32>,
+}
+
 impl OpName {
-    fn spec(self) -> &'static [(&'static str, Kind)] {
+    fn spec(self) -> &'static [ArgSpec] {
         use Kind::*;
         match self {
-            OpName::ImpliedProbability => &[("price_cents", Num)],
-            OpName::PriceToOdds => &[("probability", Num)],
-            OpName::OddsToProbability => &[("decimal_odds", Num)],
-            OpName::ExpectedValue => &[("price_cents", Num), ("probability", Num)],
-            OpName::Movement => &[("series", Series), ("window_s", Num)],
-            OpName::Volatility => &[("series", Series)],
-            OpName::Gap => &[("a_cents", Num), ("b_cents", Num)],
-            OpName::BaseRate => &[("hits", Num), ("total", Num)],
-            OpName::PositionValue => &[("count", Num), ("price_cents", Num)],
+            OpName::ImpliedProbability => &[("price_cents", Num, true)],
+            OpName::PriceToOdds => &[("probability", Num, true)],
+            OpName::OddsToProbability => &[("decimal_odds", Num, true)],
+            OpName::ExpectedValue => &[("price_cents", Num, true), ("probability", Num, true)],
+            OpName::Movement => &[("series", Series, true), ("window_s", Num, true)],
+            OpName::Volatility => &[("series", Series, true)],
+            OpName::Gap => &[("a_cents", Num, true), ("b_cents", Num, true)],
+            OpName::BaseRate => &[("hits", Num, true), ("total", Num, true)],
+            OpName::BaseRateHistory => &[
+                ("history", History, true),
+                ("lo_cents", Num, false),
+                ("hi_cents", Num, false),
+            ],
+            OpName::PositionValue => &[("count", Num, true), ("price_cents", Num, true)],
             OpName::Pnl => &[
-                ("count", Num),
-                ("avg_price_cents", Num),
-                ("price_cents", Num),
+                ("count", Num, true),
+                ("avg_price_cents", Num, true),
+                ("price_cents", Num, true),
             ],
         }
     }
@@ -63,7 +106,7 @@ impl OpName {
             OpName::PriceToOdds => Unit::DecimalOdds,
             OpName::ExpectedValue => Unit::Cents,
             OpName::Movement | OpName::Volatility | OpName::Gap => Unit::Points,
-            OpName::BaseRate => Unit::Ratio,
+            OpName::BaseRate | OpName::BaseRateHistory => Unit::Ratio,
             OpName::PositionValue | OpName::Pnl => Unit::Dollars,
         }
     }
@@ -78,6 +121,9 @@ impl OpName {
             OpName::Volatility => "sd = population stddev of (v[i] - v[i-1])",
             OpName::Gap => "gap = b_cents - a_cents",
             OpName::BaseRate => "rate = hits / total",
+            OpName::BaseRateHistory => {
+                "rate = resolved YES / n, over resolved markets with lo_cents <= price_cents <= hi_cents (default 0..=100)"
+            }
             OpName::PositionValue => "value = count * price_cents / 100",
             OpName::Pnl => "pnl = count * (price_cents - avg_price_cents) / 100",
         }
@@ -87,26 +133,53 @@ impl OpName {
 /// Resolves one call's args and computes its value.
 pub(crate) fn eval(
     call: &OpCall,
-    numbers: &BTreeMap<String, Value>,
-    done: &BTreeMap<&str, Option<f64>>,
-) -> Result<(f64, BTreeMap<String, ReceiptArg>), OpError> {
+    input: &EngineInput,
+    done: &BTreeMap<&str, Option<Done>>,
+) -> Result<Out, OpError> {
     let err = |code: &str, msg: String| OpError::new(&call.id, code, msg);
     let spec = call.op.spec();
-    if let Some(extra) = call.args.keys().find(|k| !spec.iter().any(|(n, _)| n == k)) {
+    if let Some(extra) = call
+        .args
+        .keys()
+        .find(|k| !spec.iter().any(|(n, _, _)| n == k))
+    {
         return Err(err("bad_arg", format!("unknown arg {extra:?}")));
     }
 
     let mut args = BTreeMap::new();
     let mut receipt = BTreeMap::new();
-    for &(name, kind) in spec {
+    let mut trace = Trace::default();
+    let mut traces: BTreeMap<&str, (Trace, Option<Unit>)> = BTreeMap::new();
+    for &(name, kind, required) in spec {
         let Some(r) = call.args.get(name) else {
-            return Err(err("bad_arg", format!("missing arg {name:?}")));
+            if required {
+                return Err(err("bad_arg", format!("missing arg {name:?}")));
+            }
+            continue;
         };
-        let arg = match (done.get(r.as_str()), numbers.get(r)) {
-            (Some(Some(v)), _) => Arg::Num(*v),
+        let (arg, arg_trace, from_unit) = match (done.get(r.as_str()), input.numbers.get(r)) {
+            (Some(Some(d)), _) => (Arg::Num(d.value), d.trace.clone(), Some(d.unit)),
             (Some(None), _) => return Err(err("missing_input", format!("op {r:?} failed"))),
-            (None, Some(Value::Number(v))) => Arg::Num(*v),
-            (None, Some(Value::Series(s))) => Arg::Series(s),
+            (None, Some(v)) => {
+                let t = match input.origins.get(r) {
+                    Some(o) => Trace {
+                        origins: BTreeSet::from([*o]),
+                        untagged: false,
+                    },
+                    None => Trace {
+                        origins: BTreeSet::new(),
+                        untagged: true,
+                    },
+                };
+                let a = match v {
+                    Value::Number(x) => Arg::Num(*x),
+                    // `[]` parses as an empty series; a history arg reads it as an empty history.
+                    Value::Series(s) if kind == Kind::History && s.is_empty() => Arg::History(&[]),
+                    Value::Series(s) => Arg::Series(s),
+                    Value::History(h) => Arg::History(h),
+                };
+                (a, t, None)
+            }
             (None, None) => {
                 return Err(err(
                     "missing_input",
@@ -115,25 +188,75 @@ pub(crate) fn eval(
             }
         };
         let rec = match (&arg, kind) {
-            (Arg::Num(v), Kind::Num) => ReceiptArg::Number(*v),
+            (Arg::Num(v), Kind::Num) => {
+                if !v.is_finite() {
+                    return Err(err("out_of_range", format!("{name:?} must be finite")));
+                }
+                ReceiptArg::Number(*v)
+            }
             (Arg::Series(s), Kind::Series) => ReceiptArg::Series(SeriesSummary {
                 points: s.len() as u32,
                 first_t: s.first().map_or(0, |p| p.t),
                 last_t: s.last().map_or(0, |p| p.t),
                 hash: hash_json(s),
             }),
+            (Arg::History(h), Kind::History) => ReceiptArg::Series(SeriesSummary {
+                points: h.len() as u32,
+                first_t: h.iter().map(|x| x.t).min().unwrap_or(0),
+                last_t: h.iter().map(|x| x.t).max().unwrap_or(0),
+                hash: hash_json(h),
+            }),
             (_, Kind::Num) => return Err(err("bad_arg", format!("{name:?} must be a number"))),
             (_, Kind::Series) => return Err(err("bad_arg", format!("{name:?} must be a series"))),
+            (_, Kind::History) => {
+                return Err(err(
+                    "bad_arg",
+                    format!("{name:?} must be a history of resolved markets"),
+                ));
+            }
         };
+        trace.add(&arg_trace);
+        traces.insert(name, (arg_trace, from_unit));
         args.insert(name, arg);
         receipt.insert(name.to_string(), rec);
     }
 
-    let value = compute(call.op, &args).map_err(|(code, msg)| err(code, msg))?;
+    if call.op == OpName::ExpectedValue {
+        let (t, unit) = &traces["probability"];
+        sourced_probability(t, *unit).map_err(|m| err("unsourced_probability", m))?;
+    }
+
+    let (value, sample_size) = compute(call.op, &args).map_err(|(code, msg)| err(code, msg))?;
     if !value.is_finite() {
         return Err(err("out_of_range", "result is not finite".into()));
     }
-    Ok((tidy(value), receipt))
+    Ok(Out {
+        value: tidy(value),
+        receipt_args: receipt,
+        trace,
+        sample_size,
+    })
+}
+
+/// EV's probability is the user's or a sourced number (an exchange's price, a base
+/// rate), never a model's: every input it traces back to must carry such an origin.
+fn sourced_probability(t: &Trace, from_unit: Option<Unit>) -> Result<(), String> {
+    if let Some(u) = from_unit
+        && !matches!(u, Unit::Probability | Unit::Ratio)
+    {
+        return Err(format!("probability comes from an op whose unit is {u:?}"));
+    }
+    if t.untagged || t.origins.is_empty() {
+        return Err(
+            "probability has an input with no origin (need user, market or history)".into(),
+        );
+    }
+    if let Some(o) = t.origins.iter().find(|o| !o.sources_probability()) {
+        return Err(format!(
+            "probability traces to origin {o:?} (need user, market or history)"
+        ));
+    }
+    Ok(())
 }
 
 /// Rounds to 9 decimal places so 0.62 * 100 - 57 reads 5, not 5.000000000000007.
@@ -142,9 +265,14 @@ fn tidy(x: f64) -> f64 {
     if r == 0.0 { 0.0 } else { r }
 }
 
-fn compute(op: OpName, args: &BTreeMap<&str, Arg>) -> Result<f64, Fail> {
+fn compute(op: OpName, args: &BTreeMap<&str, Arg>) -> Result<(f64, Option<u32>), Fail> {
     let num = |n: &str| match args.get(n) {
         Some(Arg::Num(v)) => *v,
+        _ => unreachable!("eval checked arg kinds"),
+    };
+    let opt_num = |n: &str| match args.get(n) {
+        Some(Arg::Num(v)) => Some(*v),
+        None => None,
         _ => unreachable!("eval checked arg kinds"),
     };
     let series = |n: &str| match args.get(n) {
@@ -154,7 +282,7 @@ fn compute(op: OpName, args: &BTreeMap<&str, Arg>) -> Result<f64, Fail> {
     let price = |n: &str| in_range(n, num(n), 0.0, 100.0);
     let prob = |n: &str| in_range(n, num(n), 0.0, 1.0);
 
-    Ok(match op {
+    let value = match op {
         OpName::ImpliedProbability => price("price_cents")? / 100.0,
         OpName::PriceToOdds => {
             let p = prob("probability")?;
@@ -196,12 +324,63 @@ fn compute(op: OpName, args: &BTreeMap<&str, Arg>) -> Result<f64, Fail> {
             }
             in_range("hits", h, 0.0, t)? / t
         }
+        OpName::BaseRateHistory => {
+            let Some(Arg::History(h)) = args.get("history") else {
+                unreachable!("eval checked arg kinds")
+            };
+            let lo = match opt_num("lo_cents") {
+                Some(v) => in_range("lo_cents", v, 0.0, 100.0)?,
+                None => 0.0,
+            };
+            let hi = match opt_num("hi_cents") {
+                Some(v) => in_range("hi_cents", v, 0.0, 100.0)?,
+                None => 100.0,
+            };
+            if lo > hi {
+                return Err((
+                    "out_of_range",
+                    format!("lo_cents {lo} is above hi_cents {hi}"),
+                ));
+            }
+            let (yes, n) = history_rate(h, lo, hi)?;
+            return Ok((yes as f64 / n as f64, Some(n)));
+        }
         OpName::PositionValue => count(num("count"))? * price("price_cents")? / 100.0,
         OpName::Pnl => {
             let c = count(num("count"))?;
             c * (price("price_cents")? - price("avg_price_cents")?) / 100.0
         }
-    })
+    };
+    Ok((value, None))
+}
+
+/// (resolved YES, n) over the records priced in lo..=hi. Every record must be valid,
+/// in the band or not, and the band must hold at least one.
+fn history_rate(h: &[Resolved], lo: f64, hi: f64) -> Result<(u32, u32), Fail> {
+    if h.is_empty() {
+        return Err(("out_of_range", "history needs at least 1 record".into()));
+    }
+    let (mut yes, mut n) = (0u32, 0u32);
+    for r in h {
+        in_range("history price_cents", r.price_cents, 0.0, 100.0)?;
+        if r.outcome != 0.0 && r.outcome != 1.0 {
+            return Err((
+                "out_of_range",
+                format!("history outcome {} must be 0 or 1", r.outcome),
+            ));
+        }
+        if (lo..=hi).contains(&r.price_cents) {
+            n += 1;
+            yes += u32::from(r.outcome == 1.0);
+        }
+    }
+    if n == 0 {
+        return Err((
+            "out_of_range",
+            format!("no resolved market priced in {lo}..={hi}"),
+        ));
+    }
+    Ok((yes, n))
 }
 
 fn in_range(name: &str, v: f64, lo: f64, hi: f64) -> Result<f64, Fail> {

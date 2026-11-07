@@ -12,4 +12,21 @@ echo '{"plan":{"plan_version":1,"ops":[{"id":"n1","op":"implied_probability","ar
 ```
 
 Ops: `implied_probability`, `price_to_odds`, `odds_to_probability`, `expected_value`, `movement`, `volatility`, `gap`,
-`base_rate`, `position_value`, `pnl`. It is also a library (`engine::run`), which the sandbox manager uses.
+`base_rate`, `base_rate_history`, `position_value`, `pnl`. It is also a library (`engine::run`), which the sandbox manager uses.
+
+**Inputs are numbers only.** `numbers` holds numbers, price series (`[{t, v}]`) and histories of resolved markets
+(`[{t, price_cents, outcome}]`, outcome 0 or 1). A plan's args name inputs or earlier ops; they never hold a value.
+
+**Origins.** `origins` tags inputs by key: `user`, `market`, `history` or `connection`. There is no `model` origin.
+`expected_value` refuses (`unsourced_probability`) unless its probability traces back, through any earlier ops, only to
+`user`, `market` or `history` inputs, and comes from a probability or ratio. So a model's number can never be EV's
+probability.
+
+**Base rates from history.** `base_rate_history` takes a history and an optional price band (`lo_cents`, `hi_cents`):
+the share of resolved markets priced in the band that resolved YES. Its receipt holds `sample_size`.
+
+**Receipts.** The result holds the plan as run, `plan_hash` (sha256 of the plan's JSON), `input_hash` (sha256 of
+`{"numbers", "origins"}`), the engine version and git hash. Each number's receipt holds the resolved args, the plan's
+`refs` for them, the formula, the origins its inputs trace to, and the same hashes and version.
+
+The git hash comes from `git rev-parse` at build time, or from `ENGINE_GIT_HASH` when set (the compute image).

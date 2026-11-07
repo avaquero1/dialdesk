@@ -14,15 +14,24 @@ export type OpName =
   | 'volatility'
   | 'gap'
   | 'base_rate'
+  | 'base_rate_history'
   | 'position_value'
   | 'pnl';
 /**
- * A named input: a single number or a time series.
+ * Where a named input came from. There is no "model" origin: a model's number can
+ * never be tagged, so it can never be `expected_value`'s probability.
+ *
+ * This interface was referenced by `__Root`'s JSON-Schema
+ * via the `definition` "Origin".
+ */
+export type Origin = 'user' | 'market' | 'history' | 'connection';
+/**
+ * A named input: a single number, a price series, or a history of resolved markets.
  *
  * This interface was referenced by `__Root`'s JSON-Schema
  * via the `definition` "Value".
  */
-export type Value = number | Point[];
+export type Value = number | Point[] | Resolved[];
 /**
  * The unit of a computed number.
  *
@@ -87,6 +96,26 @@ export interface Point {
   v: number;
 }
 /**
+ * One resolved market: its price before it resolved, and how it resolved.
+ *
+ * This interface was referenced by `__Root`'s JSON-Schema
+ * via the `definition` "Resolved".
+ */
+export interface Resolved {
+  /**
+   * 1 when it resolved YES, 0 when NO.
+   */
+  outcome: number;
+  /**
+   * YES price in cents (0..=100) before it resolved.
+   */
+  price_cents: number;
+  /**
+   * Unix seconds when the price was taken.
+   */
+  t: number;
+}
+/**
  * One engine run: a plan and the named numbers it reads.
  *
  * This interface was referenced by `__Root`'s JSON-Schema
@@ -98,6 +127,13 @@ export interface EngineInput {
    */
   numbers: {
     [k: string]: Value;
+  };
+  /**
+   * Where each named input came from, by key in `numbers`. An untagged input is
+   * usable by every op except as `expected_value`'s probability.
+   */
+  origins?: {
+    [k: string]: Origin;
   };
   plan: Plan;
 }
@@ -122,7 +158,7 @@ export interface NumberOut {
  */
 export interface OpError {
   /**
-   * One of: bad_arg, missing_input, out_of_range, bad_plan.
+   * One of: bad_arg, missing_input, out_of_range, bad_plan, unsourced_probability.
    */
   code: string;
   message: string;
@@ -157,12 +193,27 @@ export interface Receipt {
   input_hash: string;
   op: OpName;
   op_id: string;
+  /**
+   * Every origin the inputs trace back to (through earlier ops), sorted. Empty
+   * when no input was tagged.
+   */
+  origins?: Origin[];
   plan_hash: string;
+  /**
+   * The plan's refs, by arg name: a key in `numbers` or an earlier op's id.
+   */
+  refs?: {
+    [k: string]: string;
+  };
+  /**
+   * How many records the number rests on (base_rate_history).
+   */
+  sample_size?: number | null;
   unit: Unit;
   value: number;
 }
 /**
- * A series on a receipt: its size, span and hash instead of every point.
+ * A series or history on a receipt: its size, time span and hash instead of every point.
  *
  * This interface was referenced by `__Root`'s JSON-Schema
  * via the `definition` "SeriesSummary".
@@ -177,7 +228,8 @@ export interface SeriesSummary {
   points: number;
 }
 /**
- * Everything one run produced. `ok` is true when there are no errors.
+ * Everything one run produced: the plan as run, its hash and the input hash, the
+ * numbers and their receipts. `ok` is true when there are no errors.
  *
  * This interface was referenced by `__Root`'s JSON-Schema
  * via the `definition` "EngineResult".
@@ -187,11 +239,12 @@ export interface EngineResult {
   errors: OpError[];
   git_hash: string;
   /**
-   * sha256 hex of the `numbers` map's canonical JSON.
+   * sha256 hex of the canonical JSON of {"numbers", "origins"}.
    */
   input_hash: string;
   numbers: NumberOut[];
   ok: boolean;
+  plan: Plan;
   /**
    * sha256 hex of the plan's canonical JSON.
    */
