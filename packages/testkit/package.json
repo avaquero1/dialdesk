@@ -1,0 +1,16 @@
+{
+  "name": "@app/testkit",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@app/contracts": "*",
+    "@app/service-kit": "*",
+    "hono": "^4.13.17",
+    "zod": "^4.6.7"
+  }
+}

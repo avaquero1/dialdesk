@@ -1,0 +1,18 @@
+[package]
+name = "egress-proxy"
+description = "The sandboxes' only way out: an allowlisting CONNECT proxy."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "egress_proxy"
+path = "src/lib.rs"
+
+[[bin]]
+name = "egress-proxy"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

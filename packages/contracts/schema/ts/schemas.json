@@ -1,0 +1,3349 @@
+{
+  "Look": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "theme": {
+        "type": "string",
+        "enum": [
+          "agent-mail",
+          "clear-water",
+          "mercury",
+          "stadium-night",
+          "deep-sea",
+          "ice",
+          "aurora",
+          "prism",
+          "obsidian",
+          "rain",
+          "daybreak",
+          "ink-in-water"
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "light",
+          "dark",
+          "system"
+        ]
+      },
+      "hue": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 360
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "null = the theme's own hue"
+      }
+    },
+    "required": [
+      "theme",
+      "mode",
+      "hue"
+    ],
+    "additionalProperties": false
+  },
+  "WidgetSpec": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "widget_id": {
+            "type": "string",
+            "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix wid_"
+          },
+          "account_id": {
+            "type": "string",
+            "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix acc_"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "col": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 63
+                  },
+                  "row": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  }
+                },
+                "required": [
+                  "col",
+                  "row"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "folder_id": {
+                    "type": "string",
+                    "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+                    "description": "id with prefix wid_"
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 63
+                  }
+                },
+                "required": [
+                  "folder_id",
+                  "index"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "const": "display"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "events",
+              "probability",
+              "gap",
+              "news",
+              "positions",
+              "movement"
+            ]
+          },
+          "size": {
+            "type": "string",
+            "enum": [
+              "S",
+              "M",
+              "L",
+              "XL"
+            ]
+          },
+          "market_ids": {
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(kalshi:[A-Z0-9-]{3,80}|polymarket:[a-z0-9-]{3,120})$"
+            }
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "event_keys": {
+                "maxItems": 12,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]{3,80}$"
+                }
+              },
+              "team": {
+                "description": "news: the team the user follows",
+                "type": "string",
+                "maxLength": 40
+              },
+              "user_probability": {
+                "description": "probability: the user's own probability for EV",
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "threshold_pts": {
+                "description": "movement: raise movement.flagged past this move",
+                "type": "number",
+                "minimum": 1,
+                "maximum": 50
+              },
+              "window_s": {
+                "type": "integer",
+                "minimum": 3600,
+                "maximum": 2592000
+              },
+              "connection_id": {
+                "description": "positions: the connected account",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "widget_id",
+          "account_id",
+          "title",
+          "place",
+          "kind",
+          "type",
+          "size",
+          "market_ids",
+          "params"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "widget_id": {
+            "type": "string",
+            "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix wid_"
+          },
+          "account_id": {
+            "type": "string",
+            "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix acc_"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "col": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 63
+                  },
+                  "row": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  }
+                },
+                "required": [
+                  "col",
+                  "row"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "folder_id": {
+                    "type": "string",
+                    "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+                    "description": "id with prefix wid_"
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 63
+                  }
+                },
+                "required": [
+                  "folder_id",
+                  "index"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "const": "app"
+          },
+          "app": {
+            "type": "string",
+            "enum": [
+              "trust",
+              "receipts",
+              "accounts",
+              "catalog",
+              "settings"
+            ]
+          }
+        },
+        "required": [
+          "widget_id",
+          "account_id",
+          "title",
+          "place",
+          "kind",
+          "app"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "widget_id": {
+            "type": "string",
+            "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix wid_"
+          },
+          "account_id": {
+            "type": "string",
+            "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix acc_"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "col": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 63
+                  },
+                  "row": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                  }
+                },
+                "required": [
+                  "col",
+                  "row"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "folder_id": {
+                    "type": "string",
+                    "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+                    "description": "id with prefix wid_"
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 63
+                  }
+                },
+                "required": [
+                  "folder_id",
+                  "index"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "const": "folder"
+          },
+          "children": {
+            "maxItems": 24,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+              "description": "id with prefix wid_"
+            }
+          }
+        },
+        "required": [
+          "widget_id",
+          "account_id",
+          "title",
+          "place",
+          "kind",
+          "children"
+        ],
+        "additionalProperties": false
+      }
+    ]
+  },
+  "WidgetDraft": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "kind": {
+        "type": "string",
+        "const": "display"
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "events",
+          "probability",
+          "gap",
+          "news",
+          "positions",
+          "movement"
+        ]
+      },
+      "size": {
+        "type": "string",
+        "enum": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 60
+      },
+      "market_ids": {
+        "maxItems": 12,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^(kalshi:[A-Z0-9-]{3,80}|polymarket:[a-z0-9-]{3,120})$"
+        }
+      },
+      "params": {
+        "type": "object",
+        "properties": {
+          "event_keys": {
+            "maxItems": 12,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]{3,80}$"
+            }
+          },
+          "team": {
+            "description": "news: the team the user follows",
+            "type": "string",
+            "maxLength": 40
+          },
+          "user_probability": {
+            "description": "probability: the user's own probability for EV",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "threshold_pts": {
+            "description": "movement: raise movement.flagged past this move",
+            "type": "number",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "window_s": {
+            "type": "integer",
+            "minimum": 3600,
+            "maximum": 2592000
+          },
+          "connection_id": {
+            "description": "positions: the connected account",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "brief": {
+        "description": "the user's own words for this widget",
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "required": [
+      "kind",
+      "type",
+      "title",
+      "market_ids",
+      "params"
+    ],
+    "additionalProperties": false
+  },
+  "WidgetProfile": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "brief": {
+        "type": "string",
+        "maxLength": 500,
+        "description": "the user's own words"
+      },
+      "source_ids": {
+        "maxItems": 20,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^src-[a-z0-9-]{2,40}$"
+        }
+      },
+      "added_domains": {
+        "maxItems": 20,
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "domains the user clicked to allow for this widget"
+      },
+      "cadence": {
+        "type": "object",
+        "properties": {
+          "numbers_every_s": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 3600
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = no numbers runs"
+          },
+          "research_every_s": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 900,
+                "maximum": 86400
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = no research runs"
+          }
+        },
+        "required": [
+          "numbers_every_s",
+          "research_every_s"
+        ],
+        "additionalProperties": false
+      },
+      "feedback": {
+        "maxItems": 50,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "required": [
+            "at",
+            "text"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "last_math_plan": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ops": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "args": {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "Arg name -> a key in `numbers`, or the id of an earlier op."
+                    },
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,31}$",
+                      "description": "Slot-safe id, unique in the plan, e.g. \"n1\". Must not equal a key in `numbers`."
+                    },
+                    "op": {
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "const": "implied_probability",
+                          "description": "args: price_cents. Probability 0..1 = price / 100."
+                        },
+                        {
+                          "type": "string",
+                          "const": "price_to_odds",
+                          "description": "args: probability. Decimal odds = 1 / p."
+                        },
+                        {
+                          "type": "string",
+                          "const": "odds_to_probability",
+                          "description": "args: decimal_odds. Probability = 1 / odds."
+                        },
+                        {
+                          "type": "string",
+                          "const": "expected_value",
+                          "description": "args: price_cents, probability. Cents per contract = p * 100 - price."
+                        },
+                        {
+                          "type": "string",
+                          "const": "movement",
+                          "description": "args: series, window_s. Points moved over the window."
+                        },
+                        {
+                          "type": "string",
+                          "const": "volatility",
+                          "description": "args: series. Stddev of point-to-point changes, in points."
+                        },
+                        {
+                          "type": "string",
+                          "const": "gap",
+                          "description": "args: a_cents, b_cents. b - a in points."
+                        },
+                        {
+                          "type": "string",
+                          "const": "base_rate",
+                          "description": "args: hits, total. hits / total."
+                        },
+                        {
+                          "type": "string",
+                          "const": "position_value",
+                          "description": "args: count, price_cents. Dollars."
+                        },
+                        {
+                          "type": "string",
+                          "const": "pnl",
+                          "description": "args: count, avg_price_cents, price_cents. Dollars."
+                        }
+                      ],
+                      "description": "The fixed op set."
+                    }
+                  },
+                  "required": [
+                    "args",
+                    "id",
+                    "op"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One op call."
+                }
+              },
+              "plan_version": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Must be 1."
+              }
+            },
+            "required": [
+              "ops",
+              "plan_version"
+            ],
+            "additionalProperties": false,
+            "title": "Plan",
+            "description": "The ops to run, in order. Later ops may read earlier ops' outputs."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "widget_id",
+      "brief",
+      "source_ids",
+      "added_domains",
+      "cadence",
+      "feedback",
+      "last_math_plan"
+    ],
+    "additionalProperties": false
+  },
+  "WidgetCatalog": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "version": {
+        "type": "number",
+        "const": 0
+      },
+      "displays": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "events",
+                "probability",
+                "gap",
+                "news",
+                "positions",
+                "movement"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "default_size": {
+              "type": "string",
+              "enum": [
+                "S",
+                "M",
+                "L",
+                "XL"
+              ]
+            },
+            "sizes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "S",
+                  "M",
+                  "L",
+                  "XL"
+                ]
+              }
+            },
+            "engine_ops": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "implied_probability",
+                  "price_to_odds",
+                  "odds_to_probability",
+                  "expected_value",
+                  "movement",
+                  "volatility",
+                  "gap",
+                  "base_rate",
+                  "position_value",
+                  "pnl"
+                ]
+              }
+            },
+            "params": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "event_keys",
+                  "team",
+                  "user_probability",
+                  "threshold_pts",
+                  "window_s",
+                  "connection_id"
+                ]
+              }
+            },
+            "needs_markets": {
+              "type": "boolean"
+            },
+            "research": {
+              "type": "boolean",
+              "description": "true = research runs read sources"
+            },
+            "default_cadence": {
+              "type": "object",
+              "properties": {
+                "numbers_every_s": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 60,
+                      "maximum": 3600
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "null = no numbers runs"
+                },
+                "research_every_s": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 900,
+                      "maximum": 86400
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "null = no research runs"
+                }
+              },
+              "required": [
+                "numbers_every_s",
+                "research_every_s"
+              ],
+              "additionalProperties": false
+            },
+            "default_sources": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^src-[a-z0-9-]{2,40}$"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "title",
+            "description",
+            "default_size",
+            "sizes",
+            "engine_ops",
+            "params",
+            "needs_markets",
+            "research",
+            "default_cadence",
+            "default_sources"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "apps": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "app": {
+              "type": "string",
+              "enum": [
+                "trust",
+                "receipts",
+                "accounts",
+                "catalog",
+                "settings"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "app",
+            "title",
+            "description"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "default_board": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "const": "sports"
+          },
+          "tiles": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "display"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "events",
+                        "probability",
+                        "gap",
+                        "news",
+                        "positions",
+                        "movement"
+                      ]
+                    },
+                    "size": {
+                      "type": "string",
+                      "enum": [
+                        "S",
+                        "M",
+                        "L",
+                        "XL"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "market_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(kalshi:[A-Z0-9-]{3,80}|polymarket:[a-z0-9-]{3,120})$"
+                      }
+                    },
+                    "params": {
+                      "type": "object",
+                      "properties": {
+                        "event_keys": {
+                          "maxItems": 12,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9-]{3,80}$"
+                          }
+                        },
+                        "team": {
+                          "description": "news: the team the user follows",
+                          "type": "string",
+                          "maxLength": 40
+                        },
+                        "user_probability": {
+                          "description": "probability: the user's own probability for EV",
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "threshold_pts": {
+                          "description": "movement: raise movement.flagged past this move",
+                          "type": "number",
+                          "minimum": 1,
+                          "maximum": 50
+                        },
+                        "window_s": {
+                          "type": "integer",
+                          "minimum": 3600,
+                          "maximum": 2592000
+                        },
+                        "connection_id": {
+                          "description": "positions: the connected account",
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "type",
+                    "size",
+                    "title",
+                    "market_ids",
+                    "params"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "app"
+                    },
+                    "app": {
+                      "type": "string",
+                      "enum": [
+                        "trust",
+                        "receipts",
+                        "accounts",
+                        "catalog",
+                        "settings"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "app",
+                    "title"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "folder"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "display"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "events",
+                              "probability",
+                              "gap",
+                              "news",
+                              "positions",
+                              "movement"
+                            ]
+                          },
+                          "size": {
+                            "type": "string",
+                            "enum": [
+                              "S",
+                              "M",
+                              "L",
+                              "XL"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "market_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "pattern": "^(kalshi:[A-Z0-9-]{3,80}|polymarket:[a-z0-9-]{3,120})$"
+                            }
+                          },
+                          "params": {
+                            "type": "object",
+                            "properties": {
+                              "event_keys": {
+                                "maxItems": 12,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9-]{3,80}$"
+                                }
+                              },
+                              "team": {
+                                "description": "news: the team the user follows",
+                                "type": "string",
+                                "maxLength": 40
+                              },
+                              "user_probability": {
+                                "description": "probability: the user's own probability for EV",
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "threshold_pts": {
+                                "description": "movement: raise movement.flagged past this move",
+                                "type": "number",
+                                "minimum": 1,
+                                "maximum": 50
+                              },
+                              "window_s": {
+                                "type": "integer",
+                                "minimum": 3600,
+                                "maximum": 2592000
+                              },
+                              "connection_id": {
+                                "description": "positions: the connected account",
+                                "type": "string"
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "type",
+                          "size",
+                          "title",
+                          "market_ids",
+                          "params"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "title",
+                    "children"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "category",
+          "tiles"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "version",
+      "displays",
+      "apps",
+      "default_board"
+    ],
+    "additionalProperties": false
+  },
+  "SourceCatalog": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "version": {
+        "type": "number",
+        "const": 0
+      },
+      "rows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "source_id": {
+              "type": "string",
+              "pattern": "^src-[a-z0-9-]{2,40}$"
+            },
+            "category": {
+              "type": "string",
+              "enum": [
+                "sports",
+                "politics",
+                "economics",
+                "crypto"
+              ]
+            },
+            "leagues": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "nfl",
+                  "nba",
+                  "mlb",
+                  "nhl",
+                  "ncaaf",
+                  "ncaab",
+                  "soccer"
+                ]
+              }
+            },
+            "domain": {
+              "type": "string",
+              "pattern": "^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+              "description": "lower-case host name, no scheme, no port"
+            },
+            "outlet": {
+              "type": "string",
+              "maxLength": 80,
+              "description": "shown to the user only, never to a model"
+            },
+            "feeds": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "rss",
+                      "atom"
+                    ]
+                  }
+                },
+                "required": [
+                  "url",
+                  "kind"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "env": {
+              "type": "string",
+              "enum": [
+                "prod",
+                "fixture"
+              ],
+              "description": "fixture rows exist only in dev and test"
+            },
+            "verified": {
+              "type": "boolean",
+              "description": "false until the markets worker checks the domain and feeds online"
+            }
+          },
+          "required": [
+            "source_id",
+            "category",
+            "leagues",
+            "domain",
+            "outlet",
+            "feeds",
+            "env",
+            "verified"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "version",
+      "rows"
+    ],
+    "additionalProperties": false
+  },
+  "Candidate": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "candidate_id": {
+        "type": "string",
+        "pattern": "^cnd_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix cnd_"
+      },
+      "url": {
+        "type": "string",
+        "format": "uri"
+      },
+      "domain": {
+        "type": "string",
+        "pattern": "^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+        "description": "lower-case host name, no scheme, no port"
+      },
+      "published_at": {
+        "anyOf": [
+          {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "via": {
+        "type": "string",
+        "enum": [
+          "catalog",
+          "feed",
+          "search"
+        ]
+      },
+      "source_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^src-[a-z0-9-]{2,40}$"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "null when the domain is not in the catalog"
+      },
+      "allowed": {
+        "type": "boolean",
+        "description": "true only for catalog domains or domains the user added to this widget"
+      },
+      "title_for_user": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 300
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "candidate_id",
+      "url",
+      "domain",
+      "published_at",
+      "via",
+      "source_id",
+      "allowed",
+      "title_for_user"
+    ],
+    "additionalProperties": false
+  },
+  "Verdict": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "verdict_id": {
+        "type": "string",
+        "pattern": "^vrd_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix vrd_"
+      },
+      "stage": {
+        "type": "string",
+        "enum": [
+          "extract",
+          "publish",
+          "chat"
+        ]
+      },
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "pass",
+          "block",
+          "poison"
+        ]
+      },
+      "reasons": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": [
+                "instruction",
+                "exfil",
+                "advice",
+                "unsourced_claim",
+                "missing_receipt",
+                "bare_digit",
+                "secret",
+                "bad_link"
+              ]
+            },
+            "where": {
+              "type": "string",
+              "maxLength": 80,
+              "description": "a field path or fact id, never the offending text"
+            }
+          },
+          "required": [
+            "code",
+            "where"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "checker": {
+        "type": "object",
+        "properties": {
+          "wordlist_version": {
+            "type": "string"
+          },
+          "model": {
+            "description": "the decision model, when the second layer ran",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "wordlist_version",
+          "model"
+        ],
+        "additionalProperties": false
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      }
+    },
+    "required": [
+      "verdict_id",
+      "stage",
+      "outcome",
+      "reasons",
+      "checker",
+      "at"
+    ],
+    "additionalProperties": false
+  },
+  "WidgetResult": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "result_id": {
+        "type": "string",
+        "pattern": "^res_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix res_"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "run_id": {
+        "type": "string",
+        "pattern": "^run_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix run_"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "numbers",
+          "research"
+        ]
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "as_of": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+        "description": "the market data time"
+      },
+      "stale": {
+        "type": "boolean",
+        "description": "true when an exchange was down and the last cached price was used"
+      },
+      "numbers": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "op": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "const": "implied_probability",
+                  "description": "args: price_cents. Probability 0..1 = price / 100."
+                },
+                {
+                  "type": "string",
+                  "const": "price_to_odds",
+                  "description": "args: probability. Decimal odds = 1 / p."
+                },
+                {
+                  "type": "string",
+                  "const": "odds_to_probability",
+                  "description": "args: decimal_odds. Probability = 1 / odds."
+                },
+                {
+                  "type": "string",
+                  "const": "expected_value",
+                  "description": "args: price_cents, probability. Cents per contract = p * 100 - price."
+                },
+                {
+                  "type": "string",
+                  "const": "movement",
+                  "description": "args: series, window_s. Points moved over the window."
+                },
+                {
+                  "type": "string",
+                  "const": "volatility",
+                  "description": "args: series. Stddev of point-to-point changes, in points."
+                },
+                {
+                  "type": "string",
+                  "const": "gap",
+                  "description": "args: a_cents, b_cents. b - a in points."
+                },
+                {
+                  "type": "string",
+                  "const": "base_rate",
+                  "description": "args: hits, total. hits / total."
+                },
+                {
+                  "type": "string",
+                  "const": "position_value",
+                  "description": "args: count, price_cents. Dollars."
+                },
+                {
+                  "type": "string",
+                  "const": "pnl",
+                  "description": "args: count, avg_price_cents, price_cents. Dollars."
+                }
+              ],
+              "description": "The fixed op set."
+            },
+            "receipt_id": {
+              "type": "string"
+            },
+            "unit": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "dollars",
+                    "ratio"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "const": "probability",
+                  "description": "0..=1."
+                },
+                {
+                  "type": "string",
+                  "const": "decimal_odds",
+                  "description": "Decimal odds, >= 1."
+                },
+                {
+                  "type": "string",
+                  "const": "cents",
+                  "description": "Cents per contract."
+                },
+                {
+                  "type": "string",
+                  "const": "points",
+                  "description": "Price points (1 point = 1 cent of price)."
+                }
+              ],
+              "description": "The unit of a computed number."
+            },
+            "value": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "id",
+            "op",
+            "receipt_id",
+            "unit",
+            "value"
+          ],
+          "additionalProperties": {},
+          "description": "One computed number. Values are rounded to 9 decimal places."
+        }
+      },
+      "receipts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "first_t": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "hash": {
+                        "type": "string",
+                        "description": "sha256 hex of the series' canonical JSON."
+                      },
+                      "last_t": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "points": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "first_t",
+                      "hash",
+                      "last_t",
+                      "points"
+                    ],
+                    "additionalProperties": {},
+                    "description": "A series on a receipt: its size, span and hash instead of every point."
+                  }
+                ],
+                "description": "A resolved input as recorded on a receipt."
+              },
+              "description": "The resolved inputs, by arg name."
+            },
+            "engine_version": {
+              "type": "string"
+            },
+            "formula": {
+              "type": "string",
+              "description": "Human-readable formula, e.g. \"p = price_cents / 100\"."
+            },
+            "git_hash": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string",
+              "description": "\"r-\" + first 8 hex of sha256(plan_hash + op id)."
+            },
+            "input_hash": {
+              "type": "string"
+            },
+            "op": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "const": "implied_probability",
+                  "description": "args: price_cents. Probability 0..1 = price / 100."
+                },
+                {
+                  "type": "string",
+                  "const": "price_to_odds",
+                  "description": "args: probability. Decimal odds = 1 / p."
+                },
+                {
+                  "type": "string",
+                  "const": "odds_to_probability",
+                  "description": "args: decimal_odds. Probability = 1 / odds."
+                },
+                {
+                  "type": "string",
+                  "const": "expected_value",
+                  "description": "args: price_cents, probability. Cents per contract = p * 100 - price."
+                },
+                {
+                  "type": "string",
+                  "const": "movement",
+                  "description": "args: series, window_s. Points moved over the window."
+                },
+                {
+                  "type": "string",
+                  "const": "volatility",
+                  "description": "args: series. Stddev of point-to-point changes, in points."
+                },
+                {
+                  "type": "string",
+                  "const": "gap",
+                  "description": "args: a_cents, b_cents. b - a in points."
+                },
+                {
+                  "type": "string",
+                  "const": "base_rate",
+                  "description": "args: hits, total. hits / total."
+                },
+                {
+                  "type": "string",
+                  "const": "position_value",
+                  "description": "args: count, price_cents. Dollars."
+                },
+                {
+                  "type": "string",
+                  "const": "pnl",
+                  "description": "args: count, avg_price_cents, price_cents. Dollars."
+                }
+              ],
+              "description": "The fixed op set."
+            },
+            "op_id": {
+              "type": "string"
+            },
+            "plan_hash": {
+              "type": "string"
+            },
+            "unit": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "dollars",
+                    "ratio"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "const": "probability",
+                  "description": "0..=1."
+                },
+                {
+                  "type": "string",
+                  "const": "decimal_odds",
+                  "description": "Decimal odds, >= 1."
+                },
+                {
+                  "type": "string",
+                  "const": "cents",
+                  "description": "Cents per contract."
+                },
+                {
+                  "type": "string",
+                  "const": "points",
+                  "description": "Price points (1 point = 1 cent of price)."
+                }
+              ],
+              "description": "The unit of a computed number."
+            },
+            "value": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "args",
+            "engine_version",
+            "formula",
+            "git_hash",
+            "id",
+            "input_hash",
+            "op",
+            "op_id",
+            "plan_hash",
+            "unit",
+            "value"
+          ],
+          "additionalProperties": {},
+          "title": "Receipt",
+          "description": "How one number was computed."
+        }
+      },
+      "facts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fact_id": {
+              "type": "string",
+              "pattern": "^f[0-9]{1,3}$",
+              "description": "fact id inside one result, e.g. f1"
+            },
+            "candidate_id": {
+              "type": "string",
+              "pattern": "^cnd_[A-Za-z0-9]{8,32}$",
+              "description": "id with prefix cnd_"
+            },
+            "claim": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "quote": {
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "required": [
+            "fact_id",
+            "candidate_id",
+            "claim",
+            "quote"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "summary": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "template": {
+                "type": "string",
+                "maxLength": 600
+              },
+              "slots": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[nq][0-9]{1,2}$"
+                },
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "number"
+                        },
+                        "number_id": {
+                          "type": "string",
+                          "description": "the engine NumberOut id"
+                        },
+                        "receipt_id": {
+                          "type": "string",
+                          "pattern": "^r-[0-9a-f]{8}$"
+                        },
+                        "format": {
+                          "type": "string",
+                          "enum": [
+                            "percent",
+                            "cents",
+                            "points",
+                            "usd",
+                            "odds"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "number_id",
+                        "receipt_id",
+                        "format"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "quote"
+                        },
+                        "fact_id": {
+                          "type": "string",
+                          "pattern": "^f[0-9]{1,3}$",
+                          "description": "fact id inside one result, e.g. f1"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "fact_id"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "template",
+              "slots"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "null in a numbers run and in phase one of publish"
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "candidate_id": {
+              "type": "string",
+              "pattern": "^cnd_[A-Za-z0-9]{8,32}$",
+              "description": "id with prefix cnd_"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "domain": {
+              "type": "string",
+              "pattern": "^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+              "description": "lower-case host name, no scheme, no port"
+            },
+            "outlet": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "published_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "read",
+                "blocked",
+                "refused",
+                "failed"
+              ]
+            }
+          },
+          "required": [
+            "candidate_id",
+            "url",
+            "domain",
+            "outlet",
+            "published_at",
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "blocked": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "candidate_id": {
+              "type": "string",
+              "pattern": "^cnd_[A-Za-z0-9]{8,32}$",
+              "description": "id with prefix cnd_"
+            },
+            "domain": {
+              "type": "string",
+              "pattern": "^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+              "description": "lower-case host name, no scheme, no port"
+            },
+            "reason": {
+              "type": "string",
+              "const": "poison"
+            },
+            "note": {
+              "type": "string",
+              "description": "POISONED_NOTE, never a quote of the page"
+            },
+            "killed_at": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "audit_row_id": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^aud_[A-Za-z0-9]{8,32}$",
+                  "description": "id with prefix aud_"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "candidate_id",
+            "domain",
+            "reason",
+            "note",
+            "killed_at",
+            "audit_row_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "verdict_id": {
+        "type": "string",
+        "pattern": "^vrd_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix vrd_"
+      }
+    },
+    "required": [
+      "result_id",
+      "widget_id",
+      "run_id",
+      "kind",
+      "created_at",
+      "as_of",
+      "stale",
+      "numbers",
+      "receipts",
+      "facts",
+      "summary",
+      "sources",
+      "blocked",
+      "verdict_id"
+    ],
+    "additionalProperties": false
+  },
+  "SlotSummary": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "template": {
+        "type": "string",
+        "maxLength": 600
+      },
+      "slots": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[nq][0-9]{1,2}$"
+        },
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "number"
+                },
+                "number_id": {
+                  "type": "string",
+                  "description": "the engine NumberOut id"
+                },
+                "receipt_id": {
+                  "type": "string",
+                  "pattern": "^r-[0-9a-f]{8}$"
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "percent",
+                    "cents",
+                    "points",
+                    "usd",
+                    "odds"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "number_id",
+                "receipt_id",
+                "format"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "quote"
+                },
+                "fact_id": {
+                  "type": "string",
+                  "pattern": "^f[0-9]{1,3}$",
+                  "description": "fact id inside one result, e.g. f1"
+                }
+              },
+              "required": [
+                "kind",
+                "fact_id"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      }
+    },
+    "required": [
+      "template",
+      "slots"
+    ],
+    "additionalProperties": false
+  },
+  "RunTraceStep": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "run_id": {
+        "type": "string",
+        "pattern": "^run_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix run_"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "seq": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "step": {
+        "type": "string",
+        "enum": [
+          "sources",
+          "plan",
+          "read",
+          "extract",
+          "math",
+          "summary",
+          "guard",
+          "publish"
+        ]
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "started",
+          "ok",
+          "failed",
+          "poisoned",
+          "skipped"
+        ]
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "duration_ms": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "sandbox": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "sandbox_id": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "created",
+                  "held",
+                  "released",
+                  "killed",
+                  "destroyed"
+                ]
+              }
+            },
+            "required": [
+              "sandbox_id",
+              "state"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "source": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "candidate_id": {
+                "type": "string",
+                "pattern": "^cnd_[A-Za-z0-9]{8,32}$",
+                "description": "id with prefix cnd_"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "domain": {
+                "type": "string",
+                "pattern": "^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                "description": "lower-case host name, no scheme, no port"
+              },
+              "screenshot_key": {
+                "description": "Object Storage key, shown as an image labelled \"external page\"",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "candidate_id",
+              "url",
+              "domain",
+              "screenshot_key"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "proxy": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "allowed": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "refused": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "allowed",
+              "refused"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "verdict_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^vrd_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix vrd_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "receipt_ids": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^r-[0-9a-f]{8}$"
+        }
+      },
+      "audit_row_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^aud_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix aud_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "note": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 200
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "run_id",
+      "widget_id",
+      "seq",
+      "step",
+      "status",
+      "at",
+      "duration_ms",
+      "sandbox",
+      "source",
+      "proxy",
+      "verdict_id",
+      "receipt_ids",
+      "audit_row_id",
+      "note"
+    ],
+    "additionalProperties": false
+  },
+  "LogEntry": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "service": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "edge",
+              "accounts",
+              "board",
+              "agent",
+              "runner",
+              "markets",
+              "connections",
+              "models",
+              "audit"
+            ]
+          },
+          {
+            "type": "string",
+            "const": "sandbox-manager"
+          }
+        ]
+      },
+      "action": {
+        "type": "string",
+        "pattern": "^[a-z]+(\\.[a-z_]+)+$",
+        "description": "e.g. sandbox.killed, proxy.refused, chat.turn, connection.scope_checked"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "account_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix acc_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "subject_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 120
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "the widget, run, connection… this is about"
+      },
+      "outcome": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "ok",
+              "refused",
+              "blocked",
+              "poisoned",
+              "killed",
+              "failed"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "ids": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "string",
+          "maxLength": 120
+        }
+      },
+      "hashes": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "sizes": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "required": [
+      "service",
+      "action",
+      "at",
+      "account_id",
+      "subject_id",
+      "outcome",
+      "ids",
+      "hashes",
+      "sizes"
+    ],
+    "additionalProperties": false
+  },
+  "WidgetRunJob": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "job_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]+:(numbers|research):[0-9]+$"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "numbers",
+          "research"
+        ]
+      },
+      "window_start": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991,
+        "description": "unix seconds; the schedule window this run belongs to"
+      },
+      "reason": {
+        "type": "string",
+        "enum": [
+          "accept",
+          "schedule",
+          "refresh",
+          "movement",
+          "clear"
+        ]
+      }
+    },
+    "required": [
+      "job_id",
+      "widget_id",
+      "account_id",
+      "kind",
+      "window_start",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "AccountRefreshJob": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "job_id": {
+        "type": "string"
+      },
+      "connection_id": {
+        "type": "string",
+        "pattern": "^con_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix con_"
+      },
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      }
+    },
+    "required": [
+      "job_id",
+      "connection_id",
+      "account_id"
+    ],
+    "additionalProperties": false
+  },
+  "SessionClaims": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "sub": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "sid": {
+        "type": "string",
+        "pattern": "^ses_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix ses_"
+      },
+      "plan": {
+        "type": "string",
+        "enum": [
+          "free",
+          "pro"
+        ],
+        "description": "shown, not billed"
+      },
+      "guest": {
+        "type": "boolean"
+      },
+      "iat": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      },
+      "exp": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+      }
+    },
+    "required": [
+      "sub",
+      "sid",
+      "plan",
+      "guest",
+      "iat",
+      "exp"
+    ],
+    "additionalProperties": false
+  },
+  "event:widget.updated": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "change": {
+        "type": "string",
+        "enum": [
+          "added",
+          "pending",
+          "changed",
+          "removed",
+          "cleared"
+        ]
+      }
+    },
+    "required": [
+      "account_id",
+      "at",
+      "widget_id",
+      "change"
+    ],
+    "additionalProperties": false
+  },
+  "event:result.updated": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "result_id": {
+        "type": "string",
+        "pattern": "^res_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix res_"
+      },
+      "phase": {
+        "type": "string",
+        "enum": [
+          "numbers",
+          "summary"
+        ]
+      }
+    },
+    "required": [
+      "account_id",
+      "at",
+      "widget_id",
+      "result_id",
+      "phase"
+    ],
+    "additionalProperties": false
+  },
+  "event:movement.flagged": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "market_id": {
+        "type": "string"
+      },
+      "move_pts": {
+        "type": "number"
+      },
+      "threshold_pts": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "account_id",
+      "at",
+      "widget_id",
+      "market_id",
+      "move_pts",
+      "threshold_pts"
+    ],
+    "additionalProperties": false
+  },
+  "event:run.started": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "run_id": {
+        "type": "string",
+        "pattern": "^run_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix run_"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "numbers",
+          "research"
+        ]
+      }
+    },
+    "required": [
+      "account_id",
+      "at",
+      "widget_id",
+      "run_id",
+      "kind"
+    ],
+    "additionalProperties": false
+  },
+  "event:run.step": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "step": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "pattern": "^run_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix run_"
+          },
+          "widget_id": {
+            "type": "string",
+            "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix wid_"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "step": {
+            "type": "string",
+            "enum": [
+              "sources",
+              "plan",
+              "read",
+              "extract",
+              "math",
+              "summary",
+              "guard",
+              "publish"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "started",
+              "ok",
+              "failed",
+              "poisoned",
+              "skipped"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sandbox": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "sandbox_id": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "created",
+                      "held",
+                      "released",
+                      "killed",
+                      "destroyed"
+                    ]
+                  }
+                },
+                "required": [
+                  "sandbox_id",
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "candidate_id": {
+                    "type": "string",
+                    "pattern": "^cnd_[A-Za-z0-9]{8,32}$",
+                    "description": "id with prefix cnd_"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "domain": {
+                    "type": "string",
+                    "pattern": "^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                    "description": "lower-case host name, no scheme, no port"
+                  },
+                  "screenshot_key": {
+                    "description": "Object Storage key, shown as an image labelled \"external page\"",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "candidate_id",
+                  "url",
+                  "domain",
+                  "screenshot_key"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proxy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "allowed": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "refused": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "allowed",
+                  "refused"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verdict_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^vrd_[A-Za-z0-9]{8,32}$",
+                "description": "id with prefix vrd_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receipt_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^r-[0-9a-f]{8}$"
+            }
+          },
+          "audit_row_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^aud_[A-Za-z0-9]{8,32}$",
+                "description": "id with prefix aud_"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "run_id",
+          "widget_id",
+          "seq",
+          "step",
+          "status",
+          "at",
+          "duration_ms",
+          "sandbox",
+          "source",
+          "proxy",
+          "verdict_id",
+          "receipt_ids",
+          "audit_row_id",
+          "note"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "account_id",
+      "at",
+      "step"
+    ],
+    "additionalProperties": false
+  },
+  "event:run.poisoned": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "run_id": {
+        "type": "string",
+        "pattern": "^run_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix run_"
+      },
+      "reason": {
+        "type": "string",
+        "const": "poison"
+      },
+      "sandbox_id": {
+        "type": "string"
+      },
+      "audit_row_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^aud_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix aud_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "account_id",
+      "at",
+      "widget_id",
+      "run_id",
+      "reason",
+      "sandbox_id",
+      "audit_row_id"
+    ],
+    "additionalProperties": false
+  },
+  "event:run.failed": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "run_id": {
+        "type": "string",
+        "pattern": "^run_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix run_"
+      },
+      "reason": {
+        "type": "string",
+        "enum": [
+          "timeout",
+          "busy",
+          "exchange_down",
+          "model_error",
+          "guard_block",
+          "internal"
+        ]
+      },
+      "audit_row_id": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^aud_[A-Za-z0-9]{8,32}$",
+            "description": "id with prefix aud_"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "account_id",
+      "at",
+      "widget_id",
+      "run_id",
+      "reason",
+      "audit_row_id"
+    ],
+    "additionalProperties": false
+  },
+  "event:look.changed": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "account_id": {
+        "type": "string",
+        "pattern": "^acc_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix acc_"
+      },
+      "at": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+      },
+      "look": {
+        "type": "object",
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "agent-mail",
+              "clear-water",
+              "mercury",
+              "stadium-night",
+              "deep-sea",
+              "ice",
+              "aurora",
+              "prism",
+              "obsidian",
+              "rain",
+              "daybreak",
+              "ink-in-water"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark",
+              "system"
+            ]
+          },
+          "hue": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 360
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null = the theme's own hue"
+          }
+        },
+        "required": [
+          "theme",
+          "mode",
+          "hue"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "account_id",
+      "at",
+      "look"
+    ],
+    "additionalProperties": false
+  },
+  "tool:propose_widget": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "widgets": {
+        "minItems": 1,
+        "maxItems": 6,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "display"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "events",
+                "probability",
+                "gap",
+                "news",
+                "positions",
+                "movement"
+              ]
+            },
+            "size": {
+              "type": "string",
+              "enum": [
+                "S",
+                "M",
+                "L",
+                "XL"
+              ]
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "market_ids": {
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(kalshi:[A-Z0-9-]{3,80}|polymarket:[a-z0-9-]{3,120})$"
+              }
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "event_keys": {
+                  "maxItems": 12,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]{3,80}$"
+                  }
+                },
+                "team": {
+                  "description": "news: the team the user follows",
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "user_probability": {
+                  "description": "probability: the user's own probability for EV",
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "threshold_pts": {
+                  "description": "movement: raise movement.flagged past this move",
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 50
+                },
+                "window_s": {
+                  "type": "integer",
+                  "minimum": 3600,
+                  "maximum": 2592000
+                },
+                "connection_id": {
+                  "description": "positions: the connected account",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "brief": {
+              "description": "the user's own words for this widget",
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "title",
+            "market_ids",
+            "params"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "widgets"
+    ],
+    "additionalProperties": false
+  },
+  "tool:tune_widget": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      },
+      "brief": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "size": {
+        "type": "string",
+        "enum": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      },
+      "user_probability": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "threshold_pts": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 50
+      }
+    },
+    "required": [
+      "widget_id"
+    ],
+    "additionalProperties": false
+  },
+  "tool:remove_widget": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "widget_id": {
+        "type": "string",
+        "pattern": "^wid_[A-Za-z0-9]{8,32}$",
+        "description": "id with prefix wid_"
+      }
+    },
+    "required": [
+      "widget_id"
+    ],
+    "additionalProperties": false
+  },
+  "tool:quote_market": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "market_id": {
+        "type": "string",
+        "pattern": "^(kalshi:[A-Z0-9-]{3,80}|polymarket:[a-z0-9-]{3,120})$"
+      }
+    },
+    "required": [
+      "market_id"
+    ],
+    "additionalProperties": false
+  },
+  "tool:read_receipt": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "receipt_id": {
+        "type": "string",
+        "pattern": "^r-[0-9a-f]{8}$"
+      }
+    },
+    "required": [
+      "receipt_id"
+    ],
+    "additionalProperties": false
+  },
+  "tool:set_look": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "theme": {
+        "type": "string",
+        "enum": [
+          "agent-mail",
+          "clear-water",
+          "mercury",
+          "stadium-night",
+          "deep-sea",
+          "ice",
+          "aurora",
+          "prism",
+          "obsidian",
+          "rain",
+          "daybreak",
+          "ink-in-water"
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "light",
+          "dark",
+          "system"
+        ]
+      },
+      "hue": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 360
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "null = the theme's own hue"
+      }
+    },
+    "additionalProperties": false
+  }
+}

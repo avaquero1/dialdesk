@@ -1,0 +1,62 @@
+#!/usr/sbin/nft -f
+# ======================================================================================
+# STUB, not applied: Phase 3 tests and enables.
+# ======================================================================================
+# Firewall for the sandbox VM. Throwaway sandboxes sit on the bridge SBX_BRIDGE and can reach
+# one thing: the egress proxy on the host (port 8201). Only the proxy's own user may reach the
+# internet, only on 443, and never a private, link-local (cloud metadata) or VPC address.
+# The manager API (8200) answers only the control VM over the VPC.
+
+define CONTROL_VPC = 10.0.0.2          # placeholder: control VM's VPC address
+define VPC_IF      = "enp8s0"          # placeholder: VPC interface name
+define VPC_RANGE   = 10.0.0.0/24       # placeholder: the VPC subnet
+define SBX_BRIDGE  = "sbx0"
+define PROXY_UID   = 990               # placeholder: uid of the egress proxy's user
+define MANAGER_PORT = 8200
+define PROXY_PORT   = 8201
+
+flush ruleset
+
+table inet sandbox {
+	set blocked_v4 {
+		type ipv4_addr; flags interval; auto-merge
+		elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10, 127.0.0.0/8, $VPC_RANGE }
+	}
+	set blocked_v6 {
+		type ipv6_addr; flags interval; auto-merge
+		elements = { ::1/128, fe80::/10, fc00::/7 }
+	}
+
+	chain input {
+		type filter hook input priority filter; policy drop;
+		ct state established,related accept
+		ct state invalid drop
+		iifname "lo" accept
+		# Manager API: only the control VM, only over the VPC.
+		iifname $VPC_IF ip saddr $CONTROL_VPC tcp dport $MANAGER_PORT accept
+		# Sandboxes: only the egress proxy on the host.
+		iifname $SBX_BRIDGE tcp dport $PROXY_PORT accept
+		iifname $SBX_BRIDGE drop
+		# SSH for admin is reached through the VPC from control only (Phase 3 decides).
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+		# Sandboxes never route anywhere directly: no forward rules accept their traffic.
+		iifname $SBX_BRIDGE drop
+		oifname $SBX_BRIDGE drop
+	}
+
+	chain output {
+		type filter hook output priority filter; policy drop;
+		ct state established,related accept
+		oifname "lo" accept
+		# The proxy's user: internet on 443 only, never private, metadata or VPC addresses.
+		meta skuid $PROXY_UID ip daddr @blocked_v4 drop
+		meta skuid $PROXY_UID ip6 daddr @blocked_v6 drop
+		meta skuid $PROXY_UID tcp dport 443 accept
+		# DNS for the proxy goes to the VM's resolver (Phase 3: pin the resolver address).
+		meta skuid $PROXY_UID udp dport 53 accept
+		# Everything else the host starts outbound is dropped.
+	}
+}

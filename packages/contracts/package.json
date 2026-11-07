@@ -1,0 +1,14 @@
+{
+  "name": "@app/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "zod": "^4.6.7"
+  }
+}

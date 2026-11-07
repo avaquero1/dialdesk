@@ -1,0 +1,41 @@
+#!/usr/sbin/nft -f
+# ======================================================================================
+# STUB, not applied: Phase 3 tests and enables.
+# ======================================================================================
+# Firewall for the control VM. The public interface takes HTTPS (and HTTP for ACME and the
+# redirect) and SSH from the admin address only. The VPC interface takes only replies to
+# connections that control started itself (to the sandbox manager on 8200).
+
+define PUBLIC_IF = "enp1s0"            # placeholder: public interface name
+define VPC_IF    = "enp8s0"            # placeholder: VPC interface name
+define ADMIN_IP  = 203.0.113.10        # placeholder (TEST-NET-3): the admin's address
+
+flush ruleset
+
+table inet control {
+	chain input {
+		type filter hook input priority filter; policy drop;
+		ct state established,related accept
+		ct state invalid drop
+		iifname "lo" accept
+		# VPC: replies only (handled by the established,related rule above).
+		iifname $VPC_IF drop
+		# Public: web and SSH from the admin address.
+		iifname $PUBLIC_IF tcp dport 443 accept
+		iifname $PUBLIC_IF udp dport 443 accept   # HTTP/3
+		iifname $PUBLIC_IF tcp dport 80 accept    # ACME challenge and the HTTPS redirect
+		iifname $PUBLIC_IF ip saddr $ADMIN_IP tcp dport 22 accept
+		ip protocol icmp icmp type { echo-request, destination-unreachable, time-exceeded } limit rate 10/second accept
+		ip6 nexthdr icmpv6 accept
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+		# Docker inserts its own forward rules for the Compose network; Phase 3 checks how
+		# they interact with this table before it is enabled.
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+	}
+}

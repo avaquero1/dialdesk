@@ -1,0 +1,27 @@
+{
+  "name": "vultr-hackathon-app",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=26" },
+  "workspaces": ["packages/*", "services/*"],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test:contracts": "vitest run --project contracts",
+    "test:e2e": "vitest run --project e2e",
+    "test": "vitest run",
+    "gen": "tsx packages/contracts/scripts/gen.ts",
+    "dev-secrets": "tsx scripts/dev-secrets.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^26.6.6",
+    "eslint": "^10.14.0",
+    "json-schema-to-typescript": "^16.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.1.0"
+  }
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sports Wire: NBA</title>
+    <link>https://sportswire.fixture.test/nba/</link>
+    <description>NBA news from Sports Wire, a made-up outlet for tests.</description>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 07 Nov 2026 15:15:00 GMT</lastBuildDate>
+    <item>
+      <title>Preview: Lakers finish road trip in Boston on the second night of a back-to-back</title>
+      <link>https://sportswire.fixture.test/nba/lakers-celtics-preview.html</link>
+      <guid isPermaLink="true">https://sportswire.fixture.test/nba/lakers-celtics-preview.html</guid>
+      <description>The Lakers play the Celtics on Saturday night, one night after a game in Brooklyn.</description>
+      <pubDate>Sat, 07 Nov 2026 15:15:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

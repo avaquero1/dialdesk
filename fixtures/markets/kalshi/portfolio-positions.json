@@ -1,0 +1,85 @@
+{
+  "market_positions": [
+    {
+      "ticker": "KXNFLGAME-26NOV08KCBUF-KC",
+      "total_traded": 2200,
+      "total_traded_dollars": "22.0000",
+      "position": 40,
+      "market_exposure": 2200,
+      "market_exposure_dollars": "22.0000",
+      "realized_pnl": 0,
+      "realized_pnl_dollars": "0.0000",
+      "resting_orders_count": 0,
+      "fees_paid": 80,
+      "fees_paid_dollars": "0.8000",
+      "last_updated_ts": "2026-11-06T23:12:00Z"
+    },
+    {
+      "ticker": "KXNFLGAME-26NOV08GBCHI-GB",
+      "total_traded": 1100,
+      "total_traded_dollars": "11.0000",
+      "position": -25,
+      "market_exposure": 1100,
+      "market_exposure_dollars": "11.0000",
+      "realized_pnl": 0,
+      "realized_pnl_dollars": "0.0000",
+      "resting_orders_count": 0,
+      "fees_paid": 50,
+      "fees_paid_dollars": "0.5000",
+      "last_updated_ts": "2026-11-06T23:12:00Z"
+    },
+    {
+      "ticker": "KXNBAGAME-26NOV07DENPHX-DEN",
+      "total_traded": 1710,
+      "total_traded_dollars": "17.1000",
+      "position": 30,
+      "market_exposure": 1710,
+      "market_exposure_dollars": "17.1000",
+      "realized_pnl": 0,
+      "realized_pnl_dollars": "0.0000",
+      "resting_orders_count": 0,
+      "fees_paid": 60,
+      "fees_paid_dollars": "0.6000",
+      "last_updated_ts": "2026-11-06T23:12:00Z"
+    }
+  ],
+  "event_positions": [
+    {
+      "event_ticker": "KXNFLGAME-26NOV08KCBUF",
+      "total_cost": 2200,
+      "total_cost_dollars": "22.0000",
+      "event_exposure": 2200,
+      "event_exposure_dollars": "22.0000",
+      "realized_pnl": 0,
+      "realized_pnl_dollars": "0.0000",
+      "resting_order_count": 0,
+      "fees_paid": 80,
+      "fees_paid_dollars": "0.8000"
+    },
+    {
+      "event_ticker": "KXNFLGAME-26NOV08GBCHI",
+      "total_cost": 1100,
+      "total_cost_dollars": "11.0000",
+      "event_exposure": 1100,
+      "event_exposure_dollars": "11.0000",
+      "realized_pnl": 0,
+      "realized_pnl_dollars": "0.0000",
+      "resting_order_count": 0,
+      "fees_paid": 50,
+      "fees_paid_dollars": "0.5000"
+    },
+    {
+      "event_ticker": "KXNBAGAME-26NOV07DENPHX",
+      "total_cost": 1710,
+      "total_cost_dollars": "17.1000",
+      "event_exposure": 1710,
+      "event_exposure_dollars": "17.1000",
+      "realized_pnl": 0,
+      "realized_pnl_dollars": "0.0000",
+      "resting_order_count": 0,
+      "fees_paid": 60,
+      "fees_paid_dollars": "0.6000"
+    }
+  ],
+  "cursor": ""
+}

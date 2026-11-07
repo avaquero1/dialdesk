@@ -1,0 +1,964 @@
+[
+  {
+    "service": "edge",
+    "name": "signup",
+    "method": "POST",
+    "path": "/api/signup",
+    "callers": [
+      "public"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      409,
+      429
+    ],
+    "summary": "Sign up; sets the session cookie; creates the default board."
+  },
+  {
+    "service": "edge",
+    "name": "guest",
+    "method": "POST",
+    "path": "/api/guest",
+    "callers": [
+      "public"
+    ],
+    "status": 201,
+    "errors": [
+      429
+    ],
+    "summary": "\"Try it\": a guest with the pre-built board."
+  },
+  {
+    "service": "edge",
+    "name": "login",
+    "method": "POST",
+    "path": "/api/login",
+    "callers": [
+      "public"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      401,
+      429
+    ],
+    "summary": "Log in; sets the session cookie."
+  },
+  {
+    "service": "edge",
+    "name": "logout",
+    "method": "POST",
+    "path": "/api/logout",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "Log out."
+  },
+  {
+    "service": "edge",
+    "name": "me",
+    "method": "GET",
+    "path": "/api/me",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "The signed-in account."
+  },
+  {
+    "service": "edge",
+    "name": "board",
+    "method": "GET",
+    "path": "/api/board",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "The whole board."
+  },
+  {
+    "service": "edge",
+    "name": "setLayout",
+    "method": "PUT",
+    "path": "/api/board/layout",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      400
+    ],
+    "summary": "Drags, drops and folders (board validates the places)."
+  },
+  {
+    "service": "edge",
+    "name": "chat",
+    "method": "POST",
+    "path": "/api/chat",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      429
+    ],
+    "summary": "One chat turn (guarded)."
+  },
+  {
+    "service": "edge",
+    "name": "accept",
+    "method": "POST",
+    "path": "/api/proposals/:proposal_id/accept",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404,
+      409
+    ],
+    "summary": "The user's click on a proposal."
+  },
+  {
+    "service": "edge",
+    "name": "reject",
+    "method": "POST",
+    "path": "/api/proposals/:proposal_id/reject",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404,
+      409
+    ],
+    "summary": "No thanks."
+  },
+  {
+    "service": "edge",
+    "name": "resize",
+    "method": "PATCH",
+    "path": "/api/widgets/:widget_id/size",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "Menu: Size."
+  },
+  {
+    "service": "edge",
+    "name": "clear",
+    "method": "POST",
+    "path": "/api/widgets/:widget_id/clear",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Menu: Clear all."
+  },
+  {
+    "service": "edge",
+    "name": "remove",
+    "method": "DELETE",
+    "path": "/api/widgets/:widget_id",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Menu: Remove from board."
+  },
+  {
+    "service": "edge",
+    "name": "refresh",
+    "method": "POST",
+    "path": "/api/widgets/:widget_id/refresh",
+    "callers": [
+      "browser"
+    ],
+    "status": 202,
+    "errors": [
+      404,
+      429
+    ],
+    "summary": "Menu: Refresh now."
+  },
+  {
+    "service": "edge",
+    "name": "addSource",
+    "method": "POST",
+    "path": "/api/widgets/:widget_id/sources",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "Allow a suggested source for this widget."
+  },
+  {
+    "service": "edge",
+    "name": "trace",
+    "method": "GET",
+    "path": "/api/widgets/:widget_id/trace",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Menu: Sources and receipts."
+  },
+  {
+    "service": "edge",
+    "name": "receipt",
+    "method": "GET",
+    "path": "/api/receipts/:receipt_id",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "One receipt."
+  },
+  {
+    "service": "edge",
+    "name": "setLook",
+    "method": "PUT",
+    "path": "/api/look",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      400
+    ],
+    "summary": "Save the look."
+  },
+  {
+    "service": "edge",
+    "name": "connectionsKey",
+    "method": "GET",
+    "path": "/api/connections/public-key",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "The key to seal a private key to, in the browser."
+  },
+  {
+    "service": "edge",
+    "name": "connections",
+    "method": "GET",
+    "path": "/api/connections",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "Connected accounts."
+  },
+  {
+    "service": "edge",
+    "name": "connect",
+    "method": "POST",
+    "path": "/api/connections",
+    "callers": [
+      "browser"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      403,
+      422
+    ],
+    "summary": "Connect an account (read only)."
+  },
+  {
+    "service": "edge",
+    "name": "consent",
+    "method": "PUT",
+    "path": "/api/connections/:connection_id/consent",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Allow numbers to reach widgets."
+  },
+  {
+    "service": "edge",
+    "name": "disconnect",
+    "method": "DELETE",
+    "path": "/api/connections/:connection_id",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Disconnect."
+  },
+  {
+    "service": "edge",
+    "name": "trust",
+    "method": "GET",
+    "path": "/api/trust",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "The trust page."
+  },
+  {
+    "service": "edge",
+    "name": "auditHead",
+    "method": "GET",
+    "path": "/api/audit/head",
+    "callers": [
+      "browser",
+      "public"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "The signed head."
+  },
+  {
+    "service": "edge",
+    "name": "auditVerify",
+    "method": "GET",
+    "path": "/api/audit/verify",
+    "callers": [
+      "browser",
+      "public"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "Verify the chain."
+  },
+  {
+    "service": "accounts",
+    "name": "signup",
+    "method": "POST",
+    "path": "/accounts",
+    "callers": [
+      "edge"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      409
+    ],
+    "summary": "Create an account and its first session."
+  },
+  {
+    "service": "accounts",
+    "name": "guest",
+    "method": "POST",
+    "path": "/guests",
+    "callers": [
+      "edge"
+    ],
+    "status": 201,
+    "errors": [
+      429
+    ],
+    "summary": "\"Try it\": a guest account, deleted nightly."
+  },
+  {
+    "service": "accounts",
+    "name": "login",
+    "method": "POST",
+    "path": "/sessions",
+    "callers": [
+      "edge"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      401,
+      429
+    ],
+    "summary": "Log in."
+  },
+  {
+    "service": "accounts",
+    "name": "logout",
+    "method": "DELETE",
+    "path": "/sessions/:session_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Revoke a session."
+  },
+  {
+    "service": "accounts",
+    "name": "sessionValid",
+    "method": "GET",
+    "path": "/sessions/:session_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "Is a session still valid (not revoked)? edge caches this briefly."
+  },
+  {
+    "service": "accounts",
+    "name": "get",
+    "method": "GET",
+    "path": "/accounts/:account_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Read an account and its settings."
+  },
+  {
+    "service": "accounts",
+    "name": "setLook",
+    "method": "PUT",
+    "path": "/accounts/:account_id/look",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "Save the look (validated again here). Emits look.changed."
+  },
+  {
+    "service": "board",
+    "name": "getBoard",
+    "method": "GET",
+    "path": "/boards/:account_id",
+    "callers": [
+      "edge",
+      "agent"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "An account's whole board."
+  },
+  {
+    "service": "board",
+    "name": "createDefaults",
+    "method": "POST",
+    "path": "/boards/:account_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 201,
+    "errors": [
+      409
+    ],
+    "summary": "Create the prescribed default board (after sign-up). Enqueues a numbers run for each display."
+  },
+  {
+    "service": "board",
+    "name": "setLayout",
+    "method": "PUT",
+    "path": "/boards/:account_id/layout",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "The user's drags, drops and folders."
+  },
+  {
+    "service": "board",
+    "name": "propose",
+    "method": "POST",
+    "path": "/boards/:account_id/proposals",
+    "callers": [
+      "agent"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "The agent's proposal, stored pending. Each add is validated against the widget catalog."
+  },
+  {
+    "service": "board",
+    "name": "accept",
+    "method": "POST",
+    "path": "/proposals/:proposal_id/accept",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404,
+      409
+    ],
+    "summary": "The user's click. Saves the widgets and enqueues a numbers run, then a research run."
+  },
+  {
+    "service": "board",
+    "name": "reject",
+    "method": "POST",
+    "path": "/proposals/:proposal_id/reject",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404,
+      409
+    ],
+    "summary": "The user says no."
+  },
+  {
+    "service": "board",
+    "name": "getWidget",
+    "method": "GET",
+    "path": "/widgets/:widget_id",
+    "callers": [
+      "edge",
+      "agent",
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "One widget. runner reloads the spec here instead of trusting the job payload."
+  },
+  {
+    "service": "board",
+    "name": "resize",
+    "method": "PATCH",
+    "path": "/widgets/:widget_id/size",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "Size S, M, L (XL on desktop), checked against the catalog."
+  },
+  {
+    "service": "board",
+    "name": "clear",
+    "method": "POST",
+    "path": "/widgets/:widget_id/clear",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Clear all: back to the type's defaults (brief, added sources and feedback cleared)."
+  },
+  {
+    "service": "board",
+    "name": "remove",
+    "method": "DELETE",
+    "path": "/widgets/:widget_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Remove from board."
+  },
+  {
+    "service": "board",
+    "name": "refresh",
+    "method": "POST",
+    "path": "/widgets/:widget_id/refresh",
+    "callers": [
+      "edge"
+    ],
+    "status": 202,
+    "errors": [
+      404,
+      429
+    ],
+    "summary": "Refresh now: enqueue a run."
+  },
+  {
+    "service": "board",
+    "name": "addSource",
+    "method": "POST",
+    "path": "/widgets/:widget_id/sources",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "The user's click on a suggested source adds its domain to this widget's profile."
+  },
+  {
+    "service": "board",
+    "name": "putResult",
+    "method": "PUT",
+    "path": "/widgets/:widget_id/result",
+    "callers": [
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404,
+      422
+    ],
+    "summary": "Store a result. Refused (422) unless the verdict is a passing publish verdict. Emits result.updated."
+  },
+  {
+    "service": "board",
+    "name": "getTrace",
+    "method": "GET",
+    "path": "/widgets/:widget_id/trace",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Sources and receipts: the last run trace."
+  },
+  {
+    "service": "board",
+    "name": "getReceipt",
+    "method": "GET",
+    "path": "/receipts/:receipt_id",
+    "callers": [
+      "edge",
+      "agent"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "A receipt already on this account's board."
+  },
+  {
+    "service": "agent",
+    "name": "chat",
+    "method": "POST",
+    "path": "/chat",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      429
+    ],
+    "summary": "One chat turn. The reply passes the guard; a blocked reply is the fixed line."
+  },
+  {
+    "service": "agent",
+    "name": "getConversation",
+    "method": "GET",
+    "path": "/conversations/:conversation_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "A conversation so far."
+  },
+  {
+    "service": "runner",
+    "name": "getRun",
+    "method": "GET",
+    "path": "/runs/:run_id",
+    "callers": [
+      "board"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "A run's state and steps so far."
+  },
+  {
+    "service": "markets",
+    "name": "list",
+    "method": "GET",
+    "path": "/markets",
+    "callers": [
+      "agent",
+      "runner"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "Find markets (the agent proposes widgets from these)."
+  },
+  {
+    "service": "markets",
+    "name": "get",
+    "method": "GET",
+    "path": "/markets/:market_id",
+    "callers": [
+      "agent",
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "One market, cached 10-30 s. quote_market reads this."
+  },
+  {
+    "service": "markets",
+    "name": "history",
+    "method": "GET",
+    "path": "/markets/:market_id/history",
+    "callers": [
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Price history for movement, volatility and the 7-day line."
+  },
+  {
+    "service": "markets",
+    "name": "event",
+    "method": "GET",
+    "path": "/events/:event_key",
+    "callers": [
+      "agent",
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "One event's markets on both exchanges (for gap)."
+  },
+  {
+    "service": "markets",
+    "name": "candidates",
+    "method": "GET",
+    "path": "/markets/:market_id/candidates",
+    "callers": [
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Step 0, code only: candidate links for a market from the catalog, feeds and Brave, shared by every follower."
+  },
+  {
+    "service": "connections",
+    "name": "publicKey",
+    "method": "GET",
+    "path": "/public-key",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "The key the browser seals private keys to."
+  },
+  {
+    "service": "connections",
+    "name": "connect",
+    "method": "POST",
+    "path": "/connections",
+    "callers": [
+      "edge"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      403,
+      422
+    ],
+    "summary": "Connect an account. Kalshi: checks GET /api_keys, refuses any key with write scope (403)."
+  },
+  {
+    "service": "connections",
+    "name": "list",
+    "method": "GET",
+    "path": "/connections",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "An account's connections."
+  },
+  {
+    "service": "connections",
+    "name": "setConsent",
+    "method": "PUT",
+    "path": "/connections/:connection_id/consent",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "The user allows (or stops) numbers leaving connections for their widgets."
+  },
+  {
+    "service": "connections",
+    "name": "remove",
+    "method": "DELETE",
+    "path": "/connections/:connection_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "Disconnect and delete the stored key."
+  },
+  {
+    "service": "connections",
+    "name": "numbers",
+    "method": "GET",
+    "path": "/connections/:connection_id/numbers",
+    "callers": [
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      403,
+      404
+    ],
+    "summary": "Balance and positions, numbers only, and only if the user allowed it (403 otherwise)."
+  },
+  {
+    "service": "models",
+    "name": "complete",
+    "method": "POST",
+    "path": "/complete",
+    "callers": [
+      "agent",
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      402,
+      429,
+      502
+    ],
+    "summary": "One model call for a role. Refused if the prompt holds a key (400) or a cap is reached (402)."
+  },
+  {
+    "service": "models",
+    "name": "spend",
+    "method": "GET",
+    "path": "/spend",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "Today's Vultr Inference spend per role (the trust page)."
+  },
+  {
+    "service": "audit",
+    "name": "trust",
+    "method": "GET",
+    "path": "/trust",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "The trust page's counts (spend comes from models)."
+  },
+  {
+    "service": "audit",
+    "name": "head",
+    "method": "GET",
+    "path": "/audit/head",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "The signed chain head."
+  },
+  {
+    "service": "audit",
+    "name": "verify",
+    "method": "GET",
+    "path": "/audit/verify",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "Re-walk the hash chain and check the head signature."
+  },
+  {
+    "service": "audit",
+    "name": "row",
+    "method": "GET",
+    "path": "/audit/rows/:row_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "One row, for a receipt or a blocked note."
+  }
+]

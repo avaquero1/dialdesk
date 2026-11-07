@@ -1,0 +1,80 @@
+# Dev infrastructure only: Postgres, Valkey and the fixture web server.
+# The TypeScript services run natively with tsx, and sandbox-manager runs natively with cargo.
+#
+#   docker compose -f deploy/compose.dev.yml --env-file .env up -d --wait
+#   docker compose -f deploy/compose.dev.yml down -v
+#
+# Every port is bound to 127.0.0.1 only. Images are pinned by version tag and by digest
+# (the digests were read with `docker inspect` on 2026-11-07); Phase 3 re-checks the digests
+# before anything ships.
+name: vha-dev
+
+services:
+  postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD:?set PG_SUPERUSER_PASSWORD in .env}
+      # TCP logins need a password even from inside the container (initdb's default trusts 127.0.0.1).
+      # The Unix socket stays trusted for the entrypoint and the healthcheck.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust"
+      # Read by db-init.sql with psql's \getenv: one login role per service.
+      DB_PASSWORD_ACCOUNTS: ${DB_PASSWORD_ACCOUNTS:?set DB_PASSWORD_ACCOUNTS in .env}
+      DB_PASSWORD_BOARD: ${DB_PASSWORD_BOARD:?set DB_PASSWORD_BOARD in .env}
+      DB_PASSWORD_AGENT: ${DB_PASSWORD_AGENT:?set DB_PASSWORD_AGENT in .env}
+      DB_PASSWORD_RUNNER: ${DB_PASSWORD_RUNNER:?set DB_PASSWORD_RUNNER in .env}
+      DB_PASSWORD_MARKETS: ${DB_PASSWORD_MARKETS:?set DB_PASSWORD_MARKETS in .env}
+      DB_PASSWORD_CONNECTIONS: ${DB_PASSWORD_CONNECTIONS:?set DB_PASSWORD_CONNECTIONS in .env}
+      DB_PASSWORD_MODELS: ${DB_PASSWORD_MODELS:?set DB_PASSWORD_MODELS in .env}
+      DB_PASSWORD_AUDIT: ${DB_PASSWORD_AUDIT:?set DB_PASSWORD_AUDIT in .env}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - ./db-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8.1-alpine@sha256:2602ace2be6569bc2bbb06f873776516ab9089821525be34f4305c67eb9db02a
+    command: ["valkey-server", "--aclfile", "/etc/valkey/users.acl"]
+    environment:
+      VALKEY_HEALTH_PASSWORD: ${VALKEY_HEALTH_PASSWORD:?set VALKEY_HEALTH_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      # Generated, gitignored. Its `health` user may only run PING.
+      - ./.dev/valkey-users.acl:/etc/valkey/users.acl:ro
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli --no-auth-warning --user health --pass \"$$VALKEY_HEALTH_PASSWORD\" ping | grep -q PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  fixtures:
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    read_only: true
+    tmpfs:
+      - /data
+      - /config
+    ports:
+      - "127.0.0.1:8300:80"
+    volumes:
+      - ../fixtures/site:/srv:ro
+      - ./fixtures.Caddyfile:/etc/caddy/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/index.html"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  pgdata:

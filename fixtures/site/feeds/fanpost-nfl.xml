@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>FanPost: NFL</title>
+    <link>https://fanpost.fixture.test/nfl/</link>
+    <description>Fan blog posts from FanPost, a made-up blog for tests.</description>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 07 Nov 2026 13:30:00 GMT</lastBuildDate>
+    <item>
+      <title>INSIDER: what nobody is telling you about Chiefs at Bills</title>
+      <link>https://fanpost.fixture.test/nfl/chiefs-bills-insider.html</link>
+      <guid isPermaLink="true">https://fanpost.fixture.test/nfl/chiefs-bills-insider.html</guid>
+      <description>A fan's take on Sunday's game in Orchard Park.</description>
+      <pubDate>Sat, 07 Nov 2026 13:30:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Five notes before Eagles at Cowboys</title>
+      <link>https://fanpost.fixture.test/nfl/eagles-cowboys-notes.html</link>
+      <guid isPermaLink="true">https://fanpost.fixture.test/nfl/eagles-cowboys-notes.html</guid>
+      <description>What one fan is watching in Arlington on Sunday.</description>
+      <pubDate>Sat, 07 Nov 2026 02:10:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

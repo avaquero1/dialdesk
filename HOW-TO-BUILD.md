@@ -1,0 +1,88 @@
+# How to build a piece (Phase 1 and after)
+
+One worker, one piece, one branch. `main` only moves forward by fast-forward, and only when `make check` is green.
+
+## 1. Your own worktree and branch
+
+```sh
+cd ~/Projects/vultr-hackathon-app
+git worktree add ../vha-wt/<piece> -b piece/<piece> main     # e.g. piece/markets
+cd ../vha-wt/<piece>
+npm ci && make dev-secrets                                   # each worktree has its own .env
+make check                                                   # green before you start
+```
+
+Never edit another piece's folder. Never commit in the main checkout. No remote: nothing is pushed.
+
+## 2. Work
+
+- **Your service** lives in `services/<name>/`:
+  - `src/main.ts`: start-up (don't change it much: the template does config, logs, migrations, listen).
+  - `src/real.ts`: your handlers. Phase 0 makes every endpoint answer 501 (`unbuilt(API)`). Replace them one at a time:
+    `return { ...unbuilt(BOARD), getBoard: async ({ params }, ctx) => {...} }`.
+  - `src/fake.ts`: the in-memory fake. **Keep it working**: other pieces build against it. If you change behavior the
+    contract allows, change the fake too.
+  - `migrations/NNNN_name.sql`: your tables, in your schema, applied once each at start (never edit an applied file).
+  - `test/cases.ts`: the contract cases for your fake. Add cases when you add behavior.
+- **Config:** every variable starts with your service's name (`BOARD_PORT`, `BOARD_DATABASE_URL`…). Read it with
+  `loadConfig('board', { EXTRA: z.string() })`. Add new names to `scripts/dev-secrets.ts` and regenerate `.env.example`
+  (`npx tsx scripts/dev-secrets.ts --example > .env.example`).
+- **Calling another service:** `const call = await clientFromEnv('runner', 'markets'); await call(MARKETS.get, { params: { market_id } })`.
+  The client validates your request and the answer against the contract. Never hand-roll a fetch.
+- **Errors:** `throw new HttpError(404, 'not_found', '…')`. The status must be in the endpoint's `errors`.
+- **Logs:** `ctx.log` (pino, JSON). Never log a body, a key, a token or page text. `console.log` fails lint.
+- **The audit log:** `bus.log(logEntry('board', 'widget.accepted', {...}))`: ids, hashes and sizes only.
+
+## 3. Adding or changing an endpoint (needs the contracts owner)
+
+After `contracts-v0`, contracts change only through their owner. To propose one:
+
+1. Write the change in `packages/contracts/src/api/<service>.ts` on your branch: method, path, `callers`, `params`,
+   `query` (strings: use `z.coerce` for numbers), `body`, `response`, `status`, `errors`, `summary`.
+2. `npm run gen` (regenerates `schema/` and the Rust-derived types), add the handler to `fake.ts` and `real.ts`, add a
+   case to `test/cases.ts`.
+3. Ask the owner. The owner lands contract changes on `main` first, alone, so every piece rebases onto them.
+
+The token check comes from `callers`: list exactly the services that need the endpoint. `make dev-secrets` derives the
+call graph (and so every token) from those lists.
+
+Rust-owned schemas (engine, sandbox-manager): change the Rust types, then `npm run gen`. `make gen-check` fails when the
+generated TypeScript is stale.
+
+## 4. Where the fakes are
+
+| Service | Fake | Notes |
+|---|---|---|
+| edge | `services/edge/src/fake.ts` | Routes to the other services through typed clients; fake sessions `fake.<ses>.<acc>` |
+| accounts | `services/accounts/src/fake.ts` | In-memory accounts and sessions (not signed JWTs) |
+| board | `services/board/src/fake.ts` | Boards, prescribed defaults, proposals, results; enqueued runs in `fakeQueue` |
+| agent | `services/agent/src/fake.ts` | The scripted chat from the UI plan; every reply guarded; `advice-test` shows the blocked line |
+| runner | `services/runner/src/fake.ts` | `run_state` reads; the run itself is played by `e2e/run-on-fakes.ts` |
+| markets | `services/markets/src/fake.ts` | Backed by `fixtures/markets` and `fixtures/site/MANIFEST.json` |
+| connections | `services/connections/src/fake.ts` | A key id containing `write` is refused as write scope |
+| models | `services/models/src/fake.ts` | Canned answers by role × scenario (`clean`, `poisoned`, `advice`, `error`) |
+| audit | `services/audit/src/fake.ts` | An in-memory hash chain; `createFakeAudit().append(entry)` |
+| sandbox-manager | `sandbox/manager` (Rust) | The real binary on the `docker` stub backend: lifecycle, slots, hold, kill, compute in process |
+
+Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
+
+## 5. Tests
+
+- `make contracts`: every fake's cases, validated against the contract both ways; every endpoint must have a success
+  case; no route outside the contract; wrong callers get 403, no token 401.
+- `make e2e`: the end-to-end flow on fakes (`e2e/flow.test.ts`): sign up, the chat builds a widget, a run fills it
+  with numbers and receipts, a poisoned page gets its sandbox killed. Pending steps are `it.todo`: turn yours into a
+  real step when your piece lands. It needs `target/debug/sandbox-manager` (`make rust` builds it).
+- Your own unit tests: `services/<name>/test/*.test.ts` (picked up by the contracts project) or Rust `#[test]`s.
+
+## 6. Landing
+
+```sh
+make check                       # green, in your worktree
+make check                       # green again after the rebase
+cd ~/Projects/vultr-hackathon-app && git merge --ff-only piece/<piece>
+git worktree remove ../vha-wt/<piece> && git branch -d piece/<piece>
+```
+
+If `--ff-only` refuses, someone landed first: rebase again. Never merge with a merge commit, never force.
+Leave a handoff note in your report: what you tried, the dead ends, what's left.

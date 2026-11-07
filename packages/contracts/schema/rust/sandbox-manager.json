@@ -1,0 +1,1035 @@
+{
+  "paths": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "request": null,
+      "responses": {
+        "200": "Health"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/jobs",
+      "request": "JobRequest",
+      "responses": {
+        "202": "JobStatus",
+        "400": "ApiError",
+        "401": "ApiError",
+        "503": "Busy"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/jobs/{id}",
+      "request": null,
+      "responses": {
+        "200": "JobStatus",
+        "401": "ApiError",
+        "404": "ApiError"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/jobs/{id}/release",
+      "request": null,
+      "responses": {
+        "200": "JobStatus",
+        "401": "ApiError",
+        "404": "ApiError",
+        "409": "ApiError"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/jobs/{id}/kill",
+      "request": "KillRequest",
+      "responses": {
+        "200": "JobStatus",
+        "400": "ApiError",
+        "401": "ApiError",
+        "404": "ApiError",
+        "409": "ApiError"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/sandboxes",
+      "request": null,
+      "responses": {
+        "200": "SandboxList",
+        "401": "ApiError"
+      }
+    }
+  ],
+  "schemas": {
+    "ApiError": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "Every non-2xx response except 503 Busy.",
+      "properties": {
+        "error": {
+          "description": "Machine code: unauthorized, bad_request, not_found, conflict, backend.",
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "error",
+        "message"
+      ],
+      "title": "ApiError",
+      "type": "object"
+    },
+    "Busy": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "503 from POST /jobs when every slot is taken.",
+      "properties": {
+        "error": {
+          "description": "Always \"busy\".",
+          "type": "string"
+        },
+        "retry_after_ms": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "error",
+        "retry_after_ms"
+      ],
+      "title": "Busy",
+      "type": "object"
+    },
+    "Health": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "GET /health.",
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "service": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok",
+        "service",
+        "backend"
+      ],
+      "title": "Health",
+      "type": "object"
+    },
+    "JobRequest": {
+      "$defs": {
+        "BrowseSpec": {
+          "additionalProperties": false,
+          "properties": {
+            "allowlist": {
+              "description": "Domains the sandbox may reach; subdomains included.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "hold": {
+              "default": true,
+              "description": "Keep the sandbox open after the pages load, until release, kill or hold_s.",
+              "type": "boolean"
+            },
+            "screenshot": {
+              "default": false,
+              "type": "boolean"
+            },
+            "urls": {
+              "description": "https only (http too when SANDBOX_MANAGER_DEV=1). 1 to 10 URLs.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "urls",
+            "allowlist"
+          ],
+          "type": "object"
+        },
+        "ComputeSpec": {
+          "additionalProperties": false,
+          "properties": {
+            "engine_input": {
+              "$ref": "#/$defs/EngineInput"
+            }
+          },
+          "required": [
+            "engine_input"
+          ],
+          "type": "object"
+        },
+        "EngineInput": {
+          "additionalProperties": false,
+          "description": "One engine run: a plan and the named numbers it reads.",
+          "properties": {
+            "numbers": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Value"
+              },
+              "description": "Named inputs. Op args refer to them by key.",
+              "type": "object"
+            },
+            "plan": {
+              "$ref": "#/$defs/Plan"
+            }
+          },
+          "required": [
+            "plan",
+            "numbers"
+          ],
+          "type": "object"
+        },
+        "JobKind": {
+          "oneOf": [
+            {
+              "const": "browse",
+              "description": "Open pages in a browser behind the egress proxy.",
+              "type": "string"
+            },
+            {
+              "const": "compute",
+              "description": "Run the math engine on an EngineInput.",
+              "type": "string"
+            }
+          ]
+        },
+        "OpCall": {
+          "additionalProperties": false,
+          "description": "One op call.",
+          "properties": {
+            "args": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Arg name -> a key in `numbers`, or the id of an earlier op.",
+              "type": "object"
+            },
+            "id": {
+              "description": "Slot-safe id, unique in the plan, e.g. \"n1\". Must not equal a key in `numbers`.",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$",
+              "type": "string"
+            },
+            "op": {
+              "$ref": "#/$defs/OpName"
+            }
+          },
+          "required": [
+            "id",
+            "op",
+            "args"
+          ],
+          "type": "object"
+        },
+        "OpName": {
+          "description": "The fixed op set.",
+          "oneOf": [
+            {
+              "const": "implied_probability",
+              "description": "args: price_cents. Probability 0..1 = price / 100.",
+              "type": "string"
+            },
+            {
+              "const": "price_to_odds",
+              "description": "args: probability. Decimal odds = 1 / p.",
+              "type": "string"
+            },
+            {
+              "const": "odds_to_probability",
+              "description": "args: decimal_odds. Probability = 1 / odds.",
+              "type": "string"
+            },
+            {
+              "const": "expected_value",
+              "description": "args: price_cents, probability. Cents per contract = p * 100 - price.",
+              "type": "string"
+            },
+            {
+              "const": "movement",
+              "description": "args: series, window_s. Points moved over the window.",
+              "type": "string"
+            },
+            {
+              "const": "volatility",
+              "description": "args: series. Stddev of point-to-point changes, in points.",
+              "type": "string"
+            },
+            {
+              "const": "gap",
+              "description": "args: a_cents, b_cents. b - a in points.",
+              "type": "string"
+            },
+            {
+              "const": "base_rate",
+              "description": "args: hits, total. hits / total.",
+              "type": "string"
+            },
+            {
+              "const": "position_value",
+              "description": "args: count, price_cents. Dollars.",
+              "type": "string"
+            },
+            {
+              "const": "pnl",
+              "description": "args: count, avg_price_cents, price_cents. Dollars.",
+              "type": "string"
+            }
+          ]
+        },
+        "Plan": {
+          "additionalProperties": false,
+          "description": "The ops to run, in order. Later ops may read earlier ops' outputs.",
+          "properties": {
+            "ops": {
+              "items": {
+                "$ref": "#/$defs/OpCall"
+              },
+              "type": "array"
+            },
+            "plan_version": {
+              "description": "Must be 1.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "plan_version",
+            "ops"
+          ],
+          "type": "object"
+        },
+        "Point": {
+          "additionalProperties": false,
+          "description": "One point of a price series.",
+          "properties": {
+            "t": {
+              "description": "Unix seconds.",
+              "format": "int64",
+              "type": "integer"
+            },
+            "v": {
+              "description": "Price in cents (0..=100).",
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "t",
+            "v"
+          ],
+          "type": "object"
+        },
+        "Value": {
+          "anyOf": [
+            {
+              "format": "double",
+              "type": "number"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/Point"
+              },
+              "type": "array"
+            }
+          ],
+          "description": "A named input: a single number or a time series."
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "POST /jobs. Exactly one of `browse` / `compute` is set, matching `kind`.",
+      "properties": {
+        "browse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BrowseSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compute": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComputeSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "job_id": {
+          "description": "Caller-chosen, unique. Posting the same job_id again returns the existing job.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/JobKind"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "widget_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "run_id",
+        "widget_id",
+        "kind"
+      ],
+      "title": "JobRequest",
+      "type": "object"
+    },
+    "JobStatus": {
+      "$defs": {
+        "EngineResult": {
+          "description": "Everything one run produced. `ok` is true when there are no errors.",
+          "properties": {
+            "engine_version": {
+              "type": "string"
+            },
+            "errors": {
+              "items": {
+                "$ref": "#/$defs/OpError"
+              },
+              "type": "array"
+            },
+            "git_hash": {
+              "type": "string"
+            },
+            "input_hash": {
+              "description": "sha256 hex of the `numbers` map's canonical JSON.",
+              "type": "string"
+            },
+            "numbers": {
+              "items": {
+                "$ref": "#/$defs/NumberOut"
+              },
+              "type": "array"
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "plan_hash": {
+              "description": "sha256 hex of the plan's canonical JSON.",
+              "type": "string"
+            },
+            "receipts": {
+              "items": {
+                "$ref": "#/$defs/Receipt"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "ok",
+            "engine_version",
+            "git_hash",
+            "plan_hash",
+            "input_hash",
+            "numbers",
+            "receipts",
+            "errors"
+          ],
+          "type": "object"
+        },
+        "JobKind": {
+          "oneOf": [
+            {
+              "const": "browse",
+              "description": "Open pages in a browser behind the egress proxy.",
+              "type": "string"
+            },
+            {
+              "const": "compute",
+              "description": "Run the math engine on an EngineInput.",
+              "type": "string"
+            }
+          ]
+        },
+        "JobState": {
+          "enum": [
+            "queued",
+            "running",
+            "held",
+            "released",
+            "killed",
+            "done",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "Limits": {
+          "description": "Resource limits for one sandbox. Defaults are placeholders, set from the spike.",
+          "properties": {
+            "cpu_millis": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "disk_mb": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "hold_s": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "memory_mb": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "output_kb": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pids": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "wall_s": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "cpu_millis",
+            "memory_mb",
+            "pids",
+            "wall_s",
+            "hold_s",
+            "disk_mb",
+            "output_kb"
+          ],
+          "type": "object"
+        },
+        "NumberOut": {
+          "description": "One computed number. Values are rounded to 9 decimal places.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "op": {
+              "$ref": "#/$defs/OpName"
+            },
+            "receipt_id": {
+              "type": "string"
+            },
+            "unit": {
+              "$ref": "#/$defs/Unit"
+            },
+            "value": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "id",
+            "op",
+            "value",
+            "unit",
+            "receipt_id"
+          ],
+          "type": "object"
+        },
+        "OpError": {
+          "description": "Why an op (or the whole plan) did not produce a number.",
+          "properties": {
+            "code": {
+              "description": "One of: bad_arg, missing_input, out_of_range, bad_plan.",
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "op_id": {
+              "description": "The op's id, or \"plan\" for a plan-level error.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op_id",
+            "code",
+            "message"
+          ],
+          "type": "object"
+        },
+        "OpName": {
+          "description": "The fixed op set.",
+          "oneOf": [
+            {
+              "const": "implied_probability",
+              "description": "args: price_cents. Probability 0..1 = price / 100.",
+              "type": "string"
+            },
+            {
+              "const": "price_to_odds",
+              "description": "args: probability. Decimal odds = 1 / p.",
+              "type": "string"
+            },
+            {
+              "const": "odds_to_probability",
+              "description": "args: decimal_odds. Probability = 1 / odds.",
+              "type": "string"
+            },
+            {
+              "const": "expected_value",
+              "description": "args: price_cents, probability. Cents per contract = p * 100 - price.",
+              "type": "string"
+            },
+            {
+              "const": "movement",
+              "description": "args: series, window_s. Points moved over the window.",
+              "type": "string"
+            },
+            {
+              "const": "volatility",
+              "description": "args: series. Stddev of point-to-point changes, in points.",
+              "type": "string"
+            },
+            {
+              "const": "gap",
+              "description": "args: a_cents, b_cents. b - a in points.",
+              "type": "string"
+            },
+            {
+              "const": "base_rate",
+              "description": "args: hits, total. hits / total.",
+              "type": "string"
+            },
+            {
+              "const": "position_value",
+              "description": "args: count, price_cents. Dollars.",
+              "type": "string"
+            },
+            {
+              "const": "pnl",
+              "description": "args: count, avg_price_cents, price_cents. Dollars.",
+              "type": "string"
+            }
+          ]
+        },
+        "PageOut": {
+          "properties": {
+            "screenshot_png_b64": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "text": {
+              "description": "Visible text of the page, cut to the output limit.",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "status",
+            "text"
+          ],
+          "type": "object"
+        },
+        "ProxyLogEntry": {
+          "description": "One connection the sandbox asked the egress proxy for.",
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "at": {
+              "description": "RFC 3339.",
+              "type": "string"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reason": {
+              "$ref": "#/$defs/ProxyReason"
+            },
+            "sandbox_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "at",
+            "sandbox_id",
+            "host",
+            "port",
+            "allowed",
+            "reason"
+          ],
+          "type": "object"
+        },
+        "ProxyReason": {
+          "description": "Why the egress proxy allowed or refused a connection.",
+          "enum": [
+            "allowlisted",
+            "not_on_allowlist",
+            "ip_literal",
+            "bad_port",
+            "blocked_range",
+            "dns_failed"
+          ],
+          "type": "string"
+        },
+        "Receipt": {
+          "description": "How one number was computed.",
+          "properties": {
+            "args": {
+              "additionalProperties": {
+                "$ref": "#/$defs/ReceiptArg"
+              },
+              "description": "The resolved inputs, by arg name.",
+              "type": "object"
+            },
+            "engine_version": {
+              "type": "string"
+            },
+            "formula": {
+              "description": "Human-readable formula, e.g. \"p = price_cents / 100\".",
+              "type": "string"
+            },
+            "git_hash": {
+              "type": "string"
+            },
+            "id": {
+              "description": "\"r-\" + first 8 hex of sha256(plan_hash + op id).",
+              "type": "string"
+            },
+            "input_hash": {
+              "type": "string"
+            },
+            "op": {
+              "$ref": "#/$defs/OpName"
+            },
+            "op_id": {
+              "type": "string"
+            },
+            "plan_hash": {
+              "type": "string"
+            },
+            "unit": {
+              "$ref": "#/$defs/Unit"
+            },
+            "value": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "id",
+            "op_id",
+            "op",
+            "args",
+            "formula",
+            "value",
+            "unit",
+            "plan_hash",
+            "input_hash",
+            "engine_version",
+            "git_hash"
+          ],
+          "type": "object"
+        },
+        "ReceiptArg": {
+          "anyOf": [
+            {
+              "format": "double",
+              "type": "number"
+            },
+            {
+              "$ref": "#/$defs/SeriesSummary"
+            }
+          ],
+          "description": "A resolved input as recorded on a receipt."
+        },
+        "SeriesSummary": {
+          "description": "A series on a receipt: its size, span and hash instead of every point.",
+          "properties": {
+            "first_t": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "hash": {
+              "description": "sha256 hex of the series' canonical JSON.",
+              "type": "string"
+            },
+            "last_t": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "points": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "points",
+            "first_t",
+            "last_t",
+            "hash"
+          ],
+          "type": "object"
+        },
+        "Unit": {
+          "description": "The unit of a computed number.",
+          "oneOf": [
+            {
+              "enum": [
+                "dollars",
+                "ratio"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "probability",
+              "description": "0..=1.",
+              "type": "string"
+            },
+            {
+              "const": "decimal_odds",
+              "description": "Decimal odds, >= 1.",
+              "type": "string"
+            },
+            {
+              "const": "cents",
+              "description": "Cents per contract.",
+              "type": "string"
+            },
+            {
+              "const": "points",
+              "description": "Price points (1 point = 1 cent of price).",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "compute_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EngineResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "description": "RFC 3339.",
+          "type": "string"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "kill_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/JobKind"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/PageOut"
+          },
+          "type": "array"
+        },
+        "proxy_log": {
+          "items": {
+            "$ref": "#/$defs/ProxyLogEntry"
+          },
+          "type": "array"
+        },
+        "sandbox_id": {
+          "description": "\"sbx-\" + random hex.",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/JobState"
+        },
+        "updated_at": {
+          "description": "RFC 3339.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "sandbox_id",
+        "kind",
+        "state",
+        "backend",
+        "created_at",
+        "updated_at",
+        "limits",
+        "pages",
+        "proxy_log"
+      ],
+      "title": "JobStatus",
+      "type": "object"
+    },
+    "KillRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "POST /jobs/{id}/kill.",
+      "properties": {
+        "audit_row_id": {
+          "description": "The audit row that records who asked for the kill, if any.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "KillRequest",
+      "type": "object"
+    },
+    "SandboxList": {
+      "$defs": {
+        "JobKind": {
+          "oneOf": [
+            {
+              "const": "browse",
+              "description": "Open pages in a browser behind the egress proxy.",
+              "type": "string"
+            },
+            {
+              "const": "compute",
+              "description": "Run the math engine on an EngineInput.",
+              "type": "string"
+            }
+          ]
+        },
+        "JobState": {
+          "enum": [
+            "queued",
+            "running",
+            "held",
+            "released",
+            "killed",
+            "done",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "SandboxInfo": {
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "job_id": {
+              "type": "string"
+            },
+            "kind": {
+              "$ref": "#/$defs/JobKind"
+            },
+            "sandbox_id": {
+              "type": "string"
+            },
+            "state": {
+              "$ref": "#/$defs/JobState"
+            }
+          },
+          "required": [
+            "sandbox_id",
+            "job_id",
+            "kind",
+            "state",
+            "created_at"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "backend": {
+          "type": "string"
+        },
+        "sandboxes": {
+          "description": "Active sandboxes (queued, running, held).",
+          "items": {
+            "$ref": "#/$defs/SandboxInfo"
+          },
+          "type": "array"
+        },
+        "slots_total": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "slots_used": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "backend",
+        "slots_total",
+        "slots_used",
+        "sandboxes"
+      ],
+      "title": "SandboxList",
+      "type": "object"
+    }
+  },
+  "version": "0"
+}

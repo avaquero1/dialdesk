@@ -1,0 +1,46 @@
+# Phase 3: the control VM. STUB, not runnable yet (the app images are not built).
+# Only `docker compose -f deploy/compose.control.yml config` is expected to pass.
+#
+# Runs here: caddy (public 80/443), edge, accounts, board, agent, runner, markets, connections,
+# models, audit, valkey. Postgres is Vultr Managed Postgres, reached over the VPC.
+# Phase 3 adds env files, secrets, resource limits, read-only root file systems and digests.
+name: vha-control
+
+x-service: &service
+  restart: unless-stopped
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  networks: [internal]
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../web/dist:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [internal]
+  edge:        { <<: *service, image: "vha/edge:phase3" }
+  accounts:    { <<: *service, image: "vha/accounts:phase3" }
+  board:       { <<: *service, image: "vha/board:phase3" }
+  agent:       { <<: *service, image: "vha/agent:phase3" }
+  runner:      { <<: *service, image: "vha/runner:phase3" }
+  markets:     { <<: *service, image: "vha/markets:phase3" }
+  connections: { <<: *service, image: "vha/connections:phase3" }
+  models:      { <<: *service, image: "vha/models:phase3" }
+  audit:       { <<: *service, image: "vha/audit:phase3" }
+  valkey:
+    <<: *service
+    image: valkey/valkey:8.1-alpine
+    command: ["valkey-server", "--aclfile", "/etc/valkey/users.acl"]
+
+networks:
+  internal: {}
+
+volumes:
+  caddy_data:
+  caddy_config:

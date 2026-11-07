@@ -1,0 +1,12 @@
+{
+  "api_keys": [
+    {
+      "api_key_id": "fixture-key-2",
+      "name": "read and write",
+      "scopes": [
+        "read",
+        "write"
+      ]
+    }
+  ]
+}

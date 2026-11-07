@@ -1,0 +1,10 @@
+# Phase 3: the sandbox VM. STUB.
+#
+# Nothing on this VM runs in Compose. sandbox-manager runs as a systemd service together with
+# its egress proxy (manager API on 8200, VPC only; proxy on 8201, sandbox bridge only). It starts
+# a fresh, throwaway sandbox per task and kills it when the task ends or a page misbehaves.
+# The firewall is deploy/nftables/sandbox.nft. This file exists so that every VM has a
+# compose file to look at, and so `docker compose -f deploy/compose.sandbox.yml config` passes.
+name: vha-sandbox
+
+services: {}

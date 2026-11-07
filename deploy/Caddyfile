@@ -1,0 +1,30 @@
+# Caddyfile for the control VM. STUB: Phase 3 fills this in.
+# Serves the built web app from /srv/web and sends the API and the live socket to edge.
+# Every other service listens on the internal network only.
+
+vultrcontest.vaquerothe.dev {
+	# TLS is automatic (Let's Encrypt via the ACME HTTP and TLS-ALPN challenges).
+	encode zstd gzip
+
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' wss://vultrcontest.vaquerothe.dev; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy edge:8080
+	}
+
+	handle /live {
+		reverse_proxy edge:8080
+	}
+
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}

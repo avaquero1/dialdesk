@@ -1,0 +1,19 @@
+{
+  "name": "@app/edge",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/main.ts",
+    "fake": "EDGE_FAKE=1 tsx --env-file-if-exists=../../.env src/main.ts"
+  },
+  "dependencies": {
+    "@app/contracts": "*",
+    "@app/guard": "*",
+    "@app/service-kit": "*",
+    "@app/testkit": "*"
+  }
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "event_key": "nfl-2026w10-kc-buf",
+    "league": "NFL",
+    "title": "Chiefs at Bills",
+    "starts_at": "2026-11-08T18:00:00Z",
+    "kalshi_ticker": "KXNFLGAME-26NOV08KCBUF-KC",
+    "polymarket_slug": "nfl-kc-buf-2026-11-08"
+  },
+  {
+    "event_key": "nba-2026-11-07-lal-bos",
+    "league": "NBA",
+    "title": "Lakers at Celtics",
+    "starts_at": "2026-11-08T00:30:00Z",
+    "kalshi_ticker": "KXNBAGAME-26NOV07LALBOS-LAL",
+    "polymarket_slug": "nba-lal-bos-2026-11-07"
+  },
+  {
+    "event_key": "nfl-2026w10-phi-dal",
+    "league": "NFL",
+    "title": "Eagles at Cowboys",
+    "starts_at": "2026-11-08T21:25:00Z",
+    "kalshi_ticker": "KXNFLGAME-26NOV08PHIDAL-PHI",
+    "polymarket_slug": "nfl-phi-dal-2026-11-08"
+  },
+  {
+    "event_key": "nba-2026-11-07-nyk-mia",
+    "league": "NBA",
+    "title": "Knicks at Heat",
+    "starts_at": "2026-11-08T01:00:00Z",
+    "kalshi_ticker": "KXNBAGAME-26NOV07NYKMIA-NYK",
+    "polymarket_slug": "nba-nyk-mia-2026-11-07"
+  },
+  {
+    "event_key": "nfl-2026w10-gb-chi",
+    "league": "NFL",
+    "title": "Packers at Bears",
+    "starts_at": "2026-11-08T18:00:00Z",
+    "kalshi_ticker": "KXNFLGAME-26NOV08GBCHI-GB",
+    "polymarket_slug": "nfl-gb-chi-2026-11-08"
+  },
+  {
+    "event_key": "nfl-2026w10-sf-sea",
+    "league": "NFL",
+    "title": "49ers at Seahawks",
+    "starts_at": "2026-11-08T21:05:00Z",
+    "kalshi_ticker": "KXNFLGAME-26NOV08SFSEA-SF",
+    "polymarket_slug": "nfl-sf-sea-2026-11-08"
+  },
+  {
+    "event_key": "nba-2026-11-07-den-phx",
+    "league": "NBA",
+    "title": "Nuggets at Suns",
+    "starts_at": "2026-11-08T03:00:00Z",
+    "kalshi_ticker": "KXNBAGAME-26NOV07DENPHX-DEN",
+    "polymarket_slug": "nba-den-phx-2026-11-07"
+  }
+]

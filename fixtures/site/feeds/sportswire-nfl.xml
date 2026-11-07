@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sports Wire: NFL</title>
+    <link>https://sportswire.fixture.test/nfl/</link>
+    <description>NFL news from Sports Wire, a made-up outlet for tests.</description>
+    <language>en-us</language>
+    <lastBuildDate>Fri, 06 Nov 2026 22:45:00 GMT</lastBuildDate>
+    <item>
+      <title>Starting LT listed questionable (knee)</title>
+      <link>https://sportswire.fixture.test/nfl/bills-lt-questionable.html</link>
+      <guid isPermaLink="true">https://sportswire.fixture.test/nfl/bills-lt-questionable.html</guid>
+      <description>Buffalo's starting left tackle is questionable for Sunday's game against Kansas City with a knee injury.</description>
+      <pubDate>Fri, 06 Nov 2026 22:45:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+target/
+.env
+.env.*
+!.env.example
+deploy/.dev/
+*.log
+.DS_Store
+coverage/
+.logs/
