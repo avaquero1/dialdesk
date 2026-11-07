@@ -34,6 +34,9 @@ export const AuditRow = z
  * - `connection.scope_checked`: subject_id = the connection id, `ids.exchange`, `ids.scope` (e.g. "read"), outcome `ok` when the
  *   scope was proven, `refused` when the key was refused; `hashes.key_fingerprint`, never the key. `connection.removed` ends it.
  * - `consent.<what>`: every consent the user gave, subject_id = what it is about.
+ * - `account.created` (a sign-up), `account.guest_created`, `account.deleted` (a swept guest, subject_id = the account,
+ *   `ids.reason` = "guest_sweep") and `login.refused` (wrong email or password, or locked: `ids.reason`, `hashes.email`;
+ *   account_id only when the email has an account): counted for the whole site per UTC day (`site`), never per email.
  */
 export const TRUST_ACTIONS = {
   sandboxCreated: 'sandbox.created',
@@ -44,7 +47,21 @@ export const TRUST_ACTIONS = {
   connectionChecked: 'connection.scope_checked',
   connectionRemoved: 'connection.removed',
   consentPrefix: 'consent.',
+  accountCreated: 'account.created',
+  guestCreated: 'account.guest_created',
+  accountDeleted: 'account.deleted',
+  loginRefused: 'login.refused',
 } as const;
+
+/** The site's account numbers for the day (UTC): counts only, no ids. */
+export const TrustSiteCounts = z
+  .object({
+    signups: z.number().int().min(0),
+    guests_created: z.number().int().min(0),
+    guests_deleted: z.number().int().min(0),
+    logins_refused: z.number().int().min(0),
+  })
+  .strict();
 
 /** A connected account as the log shows it: the latest scope check, never a key. */
 export const TrustConnection = z
@@ -66,6 +83,9 @@ export const TrustCounts = z
     runs_poisoned: z.number().int().min(0),
     consents: z.array(z.object({ action: z.string(), at: Timestamp, subject_id: z.string().nullable() }).strict()),
     connected: z.array(TrustConnection).default([]).describe('connected accounts and their scope, from connection.scope_checked rows'),
+    site: TrustSiteCounts.default({ signups: 0, guests_created: 0, guests_deleted: 0, logins_refused: 0 }).describe(
+      "the whole site's sign-ups, guests and refused logins today (UTC), from accounts' rows",
+    ),
     head: SignedHead,
   })
   .strict();
