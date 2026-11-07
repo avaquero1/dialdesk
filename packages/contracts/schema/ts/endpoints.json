@@ -763,7 +763,8 @@
     "path": "/markets",
     "callers": [
       "agent",
-      "runner"
+      "runner",
+      "board"
     ],
     "status": 200,
     "errors": [

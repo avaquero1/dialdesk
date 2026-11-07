@@ -42,7 +42,7 @@ export const MARKETS = api('markets', {
   list: {
     method: 'GET',
     path: '/markets',
-    callers: ['agent', 'runner'],
+    callers: ['agent', 'runner', 'board'],
     query: z.object({ category: MarketCategory.optional(), league: League.optional(), q: z.string().max(80).optional() }),
     response: z.object({ markets: z.array(Market) }).strict(),
     errors: [503],
