@@ -14,7 +14,11 @@ path = "src/main.rs"
 
 [dependencies]
 serde.workspace = true
-serde_json.workspace = true
+# Exact float parsing: the input hash must match the numbers the caller sent.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 schemars.workspace = true
 sha2 = "0.10"
 hex = "0.4"
+
+[dev-dependencies]
+proptest = "1"

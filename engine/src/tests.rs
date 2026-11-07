@@ -474,3 +474,24 @@ fn schema_has_four_keys() {
     let text = serde_json::to_string(&s).unwrap();
     assert!(text.contains("^[a-z][a-z0-9_]{0,31}$"));
 }
+
+#[test]
+fn huge_results_stay_finite_or_are_refused() {
+    // Found by the property suite: tidy() overflowed 1 / 2.2e-308 to infinity.
+    let odds = one(
+        "price_to_odds",
+        json!({"probability": "p"}),
+        json!({"p": f64::MIN_POSITIVE}),
+    )
+    .unwrap();
+    assert!(odds.is_finite() && odds > 1e300);
+    assert_eq!(
+        one(
+            "position_value",
+            json!({"count": "n", "price_cents": "c"}),
+            json!({"n": f64::MAX, "c": 100})
+        ),
+        Err("out_of_range".into()),
+        "f64::MAX * 100 overflows before / 100"
+    );
+}

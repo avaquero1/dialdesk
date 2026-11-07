@@ -227,11 +227,12 @@ pub(crate) fn eval(
     }
 
     let (value, sample_size) = compute(call.op, &args).map_err(|(code, msg)| err(code, msg))?;
+    let value = tidy(value);
     if !value.is_finite() {
         return Err(err("out_of_range", "result is not finite".into()));
     }
     Ok(Out {
-        value: tidy(value),
+        value,
         receipt_args: receipt,
         trace,
         sample_size,
@@ -260,8 +261,13 @@ fn sourced_probability(t: &Trace, from_unit: Option<Unit>) -> Result<(), String>
 }
 
 /// Rounds to 9 decimal places so 0.62 * 100 - 57 reads 5, not 5.000000000000007.
+/// Values too large to scale by 1e9 are left as they are.
 fn tidy(x: f64) -> f64 {
-    let r = (x * 1e9).round() / 1e9;
+    let scaled = x * 1e9;
+    if !scaled.is_finite() {
+        return x;
+    }
+    let r = scaled.round() / 1e9;
     if r == 0.0 { 0.0 } else { r }
 }
 

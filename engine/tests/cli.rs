@@ -49,3 +49,22 @@ fn stdin_run_and_bad_input() {
     assert_eq!(code, 2);
     assert_eq!(v["error"], "bad_input");
 }
+
+#[test]
+fn stdin_ev_with_origins_and_a_full_receipt() {
+    let input = r#"{"plan":{"plan_version":1,"ops":[
+        {"id":"q","op":"implied_probability","args":{"price_cents":"poly"}},
+        {"id":"ev","op":"expected_value","args":{"price_cents":"kalshi","probability":"q"}},
+        {"id":"bad","op":"expected_value","args":{"price_cents":"kalshi","probability":"guess"}}]},
+        "numbers":{"kalshi":57,"poly":61,"guess":0.9},"origins":{"kalshi":"market","poly":"market"}}"#;
+    let (code, v) = engine(&[], input);
+    assert_eq!(code, 0);
+    assert_eq!(v["numbers"][1]["value"], 4.0);
+    assert_eq!(v["errors"][0]["op_id"], "bad");
+    assert_eq!(v["errors"][0]["code"], "unsourced_probability");
+    let r = &v["receipts"][1];
+    assert_eq!(r["refs"]["probability"], "q");
+    assert_eq!(r["origins"], serde_json::json!(["market"]));
+    assert_eq!(v["plan"]["ops"].as_array().unwrap().len(), 3);
+    assert_eq!(r["git_hash"], v["git_hash"]);
+}
