@@ -1,0 +1,11 @@
+# Every 3 minutes, and 20 s after boot. Each run keeps the addresses seen in the last 6 h.
+[Unit]
+Description=vha: refill the egress allow sets every 3 minutes
+
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=3min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

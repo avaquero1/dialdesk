@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test
+.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check
 
 check: rust gen-check typecheck lint contracts web e2e
 	@echo "make check: all green"
@@ -91,6 +91,23 @@ s3-test:
 	@$(S3_TEST_ENV) $(S3_TEST) up -d s3
 	@$(S3_TEST_ENV) S3_TEST=1 npx vitest run --project contracts tests/deploy/s3.test.ts; \
 	  s=$$?; $(S3_TEST_ENV) $(S3_TEST) down -v; exit $$s
+
+# control.nft and sandbox.nft with `nft -c` in a private network namespace (never this machine's own firewall), then
+# the egress refill for real in one (tests/deploy/egress-refresh.test.ts). Needs nft and unprivileged user namespaces.
+nft-check:
+	@d=$$(mktemp -d) && trap 'rm -rf "$$d"' EXIT && \
+	  cp deploy/nftables/example-control-vars.nft $$d/control-vars.nft && \
+	  cp deploy/nftables/example-sandbox-vars.nft $$d/sandbox-vars.nft && \
+	  cp deploy/nftables/egress-enforce.nft $$d/control-egress-mode.nft && \
+	  unshare -rn nft -c -I $$d -f deploy/nftables/control.nft && \
+	  unshare -rn nft -c -I $$d -f deploy/nftables/sandbox.nft && \
+	  echo "nft-check: control.nft and sandbox.nft pass nft -c"
+	npx vitest run --project contracts tests/deploy/egress-refresh.test.ts
+
+# Milestone V1.1's end-to-end check: build the app image, print the egress table in it, and run the prod-secrets dry
+# run in it (exit 0, no value printed). Needs Docker; through build-slot on a dev PC.
+deploy-image-check:
+	deploy/images/check-app-image.sh
 
 # Local infra only (Postgres, Valkey, fixtures). The services run natively with tsx.
 infra-up:

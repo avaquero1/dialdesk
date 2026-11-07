@@ -1,0 +1,35 @@
+# Refills control's egress sets from the egress table. deploy.sh installs this and the timer on control:
+#   install -m 0644 deploy/nftables/vha-egress-refresh.{service,timer} /etc/systemd/system/
+#   install -m 0755 deploy/nftables/egress-refresh.sh /etc/vha/nft/
+#   systemctl enable --now vha-egress-refresh.timer
+[Unit]
+Description=vha: refill the egress allow sets (deploy/nftables/egress-refresh.sh)
+# The table inet vha must exist (vha-nft.service loads control.nft; without it nft refuses the refill and nothing
+# changes), and DNS must work.
+After=vha-nft.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/vha/nft/egress-hosts.txt
+
+[Service]
+Type=oneshot
+ExecStart=/etc/vha/nft/egress-refresh.sh
+StateDirectory=vha/egress
+StateDirectoryMode=0700
+Environment=VHA_EGRESS_STATE=/var/lib/vha/egress/seen
+TimeoutStartSec=120
+# Only what nft needs.
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_NETLINK AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
