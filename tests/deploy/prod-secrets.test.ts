@@ -165,5 +165,6 @@ describe('deploy/prod-secrets.ts', () => {
     });
     expect(txt).toMatch(/DRY RUN, wrote 20 files to <a temp folder, removed below>/);
     expect(txt).toMatch(/removed the dry run's temp folder/);
-  });
+    // A fresh node + tsx start: seconds on a loaded build box.
+  }, 30_000);
 });

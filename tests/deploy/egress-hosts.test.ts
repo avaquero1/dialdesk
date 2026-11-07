@@ -92,5 +92,6 @@ describe('egress-hosts', () => {
     expect(err).toMatch(/https/);
     const cli = execFileSync('npx', ['tsx', 'deploy/egress-hosts.ts'], { cwd: root, env: { ...process.env, ...S3 }, encoding: 'utf8' });
     expect(cli).toBe(render(egressHosts(S3), S3));
-  });
+    // A fresh npx + tsx start: seconds on a loaded build box.
+  }, 30_000);
 });
