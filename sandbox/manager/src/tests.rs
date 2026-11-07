@@ -145,8 +145,43 @@ async fn browse_lifecycle_held_then_killed() {
         (v["state"].as_str(), v["kill_reason"].as_str()),
         (Some("killed"), Some("user_stop"))
     );
-    let (s, _) = call(&app, "POST", "/jobs/j1/kill", Some(TOKEN), Some(kill)).await;
+    // The trust page's rows, in order: created, killed, proxy.refused (one row, the count), destroyed.
+    let sbx = held["sandbox_id"].clone();
+    let rows: Vec<_> = v["trust_log"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| {
+            (
+                r["action"].as_str().unwrap(),
+                r["outcome"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("sandbox.created", "ok"),
+            ("sandbox.killed", "killed"),
+            ("proxy.refused", "refused"),
+            ("sandbox.destroyed", "ok")
+        ]
+    );
+    let t = &v["trust_log"];
+    assert!(t.as_array().unwrap().iter().all(|r| r["subject_id"] == sbx));
+    assert_eq!(
+        t[0]["ids"],
+        json!({"job_id": "j1", "run_id": "run1", "widget_id": "w1", "kind": "browse"})
+    );
+    assert_eq!(
+        t[1]["ids"],
+        json!({"job_id": "j1", "reason": "user_stop", "audit_row_id": "a1"})
+    );
+    assert_eq!(t[2]["sizes"], json!({"requests": 1}));
+    assert_eq!(t[3]["sizes"], json!({"proxy_requests": 2}));
+    let (s, again) = call(&app, "POST", "/jobs/j1/kill", Some(TOKEN), Some(kill)).await;
     assert_eq!(s, StatusCode::OK, "killing twice is fine");
+    assert_eq!(again["trust_log"], v["trust_log"], "and logs nothing new");
     let (s, v) = call(&app, "POST", "/jobs/j1/release", Some(TOKEN), None).await;
     assert_eq!(
         (s, v["error"].as_str()),
@@ -170,6 +205,20 @@ async fn release_and_hold_timeout() {
 
     let (s, v) = call(&app, "POST", "/jobs/r1/release", Some(TOKEN), None).await;
     assert_eq!((s, v["state"].as_str()), (StatusCode::OK, Some("released")));
+    let actions: Vec<_> = v["trust_log"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["action"].clone())
+        .collect();
+    assert_eq!(
+        actions,
+        [
+            json!("sandbox.created"),
+            json!("proxy.refused"),
+            json!("sandbox.destroyed")
+        ]
+    );
 
     app::sweep_holds(&st, Instant::now()).await;
     wait_for(&app, "t1", "held").await;

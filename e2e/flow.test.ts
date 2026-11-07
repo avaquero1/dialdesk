@@ -275,6 +275,11 @@ describe('e2e on fakes', () => {
       // Only the job's own domain got through.
       expect(j.proxy_log.filter((e) => e.allowed).map((e) => e.host)).toContain(domain);
       expect(j.proxy_log.filter((e) => e.allowed).every((e) => e.host === domain)).toBe(true);
+      // The trust page's rows came back with the job: created first, destroyed last, all about this sandbox.
+      const rows = j.trust_log ?? [];
+      expect(rows[0]?.action).toBe('sandbox.created');
+      expect(rows.at(-1)?.action).toBe('sandbox.destroyed');
+      expect(rows.every((r) => r.subject_id === j.sandbox_id)).toBe(true);
     }
     expect(liveSandboxes(topo!)).toEqual([]);
   });
@@ -287,6 +292,11 @@ describe('e2e on fakes', () => {
     expect(refused('collect.exfil.fixture.test')).toContain('not_on_allowlist');
     expect(refused('tracker.offlist.fixture.test')).toContain('not_on_allowlist');
     expect(k.proxy_log.filter((e) => e.allowed).map((e) => e.host)).toEqual(['fanpost.fixture.test']);
+    // In the trust page's shape: killed, one proxy.refused row with the count, then destroyed.
+    const rows = k.trust_log ?? [];
+    expect(rows.map((r) => r.action)).toEqual(['sandbox.created', 'sandbox.killed', 'proxy.refused', 'sandbox.destroyed']);
+    expect(rows[2]!.sizes?.requests).toBe(k.proxy_log.filter((e) => !e.allowed).length);
+    expect(rows[1]!.ids?.reason).toBe(k.kill_reason);
   });
   it.todo('the same runs on BullMQ on Valkey (runner worker + board queue; make valkey-test territory, Phase 2-3)');
   it.todo('run.step and run.poisoned reach the browser over /live (edge + runner, Phase 2)');

@@ -307,6 +307,14 @@ async fn create_job(State(st): State<Shared>, body: Bytes) -> ApiResult {
             Ok(h) => {
                 job.status.sandbox_id = h.sandbox_id.clone();
                 job.handle = Some(h.clone());
+                let ids = [
+                    ("job_id", req.job_id.as_str()),
+                    ("run_id", req.run_id.as_str()),
+                    ("widget_id", req.widget_id.as_str()),
+                    ("kind", kind_name(req.kind)),
+                ];
+                let row = trust_row("sandbox.created", &h.sandbox_id, "ok", &ids, &[]);
+                job.status.trust_log.push(row);
             }
             Err(e) => {
                 job.status.state = JobState::Failed;
@@ -331,22 +339,82 @@ async fn create_job(State(st): State<Shared>, body: Bytes) -> ApiResult {
 }
 
 /// Destroys a job's sandbox (killing it first if asked) and adds the rest of its proxy
-/// log to the job. Returns the job as it stands after.
+/// log to the job, then the trust rows: `proxy.refused` (if any) and `sandbox.destroyed`.
+/// Returns the job as it stands after.
 async fn teardown(st: &Shared, id: &str, h: &SandboxHandle, kill: bool) -> Option<JobStatus> {
     if kill {
         let _ = st.backend.kill(h).await;
     }
-    let log = match st.backend.destroy(h).await {
-        Ok(log) => log,
+    let destroyed = match st.backend.destroy(h).await {
+        Ok(log) => Some(log),
         Err(e) => {
             tracing::warn!(job_id = id, sandbox_id = %h.sandbox_id, error = %e, "destroy failed");
-            vec![]
+            None
         }
     };
     let mut jobs = st.jobs();
-    let job = jobs.get_mut(id)?;
-    job.status.proxy_log.extend(log);
-    Some(job.status.clone())
+    let s = &mut jobs.get_mut(id)?.status;
+    if let Some(log) = destroyed {
+        s.proxy_log.extend(log);
+        let refused = s.proxy_log.iter().filter(|e| !e.allowed).count() as u64;
+        let ids = [("job_id", id)];
+        if refused > 0 {
+            let sizes = [("requests", refused)];
+            s.trust_log.push(trust_row(
+                "proxy.refused",
+                &h.sandbox_id,
+                "refused",
+                &ids,
+                &sizes,
+            ));
+        }
+        let sizes = [("proxy_requests", s.proxy_log.len() as u64)];
+        s.trust_log.push(trust_row(
+            "sandbox.destroyed",
+            &h.sandbox_id,
+            "ok",
+            &ids,
+            &sizes,
+        ));
+    }
+    Some(s.clone())
+}
+
+fn kind_name(k: JobKind) -> &'static str {
+    match k {
+        JobKind::Browse => "browse",
+        JobKind::Compute => "compute",
+    }
+}
+
+/// A row for the trust page (TRUST_ACTIONS): ids and sizes only, each id cut to the log's 120 characters.
+fn trust_row(
+    action: &str,
+    sandbox_id: &str,
+    outcome: &str,
+    ids: &[(&str, &str)],
+    sizes: &[(&str, u64)],
+) -> TrustLogEntry {
+    TrustLogEntry {
+        action: action.into(),
+        at: now(),
+        subject_id: Some(sandbox_id.chars().take(120).collect()),
+        outcome: Some(outcome.into()),
+        ids: ids
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.chars().take(120).collect()))
+            .collect(),
+        sizes: sizes.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
+    }
+}
+
+/// The `sandbox.killed` row, written the moment the job is marked killed.
+fn killed_row(s: &JobStatus, reason: &str, audit_row_id: Option<&str>) -> TrustLogEntry {
+    let mut ids = vec![("job_id", s.job_id.as_str()), ("reason", reason)];
+    if let Some(a) = audit_row_id {
+        ids.push(("audit_row_id", a));
+    }
+    trust_row("sandbox.killed", &s.sandbox_id, "killed", &ids, &[])
 }
 
 enum Outcome {
@@ -415,6 +483,8 @@ async fn run_job(st: Shared, job_id: String) {
             Err(_) => {
                 s.state = JobState::Killed;
                 s.kill_reason = Some("wall_timeout".into());
+                let row = killed_row(s, "wall_timeout", None);
+                s.trust_log.push(row);
             }
         }
         s.updated_at = now();
@@ -500,6 +570,8 @@ pub async fn kill_job(
         job.status.state = JobState::Killed;
         job.status.kill_reason = Some(reason.to_string());
         job.status.updated_at = now();
+        let row = killed_row(&job.status, reason, audit_row_id);
+        job.status.trust_log.push(row);
         job.held_at = None;
         (job.status.clone(), job.handle.clone())
     };

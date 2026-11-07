@@ -69,6 +69,11 @@ sandbox-manager probe [--allow a,b] [--wall S] -- whoami   # one attack probe in
 | `SANDBOX_STATE_DIR` | a temp folder | Holds the empty `resolv.conf` |
 | `SANDBOX_MANAGER_DEV` | unset | `1` allows http URLs and `SANDBOX_DEV_SPKI` (the fixture certificate pin) |
 
+Each `JobStatus` carries `trust_log`: the trust page's rows for that job, in the shape of `TRUST_ACTIONS`
+(`packages/contracts/src/api/audit.ts`). `sandbox.created`, `sandbox.killed` (ids: reason, audit_row_id) and `sandbox.destroyed`,
+each with subject_id = the sandbox id, and one `proxy.refused` with `sizes.requests` when the proxy refused anything. The manager
+never writes to the log itself: the caller adds account_id and appends each row as service `sandbox-manager`.
+
 ## Tests
 
 - `cargo test -p egress-proxy -p sandbox-manager`: decisions, the proxy over loopback sockets, the lifecycle on the stub,
