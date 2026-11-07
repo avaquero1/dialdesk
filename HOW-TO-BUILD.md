@@ -84,6 +84,12 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
   stream's consumer group, BullMQ retries, and every service's ACL allow and deny. Not part of `make check` (it needs Docker
   and `make dev-secrets`). Run it when you touch `bus.ts`, `valkey.ts` or `queues.ts`. The ACL file comes from `valkeyAclRule()`: after a
   rule change, regenerate it with `npx tsx scripts/dev-secrets.ts --force` (every token changes).
+- `make audit-test`: audit on a real Postgres 17 and Valkey 8.1 in its own Compose project (`vha-audit-test`, ports 55434 and 56394),
+  as svc_audit and svc-audit: the chain from `log:actions`, signed and pushed heads, `verify` catching a tampered row, a rewritten
+  chain and a cut tail, UPDATE/DELETE/TRUNCATE refused, XAUTOCLAIM from a dead consumer, and the trust numbers. Not part of
+  `make check` (Docker, `make dev-secrets`). `PG_DEV_PORT` moves the dev Postgres port the same way `VALKEY_DEV_PORT` does.
+- **The trust page's numbers** come from log actions named in `TRUST_ACTIONS` (packages/contracts/src/api/audit.ts), with the
+  ids, sizes and hashes listed there. Log them with those names or the trust page won't count them.
 - Your own unit tests: `services/<name>/test/*.test.ts` (picked up by the contracts project) or Rust `#[test]`s.
 
 ## 6. Landing

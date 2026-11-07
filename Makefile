@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust install dev-secrets infra-up infra-down fakes health stop-fakes containment valkey-test engine-image engine-image-check
+.PHONY: check typecheck lint gen gen-check contracts e2e rust install dev-secrets infra-up infra-down fakes health stop-fakes containment valkey-test engine-image engine-image-check audit-test
 
 check: rust gen-check typecheck lint contracts e2e
 	@echo "make check: all green"
@@ -47,6 +47,16 @@ valkey-test:
 	$(VALKEY_TEST) up -d --wait valkey
 	VALKEY_TEST=1 VALKEY_TEST_PORT=$(VALKEY_TEST_PORT) npx vitest run --project contracts packages/service-kit/test/valkey.test.ts; \
 	  s=$$?; $(VALKEY_TEST) down -v; exit $$s
+
+# audit on a real Postgres 17 and Valkey 8.1, as svc_audit and svc-audit: the chain, signed heads, verify catching a
+# tampered row, UPDATE/DELETE refused, XAUTOCLAIM and the trust numbers. Its own Compose project and ports, removed afterwards.
+AUDIT_TEST_PG_PORT ?= 55434
+AUDIT_TEST_VALKEY_PORT ?= 56394
+AUDIT_TEST := PG_DEV_PORT=$(AUDIT_TEST_PG_PORT) VALKEY_DEV_PORT=$(AUDIT_TEST_VALKEY_PORT) docker compose -p vha-audit-test -f deploy/compose.dev.yml --env-file .env
+audit-test:
+	$(AUDIT_TEST) up -d --wait postgres valkey
+	AUDIT_TEST=1 AUDIT_TEST_PG_PORT=$(AUDIT_TEST_PG_PORT) AUDIT_TEST_VALKEY_PORT=$(AUDIT_TEST_VALKEY_PORT) npx vitest run --project contracts services/audit/test/pg.test.ts; \
+	  s=$$?; $(AUDIT_TEST) down -v; exit $$s
 
 # Local infra only (Postgres, Valkey, fixtures). The services run natively with tsx.
 infra-up:

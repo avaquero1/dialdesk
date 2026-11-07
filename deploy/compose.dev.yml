@@ -29,7 +29,7 @@ services:
       DB_PASSWORD_MODELS: ${DB_PASSWORD_MODELS:?set DB_PASSWORD_MODELS in .env}
       DB_PASSWORD_AUDIT: ${DB_PASSWORD_AUDIT:?set DB_PASSWORD_AUDIT in .env}
     ports:
-      - "127.0.0.1:55432:5432"
+      - "127.0.0.1:${PG_DEV_PORT:-55432}:5432"
     volumes:
       - ./db-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
       - pgdata:/var/lib/postgresql/data

@@ -14,7 +14,8 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /**
  * An in-memory hash chain. `append` stands in for the log-stream consumer. The head's signature is a fake
- * (base64 of "fake-signature"); the real audit signs with Ed25519 and pushes heads to write-once storage.
+ * (base64 of "fake-signature"); the real audit (src/real.ts) chains rows in Postgres, signs heads with Ed25519 and
+ * pushes them to write-once storage.
  */
 export function createFakeAudit() {
   const rows: Row[] = [];

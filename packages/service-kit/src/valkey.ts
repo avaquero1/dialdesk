@@ -89,6 +89,15 @@ export function busFromConfig(service: string, cfg: { VALKEY_URL?: string }): Va
 
 export type StreamItem = { id: string; entry: LogEntry } | { id: string; invalid: string };
 
+function parseStreamEntry([id, fields]: [string, string[]]): StreamItem {
+  const raw = fields[fields.indexOf('entry') + 1] ?? '';
+  try {
+    return { id, entry: LogEntry.parse(JSON.parse(raw)) };
+  } catch {
+    return { id, invalid: raw.slice(0, 2000) };
+  }
+}
+
 /**
  * audit's reader for `log:actions`, in the consumer group `audit`. Read the entries this consumer was handed but
  * never acked first (`pending: true`, after a restart), then new ones. Ack an entry once its row is written.
@@ -101,7 +110,8 @@ export class LogStreamReader {
     url: string,
     private readonly consumer: string,
   ) {
-    this.redis = valkeyClient(url, `audit-${consumer}`);
+    // svc-audit has no INFO, which ioredis's ready check sends.
+    this.redis = valkeyClient(url, `audit-${consumer}`, { enableReadyCheck: false });
   }
 
   /** Creates the group from the start of the stream (and the stream, if no service has logged yet). */
@@ -119,18 +129,35 @@ export class LogStreamReader {
     const res = (opts.blockMs && !opts.pending
       ? await this.redis.xreadgroup(...args, 'BLOCK', opts.blockMs, 'STREAMS', LOG_STREAM, id)
       : await this.redis.xreadgroup(...args, 'STREAMS', LOG_STREAM, id)) as [string, [string, string[]][]][] | null;
+    return (res ?? []).flatMap(([, entries]) => entries.map(parseStreamEntry));
+  }
+
+  /**
+   * Takes over entries another consumer was handed but never acked for `minIdleMs` (a consumer that died), with
+   * XAUTOCLAIM, and returns them like `read`. Entries trimmed away meanwhile come back in `deleted` (their ids are
+   * dropped from the group's pending list by Valkey).
+   */
+  async claimStale(minIdleMs: number, count = 100): Promise<{ items: StreamItem[]; deleted: string[] }> {
     const items: StreamItem[] = [];
-    for (const [, entries] of res ?? []) {
-      for (const [entryId, fields] of entries) {
-        const raw = fields[fields.indexOf('entry') + 1] ?? '';
-        try {
-          items.push({ id: entryId, entry: LogEntry.parse(JSON.parse(raw)) });
-        } catch {
-          items.push({ id: entryId, invalid: raw.slice(0, 2000) });
-        }
-      }
-    }
-    return items;
+    const deleted: string[] = [];
+    let start = '0-0';
+    do {
+      const [next, entries, gone] = (await this.redis.xautoclaim(LOG_STREAM, LOG_CONSUMER_GROUP, this.consumer, minIdleMs, start, 'COUNT', count)) as [
+        string,
+        ([string, string[]] | null)[],
+        string[]?,
+      ];
+      for (const e of entries) if (e) items.push(parseStreamEntry(e));
+      deleted.push(...(gone ?? []));
+      start = next;
+    } while (start !== '0-0' && items.length < count * 10);
+    return { items, deleted };
+  }
+
+  /** The oldest entry id any consumer of the group holds unacked, or null. Trim only below it. */
+  async oldestPending(): Promise<string | null> {
+    const [n, min] = (await this.redis.xpending(LOG_STREAM, LOG_CONSUMER_GROUP)) as [number, string | null, ...unknown[]];
+    return n > 0 ? min : null;
   }
 
   async ack(ids: string[]) {

@@ -98,6 +98,28 @@ describe.skipIf(!on)('bus on Valkey', () => {
     await reader.ack(bad.map((i) => i.id));
   });
 
+  it("claims a dead consumer's unacked entries (XAUTOCLAIM) and reports the oldest pending id", async () => {
+    const board = use(new ValkeyBus(url.board!, 'board'));
+    const dead = use(new LogStreamReader(url.audit!, `audit-dead-${tag()}`));
+    const alive = use(new LogStreamReader(url.audit!, `audit-alive-${tag()}`));
+    await alive.ensureGroup();
+    await alive.ack((await alive.read({ count: 10_000 })).map((i) => i.id)); // start from a clean group
+    const subject = `wid_${tag()}`;
+    await board.log(logEntry('board', 'widget.accepted', { subject_id: subject, outcome: 'ok' }));
+    const taken = (await dead.read({ count: 1000 })).filter((i) => 'entry' in i && i.entry.subject_id === subject);
+    expect(taken).toHaveLength(1);
+    expect(await alive.oldestPending()).toBe(taken[0]!.id);
+    // Not idle long enough yet: nothing moves.
+    expect((await alive.claimStale(60_000)).items).toEqual([]);
+    await wait(300);
+    const { items } = await alive.claimStale(200);
+    expect(items.map((i) => i.id)).toEqual([taken[0]!.id]);
+    expect((await alive.read({ pending: true })).map((i) => i.id)).toEqual([taken[0]!.id]);
+    expect(await dead.read({ pending: true })).toEqual([]);
+    await alive.ack([taken[0]!.id]);
+    expect(await alive.oldestPending()).toBeNull();
+  });
+
   it('enqueues on widget-runs (board) and runner consumes: dedupe, retry, no retry on poison, busy, timeout', async () => {
     const t = tag();
     const ids = { ok: `wid_ok${t}`, retry: `wid_re${t}`, poison: `wid_po${t}`, busy: `wid_bu${t}`, slow: `wid_sl${t}` };

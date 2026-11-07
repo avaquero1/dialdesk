@@ -1,7 +1,7 @@
 /**
  * Writes the local dev secrets: `.env` (every service's tokens, caller hashes, database and Valkey users) and
  * `deploy/.dev/valkey-users.acl`, and the session signing key `deploy/.dev/session-ed25519.pem` (accounts reads it;
- * edge gets only the public key). All are gitignored. Run once: `make dev-secrets` (it refuses to overwrite
+ * edge gets only the public key), and audit's head signing key `deploy/.dev/audit-signing-key.pem`. All are gitignored. Run once: `make dev-secrets` (it refuses to overwrite
  * unless you pass --force). `--example` prints `.env.example` instead (names only, no values).
  */
 import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
@@ -77,6 +77,12 @@ put('EDGE_SESSION_PUBLIC_KEYS', example ? '' : sessionPub);
 lines.push(`# kid ${example ? '<kid>' : createHash('sha256').update(Buffer.from(sessionPub, 'base64url')).digest('base64url').slice(0, 16)}`);
 put('EDGE_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:8080,http://localhost:8080');
 
+lines.push('', '# --- audit: its Ed25519 signing key (a file only audit reads) and the write-once folder for signed heads (dev).');
+lines.push('# Blank = the default: /run/secrets/audit-signing-key and /var/lib/audit/heads (Object Storage replaces the folder in Phase 3).');
+const auditKeyPath = join(root, 'deploy/.dev/audit-signing-key.pem');
+put(envKey('audit', 'SIGNING_KEY_FILE'), example ? '' : auditKeyPath);
+put(envKey('audit', 'HEADS_DIR'), example ? '' : join(root, 'deploy/.dev/audit-heads'));
+
 lines.push('', '# --- run a service as its in-memory fake: <SVC>_FAKE=1 (npm run fake -w services/<svc> sets it)');
 lines.push(`# ports: ${Object.entries(PORTS).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 lines.push('# board keeps screenshots in BOARD_SCREENSHOT_DIR until Object Storage exists (default .data/board/screenshots)');
@@ -97,5 +103,9 @@ if (example) {
   chmodSync(aclPath, 0o644); // the valkey user in the container must read it
   writeFileSync(sessionKeyPath, session.privateKey.export({ format: 'pem', type: 'pkcs8' }) as string, { mode: 0o600 });
   chmodSync(sessionKeyPath, 0o600); // accounts refuses a key file others can read
-  console.log('wrote .env, deploy/.dev/valkey-users.acl and deploy/.dev/session-ed25519.pem');
+  // audit's head signatures must stay checkable, so --force keeps an existing key.
+  if (!existsSync(auditKeyPath)) {
+    writeFileSync(auditKeyPath, generateKeyPairSync('ed25519').privateKey.export({ format: 'pem', type: 'pkcs8' }) as string, { mode: 0o600 });
+  }
+  console.log('wrote .env, deploy/.dev/valkey-users.acl, deploy/.dev/session-ed25519.pem and deploy/.dev/audit-signing-key.pem');
 }
