@@ -95,7 +95,7 @@ describe('egress-refresh.sh', { timeout: 30_000 }, () => {
     expect(elements(applied, 'markets')).toEqual(['151.101.2.1', '151.101.66.1']);
     expect(r.out).toContain('cdn.example.com: no answer now, kept its addresses');
     // 6 h after T0, the address seen only at T0 goes; the one seen again at T0+1h stays.
-    r = refresh([], T0 + 6 * HOUR);
+    expect(refresh([], T0 + 6 * HOUR).code).toBe(0);
     applied = readFileSync(join(base, 'applied.nft'), 'utf8');
     expect(elements(applied, 'markets')).toEqual(['151.101.2.1']);
     // With no answers at all for 6 h after the last one (T0+6h), the set is empty and the run says so.
