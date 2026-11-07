@@ -1,0 +1,82 @@
+/* The web app's own additions to the design kit's base: the door (sign in), notices, "next build" notes, and the
+   pieces the policy needs as classes (no inline styles). Tokens only; a theme never needs to know these exist. */
+
+/* ---- no inline styles: what the board's markup used to carry ---- */
+.svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+#sg .sg-a { stop-color: var(--ink-3); }
+#sg .sg-b { stop-color: var(--accent); }
+#sa .sa-a { stop-color: var(--accent); stop-opacity: .34; }
+#sa .sa-b { stop-color: var(--accent); stop-opacity: 0; }
+.theme-chip .tc-sw { --hue: var(--hue-default); }
+
+/* ---- a lifted widget: the refraction lens is off while it moves (Chromium skips the blur on a moving, scaled widget
+   with a lens), so a veil and a stronger blur keep the tile beneath from reading through, in every theme ---- */
+html { --lift-veil: rgba(255, 255, 255, .5); }
+html[data-mode="dark"] { --lift-veil: rgba(14, 16, 22, .55); }
+html .w--display.is-lifted {
+  background: linear-gradient(var(--lift-veil), var(--lift-veil)), var(--glass-widget-bg);
+  -webkit-backdrop-filter: blur(max(var(--glass-widget-blur), 28px)) saturate(var(--glass-widget-sat));
+  backdrop-filter: blur(max(var(--glass-widget-blur), 28px)) saturate(var(--glass-widget-sat));
+}
+
+/* ---- views: the door or the board ---- */
+html[data-view="boot"] .app, html[data-view="boot"] .chat,
+html[data-view="auth"] .app, html[data-view="auth"] .chat { visibility: hidden; }
+
+.auth { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; pointer-events: none; }
+html[data-view="auth"] .auth { pointer-events: auto; }
+.auth:empty { display: none; }
+.auth-card {
+  width: min(420px, 100%); padding: 30px 28px 24px; border-radius: var(--r-panel); position: relative; overflow: hidden;
+  background: var(--glass-panel-bg); box-shadow: inset 0 0 0 1px var(--glass-panel-rim), inset 0 1px 0 var(--glass-panel-top), var(--glass-panel-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-panel-sat)); backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-panel-sat));
+  animation: auth-pour var(--t-pour) var(--ease-pour) both;
+}
+.auth-card::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--glass-panel-sheen); pointer-events: none; }
+.auth-card > * { position: relative; }
+.auth.is-leaving .auth-card { animation: auth-drain var(--t-drain) var(--ease-drain) both; }
+.auth.is-busy .auth-go, .auth.is-busy .auth-guest { opacity: .6; pointer-events: none; }
+@keyframes auth-pour { from { opacity: 0; transform: translateY(18px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes auth-drain { to { opacity: 0; transform: translateY(10px) scale(.96); } }
+.auth-title { font: 650 26px/1.1 var(--font-display); letter-spacing: -.02em; }
+.auth-sub { margin-top: 8px; color: var(--text-2); font-size: 13.5px; }
+.auth-tabs { margin: 20px 0 14px; width: 100%; }
+.auth-tabs button { flex: 1; text-align: center; }
+.auth-form { display: grid; gap: 10px; }
+.auth-form label { display: grid; gap: 5px; font: 500 12px/1 var(--font-ui); color: var(--text-2); }
+.auth-form input {
+  height: 44px; padding: 0 14px; border-radius: 14px; border: 0; outline: none; background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--glass-chip-rim); font: 400 14.5px var(--font-ui); color: var(--text);
+}
+.auth-form input:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.auth-err { min-height: 18px; font-size: 12.5px; color: var(--danger); }
+.auth-go, .auth-guest { width: 100%; height: 44px; justify-content: center; }
+.auth-or { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--text-3); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--text) 14%, transparent); }
+.auth-fine { margin-top: 14px; font-size: 11.5px; color: var(--text-3); text-align: center; }
+
+/* ---- notices (429, 413, offline) and the offline hint ---- */
+.notice {
+  position: fixed; left: 50%; top: 84px; z-index: 95; max-width: calc(100vw - 32px); transform: translate(-50%, -8px);
+  padding: 10px 18px; border-radius: 999px; font: 500 13px/1.3 var(--font-ui); color: var(--text); opacity: 0; pointer-events: none;
+  transition: opacity 260ms ease, transform 260ms ease;
+  background: var(--glass-panel-bg); box-shadow: inset 0 0 0 1px var(--glass-panel-rim), var(--glass-panel-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)); backdrop-filter: blur(var(--glass-panel-blur));
+}
+.notice.on { opacity: 1; transform: translate(-50%, 0); }
+html.is-offline .chip--trust { opacity: .6; }
+
+/* ---- not built yet: plain notes, never fake results ---- */
+.stub-note { margin-top: 12px; padding: 12px 14px; border-radius: 16px; font-size: 13px; color: var(--text-2); background: var(--field); }
+.stub-note b { color: var(--text); font-weight: 600; }
+.mi-note { padding: 8px 12px 4px; font-size: 11.5px; line-height: 1.35; color: var(--text-3); }
+.msg--note { background: var(--field); color: var(--text-2); }
+.chat-form input:disabled { opacity: .7; }
+.chat-form .send:disabled { opacity: .45; cursor: default; scale: 1; }
+.w-empty { margin-top: 8px; font-size: calc(12.5px * var(--u)); color: var(--text-3); line-height: 1.35; }
+.w--s .w-empty { font-size: calc(11.5px * var(--u)); }
+.ic-inline { display: inline-grid; width: 18px; height: 18px; }
+.ic-inline svg { width: 18px; height: 18px; }
+.chip--trust .long, .chip--trust .short { font-weight: 500; }
+
+html[data-motion="reduced"] .auth-card, html[data-motion="reduced"] .auth.is-leaving .auth-card { animation: none; transition: opacity 200ms ease; }

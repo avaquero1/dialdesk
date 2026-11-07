@@ -2,9 +2,9 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test engine-image engine-image-check audit-test
+.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test
 
-check: rust gen-check typecheck lint contracts e2e
+check: rust gen-check typecheck lint contracts web e2e
 	@echo "make check: all green"
 
 install:
@@ -25,6 +25,7 @@ gen:
 
 typecheck:
 	npx tsc -p tsconfig.json
+	npx tsc -p web/tsconfig.json
 
 lint:
 	npx eslint . --max-warnings 0
@@ -32,6 +33,16 @@ lint:
 # Every fake's requests and responses validate against packages/contracts.
 contracts:
 	npx vitest run --project contracts
+
+# The browser bundle Caddy serves (web/dist). Fails on an inline script or style, eval, or no themes.
+web:
+	npx tsx web/build.ts
+
+# The web app in a real browser (system Chromium) on its own local stack (web/dev/stack.sh: Compose project vha-web,
+# real edge, accounts and board, the rest as fakes). Not part of `make check`: it needs Docker and `make dev-secrets`.
+web-e2e: web
+	web/dev/stack.sh up
+	npx vitest run --project web; s=$$?; web/dev/stack.sh down; exit $$s
 
 # Real Chromium sandboxes behind the real proxy (Docker needed). E2E_SANDBOX=stub runs it without Docker.
 e2e: rust images engine-image

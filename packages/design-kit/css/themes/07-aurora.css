@@ -1,0 +1,390 @@
+/* =============================================================================
+   Theme 07 · Aurora
+   Dark glass over drifting aurora ribbons, green to violet, with softly glowing edges.
+
+   Dark:  a violet-black sky with stars. A curtain of light (green at its foot, violet above,
+          rays that shimmer) and a second, higher one drift across it. The glass is dark
+          indigo, lit from the edge: a thin green-to-violet ring and a soft halo around it.
+   Light: a pale dawn sky (lilac, rose, peach) with a faint aurora. Milk glass, the same
+          green-to-violet ring, deep indigo ink.
+
+   Everything with a color follows --hue: ribbons, sky, glass, ring, accent. The movement
+   colors, chart inks and status colors stay fixed on purpose (they are identities).
+   Amber (--attention) is only for "this needs you".
+
+   Ribbons move with transform only. It never changes layout, sizes or positions.
+   ============================================================================= */
+
+/* ---------- light = a pale dawn with a faint aurora, milk glass ---------- */
+[data-theme="aurora"] {
+  --hue-default: 154;
+
+  --font-ui: "Inter", "Adwaita Sans", "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-num: "Inter", "Adwaita Sans", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-display: var(--font-num);
+
+  /* the ribbon colors as L C H triples: oklch(var(--au-g) / .5) */
+  --au-g: .84 .17 var(--hue);
+  --au-t: .84 .12 calc(var(--hue) + 38);
+  --au-v: .76 .16 calc(var(--hue) + 140);
+  --au-m: .8 .15 calc(var(--hue) + 178);
+  --au-op-halo: 1;
+  --au-op-rays: .95;
+
+  --wallpaper:
+    radial-gradient(70% 40% at 10% 110%, oklch(.93 .08 calc(var(--hue) + 238) / .85), transparent 72%),
+    radial-gradient(60% 38% at 94% 106%, oklch(.92 .07 calc(var(--hue) + 204) / .75), transparent 72%),
+    linear-gradient(160deg, transparent 24%, oklch(var(--au-g) / .62) 36%, transparent 47%, oklch(var(--au-t) / .4) 53%, transparent 60%, oklch(var(--au-v) / .5) 67%, transparent 78%),
+    radial-gradient(80% 46% at 50% -8%, oklch(.9 .07 calc(var(--hue) + 140) / .9), transparent 74%),
+    linear-gradient(180deg, oklch(.935 .032 calc(var(--hue) + 140)) 0%, oklch(.955 .03 calc(var(--hue) + 190)) 56%, oklch(.965 .04 calc(var(--hue) + 236)) 100%);
+
+  --text: oklch(.25 .045 calc(var(--hue) + 132));
+  --text-2: oklch(.35 .045 calc(var(--hue) + 132));
+  --text-3: oklch(.45 .045 calc(var(--hue) + 132));
+  --text-on-accent: #fff;
+
+  --accent: oklch(.5 .17 calc(var(--hue) + 6));
+  --attention: oklch(.52 .13 68);
+  --danger: oklch(.52 .21 25);
+  --ok: oklch(.5 .13 160);
+  --up: oklch(.5 .12 218);
+  --down: oklch(.5 .18 330);
+  --flat: oklch(.45 .045 calc(var(--hue) + 132) / .8);
+
+  --ink-1: oklch(.5 .2 294);
+  --ink-2: oklch(.56 .15 160);
+  --ink-3: oklch(.58 .21 345);
+  --ink-4: oklch(.58 .12 218);
+  --ink-5: oklch(.5 .17 266);
+  --ink-6: oklch(.62 .15 122);
+
+  /* widget = milk tiles, lit at the edge */
+  --glass-widget-bg: oklch(.995 .014 calc(var(--hue) + 140) / .5);
+  --glass-widget-blur: 18px;
+  --glass-widget-sat: 160%;
+  --glass-widget-rim: rgba(255, 255, 255, .6);
+  --glass-widget-top: rgba(255, 255, 255, .95);
+  --glass-widget-shadow: 0 22px 46px -16px oklch(.5 .1 calc(var(--hue) + 140) / .32), 0 2px 8px oklch(.45 .08 calc(var(--hue) + 140) / .12), 0 0 30px -8px oklch(.82 .15 var(--hue) / .34), 0 0 54px -14px oklch(.74 .16 calc(var(--hue) + 140) / .3);
+  --glass-widget-sheen: linear-gradient(180deg, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 42%), radial-gradient(70% 50% at 0% 0%, oklch(var(--au-g) / .26), transparent 70%), radial-gradient(70% 52% at 100% 100%, oklch(var(--au-v) / .24), transparent 70%);
+
+  /* panel = milk, a little denser (chat, menus, sheets, open folders) */
+  --glass-panel-bg: oklch(.995 .014 calc(var(--hue) + 140) / .66);
+  --glass-panel-blur: 26px;
+  --glass-panel-sat: 160%;
+  --glass-panel-rim: rgba(255, 255, 255, .7);
+  --glass-panel-top: rgba(255, 255, 255, .98);
+  --glass-panel-shadow: 0 30px 66px -16px oklch(.46 .1 calc(var(--hue) + 140) / .38), 0 3px 10px oklch(.42 .08 calc(var(--hue) + 140) / .14), 0 0 36px -10px oklch(.82 .15 var(--hue) / .32), 0 0 64px -16px oklch(.74 .16 calc(var(--hue) + 140) / .28);
+  --glass-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, .66), rgba(255, 255, 255, 0) 40%), radial-gradient(70% 38% at 0% 0%, oklch(var(--au-g) / .2), transparent 70%), radial-gradient(70% 38% at 100% 100%, oklch(var(--au-v) / .2), transparent 70%);
+
+  /* chip = clear glass (buttons, chips, bubbles; never blurred) */
+  --glass-chip-bg: oklch(1 .01 calc(var(--hue) + 140) / .52);
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: rgba(255, 255, 255, .78);
+  --glass-chip-top: rgba(255, 255, 255, 1);
+  --glass-chip-shadow: 0 6px 14px -4px oklch(.46 .09 calc(var(--hue) + 140) / .26), 0 0 0 1px oklch(.5 .08 calc(var(--hue) + 140) / .08);
+  --glass-chip-sheen: radial-gradient(90% 80% at 30% 0%, rgba(255, 255, 255, .85), rgba(255, 255, 255, 0) 62%);
+
+  /* bar = the same milk, thinner */
+  --glass-bar-bg: oklch(.995 .014 calc(var(--hue) + 140) / .46);
+  --glass-bar-blur: 20px;
+  --glass-bar-sat: 170%;
+  --glass-bar-rim: rgba(255, 255, 255, .66);
+  --glass-bar-top: rgba(255, 255, 255, .98);
+  --glass-bar-shadow: 0 18px 40px -12px oklch(.46 .1 calc(var(--hue) + 140) / .3), 0 2px 8px oklch(.42 .08 calc(var(--hue) + 140) / .12), 0 0 30px -10px oklch(.82 .15 var(--hue) / .3);
+  --glass-bar-sheen: linear-gradient(180deg, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 60%), radial-gradient(40% 90% at 0% 50%, oklch(var(--au-g) / .22), transparent 70%), radial-gradient(40% 90% at 100% 50%, oklch(var(--au-v) / .2), transparent 70%);
+
+  --refraction: .7;
+  --specular: .8;
+
+  --r-widget: 30px;
+  --r-panel: 32px;
+  --r-chip: 999px;
+  --gap: 12px;
+  --pad: 16px;
+
+  /* slow and silky: one soft overshoot */
+  --ease-water: cubic-bezier(.24, 1.3, .44, 1);
+  --t-water: 620ms;
+  --ease-honey: cubic-bezier(.2, .9, .3, 1);
+  --t-honey: 1000ms;
+  --ease-pour: cubic-bezier(.26, 1.14, .38, 1);
+  --t-pour: 760ms;
+  --ease-drain: cubic-bezier(.5, 0, .22, 1);
+  --t-drain: 440ms;
+
+  --lift-scale: 1.05;
+  --wobble: 7px;
+
+  --hair: oklch(.4 .08 calc(var(--hue) + 132) / .14);
+  --hair-strong: oklch(.4 .08 calc(var(--hue) + 132) / .26);
+  --hover: oklch(.5 .1 calc(var(--hue) + 132) / .09);
+  --field: oklch(1 .01 calc(var(--hue) + 140) / .6);
+  --scrim: oklch(.3 .06 calc(var(--hue) + 132) / .24);
+  --label-shadow: 0 1px 8px rgba(255, 255, 255, .85), 0 0 2px rgba(255, 255, 255, .7);
+  --lift-shadow: 0 40px 66px -18px oklch(.42 .1 calc(var(--hue) + 140) / .42), 0 10px 22px oklch(.4 .08 calc(var(--hue) + 140) / .18), 0 0 46px -6px oklch(.8 .16 var(--hue) / .4);
+  --bead: radial-gradient(circle at 34% 28%, #fff 0 10%, oklch(.9 .08 calc(var(--hue) + 40)) 30%, oklch(.64 .15 calc(var(--hue) + 128)) 100%);
+  --bead-accent: radial-gradient(circle at 34% 28%, #fff 0 10%, oklch(.88 .14 var(--hue)) 30%, oklch(.58 .17 calc(var(--hue) + 8)) 100%);
+  --bead-shadow: inset 0 -2px 4px oklch(.3 .12 calc(var(--hue) + 130) / .4), 0 0 12px oklch(.8 .15 var(--hue) / .4), 0 2px 6px oklch(.3 .08 calc(var(--hue) + 130) / .3);
+  --bead-shadow-sm: 0 0 5px oklch(.8 .15 var(--hue) / .5);
+  --neck: linear-gradient(90deg, oklch(.8 .16 var(--hue)), oklch(.68 .17 calc(var(--hue) + 140)));
+  --slot-bg: oklch(.5 .1 calc(var(--hue) + 132) / .07);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.6 .14 var(--hue) / .32), inset 0 8px 18px -8px oklch(.3 .08 calc(var(--hue) + 130) / .26);
+  --g-ring: linear-gradient(135deg, oklch(.82 .17 var(--hue) / .95) 0%, rgba(255, 255, 255, .5) 28%, rgba(255, 255, 255, .16) 52%, oklch(.74 .16 calc(var(--hue) + 140) / .55) 78%, oklch(.78 .17 calc(var(--hue) + 178) / .9) 100%);
+}
+
+/* ---------- dark = glass in the night, lit by the ribbons ---------- */
+[data-theme="aurora"][data-mode="dark"] {
+  --au-g: .84 .22 var(--hue);
+  --au-t: .8 .15 calc(var(--hue) + 38);
+  --au-v: .64 .23 calc(var(--hue) + 140);
+  --au-m: .7 .22 calc(var(--hue) + 178);
+  --au-op-halo: 1;
+  --au-op-rays: 1;
+
+  --wallpaper:
+    radial-gradient(58% 30% at 44% 114%, oklch(var(--au-g) / .4), transparent 74%),
+    linear-gradient(160deg, transparent 26%, oklch(var(--au-g) / .34) 36%, transparent 46%, oklch(var(--au-t) / .26) 52%, transparent 60%, oklch(var(--au-v) / .4) 67%, transparent 78%),
+    radial-gradient(62% 44% at 96% -8%, oklch(.36 .16 calc(var(--hue) + 140) / .6), transparent 72%),
+    radial-gradient(54% 40% at 0% 6%, oklch(.3 .1 calc(var(--hue) + 40) / .4), transparent 72%),
+    linear-gradient(180deg, oklch(.15 .045 calc(var(--hue) + 130)) 0%, oklch(.12 .04 calc(var(--hue) + 118)) 58%, oklch(.15 .055 calc(var(--hue) + 80)) 100%);
+
+  --text: oklch(.97 .012 calc(var(--hue) + 140));
+  --text-2: oklch(.88 .024 calc(var(--hue) + 140));
+  --text-3: oklch(.77 .034 calc(var(--hue) + 140));
+  --text-on-accent: oklch(.16 .05 calc(var(--hue) + 120));
+
+  --accent: oklch(.84 .19 var(--hue));
+  --attention: oklch(.82 .15 76);
+  --danger: oklch(.72 .19 22);
+  --ok: oklch(.84 .17 162);
+  --up: oklch(.87 .12 214);
+  --down: oklch(.77 .18 336);
+  --flat: oklch(.77 .034 calc(var(--hue) + 140) / .85);
+
+  --ink-1: oklch(.76 .17 296);
+  --ink-2: oklch(.86 .19 152);
+  --ink-3: oklch(.77 .2 346);
+  --ink-4: oklch(.85 .12 212);
+  --ink-5: oklch(.74 .15 264);
+  --ink-6: oklch(.9 .17 122);
+
+  /* widget = dark indigo glass; the halo is the aurora leaking round the edge */
+  --glass-widget-bg: linear-gradient(180deg, oklch(.21 .05 calc(var(--hue) + 130) / .58) 0%, oklch(.15 .045 calc(var(--hue) + 126) / .64) 100%);
+  --glass-widget-blur: 13px;
+  --glass-widget-sat: 175%;
+  --glass-widget-rim: oklch(.9 .09 calc(var(--hue) + 70) / .13);
+  --glass-widget-top: oklch(.96 .09 calc(var(--hue) + 14) / .6);
+  --glass-widget-shadow: 0 26px 52px -18px rgba(2, 1, 14, .74), 0 3px 10px rgba(2, 1, 14, .4), 0 0 32px -6px oklch(var(--au-g) / .3), 0 0 64px -12px oklch(var(--au-v) / .38);
+  --glass-widget-sheen: linear-gradient(180deg, oklch(.92 .11 var(--hue) / .15), transparent 34%), radial-gradient(70% 52% at 100% 0%, oklch(var(--au-v) / .2), transparent 70%), radial-gradient(80% 40% at 0% 112%, oklch(var(--au-g) / .12), transparent 70%);
+
+  --glass-panel-bg: linear-gradient(180deg, oklch(.19 .048 calc(var(--hue) + 130) / .76) 0%, oklch(.14 .044 calc(var(--hue) + 126) / .8) 100%);
+  --glass-panel-blur: 24px;
+  --glass-panel-sat: 170%;
+  --glass-panel-rim: oklch(.9 .09 calc(var(--hue) + 70) / .15);
+  --glass-panel-top: oklch(.96 .09 calc(var(--hue) + 14) / .62);
+  --glass-panel-shadow: 0 32px 72px -16px rgba(2, 1, 14, .8), 0 4px 12px rgba(2, 1, 14, .42), 0 0 38px -8px oklch(var(--au-g) / .28), 0 0 72px -14px oklch(var(--au-v) / .36);
+  --glass-panel-sheen: linear-gradient(180deg, oklch(.92 .11 var(--hue) / .14), transparent 32%), radial-gradient(70% 38% at 100% 0%, oklch(var(--au-v) / .18), transparent 70%), radial-gradient(80% 30% at 0% 112%, oklch(var(--au-g) / .1), transparent 70%);
+
+  --glass-chip-bg: linear-gradient(180deg, oklch(.92 .08 calc(var(--hue) + 120) / .15), oklch(.82 .1 calc(var(--hue) + 130) / .07));
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(.92 .1 calc(var(--hue) + 80) / .22);
+  --glass-chip-top: oklch(.97 .08 calc(var(--hue) + 40) / .5);
+  --glass-chip-shadow: 0 6px 14px -4px rgba(2, 1, 14, .55), 0 0 16px -6px oklch(var(--au-g) / .22);
+  --glass-chip-sheen: radial-gradient(90% 80% at 30% 0%, oklch(.96 .08 calc(var(--hue) + 50) / .26), transparent 62%);
+
+  --glass-bar-bg: linear-gradient(90deg, oklch(.2 .05 calc(var(--hue) + 132) / .54), oklch(.16 .05 calc(var(--hue) + 124) / .52));
+  --glass-bar-blur: 16px;
+  --glass-bar-sat: 175%;
+  --glass-bar-rim: oklch(.9 .09 calc(var(--hue) + 70) / .14);
+  --glass-bar-top: oklch(.96 .09 calc(var(--hue) + 14) / .56);
+  --glass-bar-shadow: 0 18px 44px -10px rgba(2, 1, 14, .6), 0 3px 8px rgba(2, 1, 14, .36), 0 0 34px -10px oklch(var(--au-g) / .22), 0 0 50px -14px oklch(var(--au-v) / .26);
+  --glass-bar-sheen: linear-gradient(180deg, oklch(.92 .11 var(--hue) / .14), transparent 60%), radial-gradient(40% 90% at 0% 50%, oklch(var(--au-g) / .16), transparent 70%), radial-gradient(40% 90% at 100% 50%, oklch(var(--au-v) / .18), transparent 70%);
+
+  --refraction: .85;
+  --specular: .6;
+
+  --hair: oklch(.92 .06 calc(var(--hue) + 110) / .14);
+  --hair-strong: oklch(.92 .06 calc(var(--hue) + 110) / .27);
+  --hover: oklch(.95 .07 calc(var(--hue) + 80) / .1);
+  --field: oklch(.08 .03 calc(var(--hue) + 128) / .46);
+  --scrim: oklch(.05 .03 calc(var(--hue) + 128) / .52);
+  --label-shadow: 0 1px 9px rgba(3, 1, 14, .9), 0 0 2px rgba(3, 1, 14, .7);
+  --lift-shadow: 0 44px 70px -18px rgba(2, 1, 14, .8), 0 10px 24px rgba(2, 1, 14, .5), 0 0 48px -6px oklch(var(--au-g) / .36), 0 0 90px -10px oklch(var(--au-v) / .4);
+  --bead: radial-gradient(circle at 34% 28%, #fff 0 9%, oklch(.92 .11 calc(var(--hue) + 24)) 26%, oklch(.64 .2 calc(var(--hue) + 80)) 62%, oklch(.46 .22 calc(var(--hue) + 140)) 100%);
+  --bead-accent: radial-gradient(circle at 34% 28%, #fff 0 9%, oklch(.94 .13 var(--hue)) 28%, oklch(.78 .2 var(--hue)) 100%);
+  --bead-shadow: inset 0 -2px 4px oklch(.2 .14 calc(var(--hue) + 140) / .6), 0 0 14px oklch(var(--au-g) / .5), 0 2px 6px rgba(2, 1, 14, .5);
+  --bead-shadow-sm: 0 0 6px oklch(var(--au-g) / .6);
+  --neck: linear-gradient(90deg, oklch(.84 .2 var(--hue)), oklch(.7 .21 calc(var(--hue) + 140)));
+  --slot-bg: oklch(.06 .03 calc(var(--hue) + 128) / .3);
+  --slot-shadow: inset 0 0 0 1.5px oklch(var(--au-g) / .3), inset 0 8px 18px -8px rgba(2, 1, 14, .6);
+  --g-ring: linear-gradient(135deg, oklch(.9 .18 var(--hue) / .95) 0%, oklch(.8 .15 calc(var(--hue) + 38) / .3) 26%, oklch(.6 .15 calc(var(--hue) + 100) / .1) 52%, oklch(.68 .22 calc(var(--hue) + 140) / .45) 78%, oklch(.84 .2 calc(var(--hue) + 178) / .9) 100%);
+}
+
+/* phones: lighter blur and slightly tighter spacing (the Pixel does the blur for every glass piece on screen) */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="aurora"],
+  [data-theme="aurora"][data-mode="dark"] {
+    --glass-widget-blur: 12px;
+    --glass-panel-blur: 20px;
+    --glass-bar-blur: 14px;
+    --refraction: .5;
+  }
+}
+@media (max-width: 720px) {
+  [data-theme="aurora"],
+  [data-theme="aurora"][data-mode="dark"] {
+    --pad: 13px;
+    --r-widget: 26px;
+  }
+}
+
+/* ---------- the numbers: a little glow in the dark, plain ink in the light ---------- */
+[data-theme="aurora"] :is(.big, .g-p, .bal, .mv, .card .p, .stat .v) {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+[data-theme="aurora"][data-mode="dark"] .big {
+  text-shadow: 0 0 20px oklch(var(--au-g) / .34), 0 0 38px oklch(var(--au-v) / .3);
+}
+
+/* ---------- own paint 1 of 2: the ribbons (.wallpaper-fx). Transform only, very slow. ---------- */
+/* fx1 = the main curtain. The layer holds the soft halo; its two pseudo-layers hold the ray sheets. */
+[data-theme="aurora"] .wallpaper-fx .fx1 {
+  left: -30%; right: -30%; top: 8%; bottom: 12%;
+  transform-origin: 50% 100%;
+  background:
+    radial-gradient(32% 50% at 20% 78%, oklch(var(--au-g) / .5), transparent 72%),
+    radial-gradient(28% 46% at 48% 72%, oklch(var(--au-t) / .34), transparent 72%),
+    radial-gradient(34% 52% at 78% 74%, oklch(var(--au-v) / .46), transparent 72%);
+  opacity: var(--au-op-halo);
+  animation: au-sway-a 74s ease-in-out infinite alternate;
+}
+/* fx2 = a second, higher curtain, leaning the other way, violet to rose */
+[data-theme="aurora"] .wallpaper-fx .fx2 {
+  left: -10%; right: -40%; top: -16%; bottom: 46%;
+  transform-origin: 50% 100%;
+  background:
+    radial-gradient(34% 56% at 26% 76%, oklch(var(--au-v) / .46), transparent 72%),
+    radial-gradient(30% 52% at 62% 70%, oklch(var(--au-m) / .38), transparent 72%),
+    radial-gradient(26% 46% at 90% 76%, oklch(var(--au-t) / .3), transparent 72%);
+  opacity: var(--au-op-halo);
+  animation: au-sway-b 96s ease-in-out infinite alternate;
+}
+/* the ray sheets: soft vertical blades with different lengths, made by crossing two tilings */
+[data-theme="aurora"] .wallpaper-fx :is(.fx1, .fx2)::before,
+[data-theme="aurora"] .wallpaper-fx :is(.fx1, .fx2)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  mask-image:
+    linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, .34) 26%, rgba(0, 0, 0, .9) 66%, #000 88%, transparent 100%),
+    radial-gradient(ellipse 50% 112% at 50% 108%, #000 26%, rgba(0, 0, 0, .46) 60%, rgba(0, 0, 0, .12) 100%),
+    radial-gradient(ellipse 50% 112% at 50% 112%, #000 22%, rgba(0, 0, 0, .5) 58%, rgba(0, 0, 0, .16) 100%),
+    linear-gradient(90deg, transparent 0%, #000 16%, #000 80%, transparent 100%);
+  mask-repeat: no-repeat, repeat-x, repeat-x, no-repeat;
+  mask-composite: intersect;
+  opacity: var(--au-op-rays);
+}
+[data-theme="aurora"] .wallpaper-fx .fx1::before {
+  background:
+    linear-gradient(90deg, transparent 30%, oklch(var(--au-v) / .5) 68%, oklch(var(--au-m) / .6) 100%),
+    linear-gradient(0deg, oklch(var(--au-g) / .98) 0%, oklch(var(--au-g) / .78) 24%, oklch(var(--au-t) / .5) 48%, oklch(var(--au-v) / .5) 76%, oklch(var(--au-m) / .55) 100%);
+  mask-size: 100% 100%, 97px 100%, 151px 100%, 100% 100%;
+  mask-position: 0 0, 13px 0, 61px 0, 0 0;
+  animation: au-ray-a 53s ease-in-out infinite alternate;
+}
+[data-theme="aurora"] .wallpaper-fx .fx1::after {
+  background: linear-gradient(0deg, oklch(var(--au-t) / .85) 0%, oklch(var(--au-g) / .5) 38%, oklch(var(--au-v) / .4) 80%, transparent 100%);
+  mask-size: 100% 100%, 71px 100%, 113px 100%, 100% 100%;
+  mask-position: 0 0, 29px 0, 7px 0, 0 0;
+  animation: au-ray-b 61s ease-in-out infinite alternate;
+  opacity: calc(var(--au-op-rays) * .7);
+}
+[data-theme="aurora"] .wallpaper-fx .fx2::before {
+  background:
+    linear-gradient(90deg, oklch(var(--au-v) / .4) 0%, transparent 60%),
+    linear-gradient(0deg, oklch(var(--au-v) / .9) 0%, oklch(var(--au-m) / .75) 44%, oklch(var(--au-t) / .4) 100%);
+  mask-size: 100% 100%, 83px 100%, 131px 100%, 100% 100%;
+  mask-position: 0 0, 41px 0, 17px 0, 0 0;
+  animation: au-ray-b 67s ease-in-out infinite alternate-reverse;
+}
+[data-theme="aurora"] .wallpaper-fx .fx2::after {
+  background: linear-gradient(0deg, oklch(var(--au-m) / .8) 0%, oklch(var(--au-v) / .5) 50%, transparent 100%);
+  mask-size: 100% 100%, 59px 100%, 101px 100%, 100% 100%;
+  mask-position: 0 0, 11px 0, 53px 0, 0 0;
+  animation: au-ray-a 79s ease-in-out infinite alternate-reverse;
+  opacity: calc(var(--au-op-rays) * .6);
+}
+/* fx3 = the stars (they breathe) and the glow on the horizon */
+[data-theme="aurora"] .wallpaper-fx .fx3 {
+  inset: 0;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, .95) 0, rgba(255, 255, 255, .95) .7px, transparent 1.5px) 0 0 / 239px 211px,
+    radial-gradient(circle, oklch(.96 .07 calc(var(--hue) + 40) / .9) 0, oklch(.96 .07 calc(var(--hue) + 40) / .9) .6px, transparent 1.3px) 101px 67px / 173px 149px,
+    radial-gradient(circle, oklch(.98 .05 calc(var(--hue) + 140) / .85) 0, oklch(.98 .05 calc(var(--hue) + 140) / .85) .6px, transparent 1.3px) 37px 119px / 131px 163px,
+    radial-gradient(circle, rgba(255, 255, 255, .95) 0, rgba(255, 255, 255, .95) 1px, transparent 2.2px) 61px 23px / 397px 331px;
+  mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 96%);
+  animation: au-twinkle 12s ease-in-out infinite alternate;
+}
+[data-theme="aurora"] .wallpaper-fx .fx3::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, .9) 0, rgba(255, 255, 255, .9) .6px, transparent 1.3px) 53px 31px / 193px 181px,
+    radial-gradient(circle, oklch(.97 .06 calc(var(--hue) + 80) / .85) 0, oklch(.97 .06 calc(var(--hue) + 80) / .85) .7px, transparent 1.5px) 11px 97px / 277px 233px;
+  mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 96%);
+  animation: au-twinkle 17s ease-in-out -7s infinite alternate;
+}
+/* light mode: no stars, a pale rose glow rising at the horizon instead */
+[data-theme="aurora"]:not([data-mode="dark"]) .wallpaper-fx .fx3 {
+  left: -10%; right: -10%; top: 58%; bottom: -30%;
+  background:
+    radial-gradient(40% 60% at 18% 70%, oklch(.92 .1 calc(var(--hue) + 236) / .7), transparent 72%),
+    radial-gradient(40% 60% at 80% 76%, oklch(.92 .09 calc(var(--hue) + 202) / .6), transparent 72%);
+  mask-image: none;
+  animation: au-dawn 60s ease-in-out infinite alternate;
+}
+[data-theme="aurora"]:not([data-mode="dark"]) .wallpaper-fx .fx3::before { display: none; }
+
+@keyframes au-sway-a {
+  from { transform: translate3d(-4%, 1%, 0) rotate(-12deg) skewX(-5deg) scaleY(.94); }
+  to   { transform: translate3d(5%, -3%, 0) rotate(-7deg) skewX(6deg) scaleY(1.06); }
+}
+@keyframes au-sway-b {
+  from { transform: translate3d(4%, 2%, 0) rotate(5deg) skewX(5deg) scaleY(1.04); }
+  to   { transform: translate3d(-5%, -2%, 0) rotate(10deg) skewX(-5deg) scaleY(.92); }
+}
+@keyframes au-ray-a {
+  from { transform: translate3d(-1.6%, 0, 0) skewX(4deg); }
+  to   { transform: translate3d(1.6%, 0, 0) skewX(-4deg); }
+}
+@keyframes au-ray-b {
+  from { transform: translate3d(1.4%, 0, 0) skewX(-3deg) scaleY(.96); }
+  to   { transform: translate3d(-1.4%, 0, 0) skewX(3deg) scaleY(1.04); }
+}
+@keyframes au-twinkle {
+  from { opacity: .5; }
+  to   { opacity: 1; }
+}
+@keyframes au-dawn {
+  from { transform: translate3d(-3%, 2%, 0) scale(1); }
+  to   { transform: translate3d(3%, -4%, 0) scale(1.08); }
+}
+
+/* phones: finer rays for a narrow screen, one sheet fewer */
+@media (max-width: 720px) {
+  [data-theme="aurora"] .wallpaper-fx .fx1 { left: -50%; right: -50%; top: 14%; bottom: 8%; }
+  [data-theme="aurora"] .wallpaper-fx .fx2 { left: -30%; right: -50%; top: -10%; bottom: 52%; }
+  [data-theme="aurora"] .wallpaper-fx .fx1::after,
+  [data-theme="aurora"] .wallpaper-fx .fx2::after { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="aurora"] .wallpaper-fx > i,
+  [data-theme="aurora"] .wallpaper-fx > i::before,
+  [data-theme="aurora"] .wallpaper-fx > i::after { animation: none; }
+}

@@ -1,0 +1,262 @@
+/* ==========================================================================
+   Theme 02 · Clear Water
+   Apple-style liquid glass: almost colorless plates whose edges lens the
+   wallpaper behind them, bright specular rims, a vivid color field that drifts.
+   Light is the hero; dark keeps the same clarity over a deep field.
+
+   Tokens from the plan's contract, light under [data-theme="clear-water"] and
+   dark under [data-theme="clear-water"][data-mode="dark"]. Extra paint sits under
+   this theme's own selector and on the .wallpaper-fx layer. It never changes layout,
+   sizes or positions. The board gives this file the shared class names in packages/design-kit/README.md.
+   ========================================================================== */
+
+[data-theme="clear-water"] {
+  --hue-default: 222;
+
+  --font-ui: -apple-system, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", system-ui, "Helvetica Neue", Arial, sans-serif;
+  --font-num: -apple-system, "SF Pro Display", "Segoe UI", Roboto, "Noto Sans", system-ui, "Helvetica Neue", Arial, sans-serif; /* the board sets tabular-nums */
+  --font-display: ui-rounded, "SF Pro Rounded", -apple-system, "Segoe UI", Roboto, "Noto Sans", system-ui, Arial, sans-serif;
+
+  /* the vivid field: four color pools over a diagonal wash, all keyed to the hue */
+  --wallpaper:
+    radial-gradient(62% 56% at 8% 6%, oklch(0.9 0.13 calc(var(--hue) + 172)) 0%, transparent 70%),
+    radial-gradient(56% 52% at 95% 7%, oklch(0.86 0.14 calc(var(--hue) + 64)) 0%, transparent 70%),
+    radial-gradient(72% 64% at 90% 97%, oklch(0.85 0.13 calc(var(--hue) - 8)) 0%, transparent 70%),
+    radial-gradient(62% 58% at 5% 95%, oklch(0.9 0.13 calc(var(--hue) - 86)) 0%, transparent 70%),
+    linear-gradient(140deg, oklch(0.94 0.07 calc(var(--hue) + 130)), oklch(0.9 0.1 calc(var(--hue) + 30)) 48%, oklch(0.9 0.1 calc(var(--hue) - 34)));
+
+  /* ink on clear glass: solid deep tones, never alpha (alpha text fails on a vivid field) */
+  --text: oklch(0.19 0.05 var(--hue));
+  --text-2: oklch(0.29 0.05 var(--hue));
+  --text-3: oklch(0.39 0.05 var(--hue));
+  --text-on-accent: oklch(0.99 0.01 var(--hue));
+  --accent: oklch(0.47 0.2 var(--hue));
+  --attention: oklch(0.48 0.12 68); /* the board also sets the label in this color: it must read on pale glass */
+  --danger: oklch(0.46 0.21 25);
+  --ok: oklch(0.43 0.13 155);
+  --up: oklch(0.36 0.11 205);
+  --down: oklch(0.4 0.18 318);
+  --flat: oklch(0.38 0.03 var(--hue));
+  --ink-1: oklch(0.45 0.19 262);
+  --ink-2: oklch(0.46 0.13 190);
+  --ink-3: oklch(0.5 0.19 335);
+  --ink-4: oklch(0.47 0.16 292);
+  --ink-5: oklch(0.46 0.12 132);
+  --ink-6: oklch(0.5 0.15 42);
+
+  /* widget: a pale veil, not a tint. Rims are painted with inset shadows so they work wherever the board puts --shadow:
+     a bright line on the top and left, a fainter twin on the bottom and right, then an inner glow. */
+  --glass-widget-bg: radial-gradient(closest-side, oklch(1 0.012 var(--hue) / 0.56) 0%, oklch(1 0.012 var(--hue) / 0.52) 80%, oklch(1 0.012 var(--hue) / 0.03) 100%), linear-gradient(158deg, oklch(1 0.012 var(--hue) / 0.14), oklch(1 0.01 var(--hue) / 0.04) 60%, oklch(1 0.014 var(--hue) / 0.1));
+  --glass-widget-blur: 2.5px;
+  --glass-widget-sat: 190%;
+  --glass-widget-rim: oklch(1 0 0 / 0.5);
+  --glass-widget-top: oklch(1 0 0 / 0.95);
+  --glass-widget-shadow: 0 24px 46px -14px oklch(0.34 0.13 var(--hue) / 0.3), 0 5px 14px oklch(0.34 0.13 var(--hue) / 0.12), inset 2.5px 2.5px 0.5px -1px oklch(1 0 0 / 0.95), inset -2px -2px 0.5px -1px oklch(1 0 0 / 0.6), inset 0 0 14px oklch(1 0 0 / 0.14), inset 0 -1.5px 0 oklch(1 0 0 / 0.45);
+  --glass-widget-sheen: radial-gradient(125% 70% at 10% -8%, oklch(1 0 0 / 0.8), transparent 56%), radial-gradient(90% 55% at 94% 108%, oklch(1 0 0 / 0.36), transparent 64%);
+
+  /* panel: chat, menus, sheets, open folders. A little more veil under long text. */
+  --glass-panel-bg: linear-gradient(160deg, oklch(1 0.012 var(--hue) / 0.64) 0%, oklch(1 0.01 var(--hue) / 0.4) 50%, oklch(1 0.014 var(--hue) / 0.5) 100%);
+  --glass-panel-blur: 10px;
+  --glass-panel-sat: 180%;
+  --glass-panel-rim: oklch(1 0 0 / 0.55);
+  --glass-panel-top: oklch(1 0 0 / 0.95);
+  --glass-panel-shadow: 0 34px 70px -18px oklch(0.3 0.14 var(--hue) / 0.36), 0 8px 22px oklch(0.3 0.14 var(--hue) / 0.14), inset 2.5px 2.5px 0.5px -1px oklch(1 0 0 / 0.95), inset -2px -2px 0.5px -1px oklch(1 0 0 / 0.6), inset 0 0 30px oklch(1 0 0 / 0.3), inset 0 -1.5px 0 oklch(1 0 0 / 0.45);
+  --glass-panel-sheen: radial-gradient(120% 56% at 8% -8%, oklch(1 0 0 / 0.8), transparent 56%), radial-gradient(80% 44% at 96% 108%, oklch(1 0 0 / 0.34), transparent 64%);
+
+  /* chip: small painted glass (buttons, pills) */
+  --glass-chip-bg: linear-gradient(180deg, oklch(1 0.01 var(--hue) / 0.78), oklch(1 0.01 var(--hue) / 0.4));
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(1 0 0 / 0.7);
+  --glass-chip-top: oklch(1 0 0 / 1);
+  --glass-chip-shadow: 0 6px 14px -6px oklch(0.3 0.13 var(--hue) / 0.35), inset 0 0 10px oklch(1 0 0 / 0.35);
+  --glass-chip-sheen: linear-gradient(180deg, oklch(1 0 0 / 0.7), transparent 56%);
+
+  /* bar: the top bar, a little airier than a widget */
+  --glass-bar-bg: linear-gradient(160deg, oklch(1 0.012 var(--hue) / 0.62) 0%, oklch(1 0.01 var(--hue) / 0.42) 50%, oklch(1 0.014 var(--hue) / 0.5) 100%);
+  --glass-bar-blur: 10px;
+  --glass-bar-sat: 190%;
+  --glass-bar-rim: oklch(1 0 0 / 0.5);
+  --glass-bar-top: oklch(1 0 0 / 0.95);
+  --glass-bar-shadow: 0 18px 38px -14px oklch(0.34 0.13 var(--hue) / 0.28), 0 3px 10px oklch(0.34 0.13 var(--hue) / 0.1), inset 2.5px 2.5px 0.5px -1px oklch(1 0 0 / 0.95), inset -2px -2px 0.5px -1px oklch(1 0 0 / 0.6), inset 0 0 22px oklch(1 0 0 / 0.28), inset 0 -1.5px 0 oklch(1 0 0 / 0.4);
+  --glass-bar-sheen: radial-gradient(90% 150% at 6% -40%, oklch(1 0 0 / 0.8), transparent 58%), radial-gradient(60% 120% at 96% 150%, oklch(1 0 0 / 0.3), transparent 64%);
+
+  --refraction: 0.95; /* strong lensing at the edges: the board's displacement scale = 2 × band depth × this */
+  --specular: 0.9;    /* scales the cursor light and the idle glint */
+  --r-widget: 30px;
+  --r-panel: 34px;
+  --r-chip: 999px;
+  --gap: 12px;
+  --pad: 18px;
+
+  /* water: quick, one soft overshoot · honey: slow, no bounce · pour: wide, then deep · drain: shallow, then narrow */
+  --ease-water: cubic-bezier(0.22, 1.24, 0.36, 1);
+  --t-water: 640ms;
+  --ease-honey: cubic-bezier(0.18, 0.86, 0.24, 1);
+  --t-honey: 1000ms;
+  --ease-pour: cubic-bezier(0.2, 1.1, 0.3, 1);
+  --t-pour: 780ms;
+  --ease-drain: cubic-bezier(0.56, 0.06, 0.28, 1);
+  --t-drain: 520ms;
+  --lift-scale: 1.055;
+  --wobble: 9;
+}
+
+[data-theme="clear-water"][data-mode="dark"] {
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --wallpaper:
+    radial-gradient(62% 56% at 8% 6%, oklch(0.3 0.13 calc(var(--hue) + 172)) 0%, transparent 70%),
+    radial-gradient(56% 52% at 95% 7%, oklch(0.29 0.15 calc(var(--hue) + 64)) 0%, transparent 70%),
+    radial-gradient(72% 64% at 90% 97%, oklch(0.31 0.14 calc(var(--hue) - 8)) 0%, transparent 70%),
+    radial-gradient(62% 58% at 5% 95%, oklch(0.27 0.11 calc(var(--hue) - 86)) 0%, transparent 70%),
+    linear-gradient(140deg, oklch(0.21 0.07 calc(var(--hue) + 24)), oklch(0.17 0.06 calc(var(--hue) - 18)) 52%, oklch(0.15 0.05 calc(var(--hue) - 58)));
+
+  --text: oklch(0.975 0.012 var(--hue));
+  --text-2: oklch(0.91 0.02 var(--hue));
+  --text-3: oklch(0.9 0.03 var(--hue));
+  --text-on-accent: oklch(0.18 0.05 var(--hue));
+  --accent: oklch(0.8 0.14 var(--hue));
+  --attention: oklch(0.84 0.16 78);
+  --danger: oklch(0.85 0.13 25);
+  --ok: oklch(0.8 0.15 155);
+  --up: oklch(0.91 0.09 200);
+  --down: oklch(0.89 0.1 330);
+  --flat: oklch(0.8 0.03 var(--hue));
+  --ink-1: oklch(0.76 0.15 262);
+  --ink-2: oklch(0.82 0.13 188);
+  --ink-3: oklch(0.8 0.15 340);
+  --ink-4: oklch(0.78 0.14 295);
+  --ink-5: oklch(0.82 0.14 132);
+  --ink-6: oklch(0.8 0.13 45);
+
+  --glass-widget-bg: radial-gradient(closest-side, oklch(0.13 0.04 var(--hue) / 0.76) 0%, oklch(0.13 0.04 var(--hue) / 0.7) 82%, oklch(0.13 0.04 var(--hue) / 0.06) 100%), linear-gradient(158deg, oklch(0.3 0.04 var(--hue) / 0.2), oklch(0.13 0.04 var(--hue) / 0.08) 60%, oklch(0.2 0.04 var(--hue) / 0.14));
+  --glass-widget-blur: 2.5px;
+  --glass-widget-sat: 170%;
+  --glass-widget-rim: oklch(1 0 0 / 0.34);
+  --glass-widget-top: oklch(1 0 0 / 0.75);
+  --glass-widget-shadow: 0 26px 48px -14px oklch(0.05 0.04 var(--hue) / 0.7), 0 5px 14px oklch(0.05 0.04 var(--hue) / 0.35), inset 2.5px 2.5px 0.5px -1px oklch(1 0 0 / 0.8), inset -2px -2px 0.5px -1px oklch(1 0 0 / 0.4), inset 0 0 14px oklch(1 0 0 / 0.06), inset 0 -1.5px 0 oklch(1 0 0 / 0.16);
+  --glass-widget-sheen: radial-gradient(125% 70% at 10% -8%, oklch(1 0 0 / 0.15), transparent 56%), radial-gradient(90% 55% at 94% 108%, oklch(1 0 0 / 0.08), transparent 64%);
+
+  --glass-panel-bg: linear-gradient(160deg, oklch(0.26 0.04 var(--hue) / 0.66) 0%, oklch(0.16 0.04 var(--hue) / 0.6) 50%, oklch(0.2 0.04 var(--hue) / 0.62) 100%);
+  --glass-panel-blur: 12px;
+  --glass-panel-sat: 170%;
+  --glass-panel-rim: oklch(1 0 0 / 0.36);
+  --glass-panel-top: oklch(1 0 0 / 0.75);
+  --glass-panel-shadow: 0 36px 72px -18px oklch(0.04 0.04 var(--hue) / 0.75), 0 8px 22px oklch(0.04 0.04 var(--hue) / 0.4), inset 2.5px 2.5px 0.5px -1px oklch(1 0 0 / 0.8), inset -2px -2px 0.5px -1px oklch(1 0 0 / 0.4), inset 0 0 28px oklch(1 0 0 / 0.07), inset 0 -1.5px 0 oklch(1 0 0 / 0.16);
+  --glass-panel-sheen: radial-gradient(120% 56% at 8% -8%, oklch(1 0 0 / 0.14), transparent 56%), radial-gradient(80% 44% at 96% 108%, oklch(1 0 0 / 0.07), transparent 64%);
+
+  --glass-chip-bg: linear-gradient(180deg, oklch(0.4 0.04 var(--hue) / 0.66), oklch(0.22 0.04 var(--hue) / 0.55));
+  --glass-chip-rim: oklch(1 0 0 / 0.4);
+  --glass-chip-top: oklch(1 0 0 / 0.7);
+  --glass-chip-shadow: 0 6px 14px -6px oklch(0.04 0.04 var(--hue) / 0.6), inset 0 0 10px oklch(1 0 0 / 0.06);
+  --glass-chip-sheen: linear-gradient(180deg, oklch(1 0 0 / 0.16), transparent 56%);
+
+  --glass-bar-bg: linear-gradient(160deg, oklch(0.3 0.04 var(--hue) / 0.55) 0%, oklch(0.16 0.04 var(--hue) / 0.5) 50%, oklch(0.2 0.04 var(--hue) / 0.52) 100%);
+  --glass-bar-blur: 10px;
+  --glass-bar-sat: 170%;
+  --glass-bar-rim: oklch(1 0 0 / 0.34);
+  --glass-bar-top: oklch(1 0 0 / 0.72);
+  --glass-bar-shadow: 0 18px 38px -14px oklch(0.04 0.04 var(--hue) / 0.65), 0 3px 10px oklch(0.04 0.04 var(--hue) / 0.3), inset 2.5px 2.5px 0.5px -1px oklch(1 0 0 / 0.8), inset -2px -2px 0.5px -1px oklch(1 0 0 / 0.4), inset 0 0 22px oklch(1 0 0 / 0.07), inset 0 -1.5px 0 oklch(1 0 0 / 0.14);
+  --glass-bar-sheen: radial-gradient(90% 150% at 6% -40%, oklch(1 0 0 / 0.16), transparent 58%), radial-gradient(60% 120% at 96% 150%, oklch(1 0 0 / 0.07), transparent 64%);
+
+  --refraction: 0.95;
+  --specular: 0.8;
+}
+
+/* ---- Extra paint, 1 of 3: the drifting field (the .wallpaper-fx layer) ------------------------------
+   fx1 = saturated color pools, fx2 = ripple rings (crisp hairlines so the lens has something to bend),
+   fx3 = a fine dot grid. They are oversized so the drift never shows an edge, and move with transform only. */
+[data-theme="clear-water"] .wallpaper-fx > .fx1,
+[data-theme="clear-water"] .wallpaper-fx > .fx2,
+[data-theme="clear-water"] .wallpaper-fx > .fx3 {
+  position: absolute;
+  inset: -14%;
+  will-change: transform;
+}
+[data-theme="clear-water"] .wallpaper-fx > .fx1 {
+  background:
+    radial-gradient(34% 40% at 20% 26%, oklch(0.76 0.21 calc(var(--hue) + 168) / 0.9), transparent 70%),
+    radial-gradient(30% 38% at 76% 20%, oklch(0.74 0.2 calc(var(--hue) + 70) / 0.85), transparent 70%),
+    radial-gradient(40% 42% at 70% 78%, oklch(0.76 0.18 calc(var(--hue) - 6) / 0.9), transparent 70%),
+    radial-gradient(28% 34% at 16% 80%, oklch(0.82 0.18 calc(var(--hue) - 88) / 0.85), transparent 70%);
+  animation: cw-pools 52s ease-in-out infinite alternate;
+}
+[data-theme="clear-water"] .wallpaper-fx > .fx2 {
+  background:
+    repeating-radial-gradient(circle at 26% 30%, transparent 0 34px, oklch(1 0 0 / 0.72) 34px 36px, transparent 36px 68px),
+    repeating-radial-gradient(circle at 80% 70%, transparent 0 46px, oklch(1 0 0 / 0.62) 46px 48px, transparent 48px 92px),
+    repeating-radial-gradient(circle at 66% 14%, transparent 0 28px, oklch(1 0 0 / 0.58) 28px 30px, transparent 30px 56px);
+  -webkit-mask-image: radial-gradient(circle at 26% 30%, #000 0 18%, transparent 52%), radial-gradient(circle at 80% 70%, #000 0 20%, transparent 54%), radial-gradient(circle at 66% 14%, #000 0 12%, transparent 40%);
+  mask-image: radial-gradient(circle at 26% 30%, #000 0 18%, transparent 52%), radial-gradient(circle at 80% 70%, #000 0 20%, transparent 54%), radial-gradient(circle at 66% 14%, #000 0 12%, transparent 40%);
+  animation: cw-rings 64s ease-in-out infinite alternate;
+}
+[data-theme="clear-water"] .wallpaper-fx > .fx3 {
+  background: radial-gradient(oklch(1 0 0 / 0.9) 1.3px, transparent 1.9px) 0 0 / 28px 28px;
+  opacity: 0.6;
+  animation: cw-dots 56s linear infinite;
+}
+[data-theme="clear-water"][data-mode="dark"] .wallpaper-fx > .fx1 {
+  background:
+    radial-gradient(34% 40% at 20% 26%, oklch(0.42 0.2 calc(var(--hue) + 168) / 0.8), transparent 70%),
+    radial-gradient(30% 38% at 76% 20%, oklch(0.41 0.2 calc(var(--hue) + 70) / 0.75), transparent 70%),
+    radial-gradient(40% 42% at 70% 78%, oklch(0.42 0.19 calc(var(--hue) - 6) / 0.8), transparent 70%),
+    radial-gradient(28% 34% at 16% 80%, oklch(0.4 0.15 calc(var(--hue) - 88) / 0.75), transparent 70%);
+}
+[data-theme="clear-water"][data-mode="dark"] .wallpaper-fx > .fx2 { opacity: 0.3; }
+[data-theme="clear-water"][data-mode="dark"] .wallpaper-fx > .fx3 { opacity: 0.22; }
+
+@keyframes cw-pools { from { transform: translate3d(-3%, -2%, 0) scale(1) rotate(0deg); } to { transform: translate3d(4%, 3%, 0) scale(1.14) rotate(7deg); } }
+@keyframes cw-rings { from { transform: translate3d(1.5%, 1%, 0) scale(1) rotate(0deg); } to { transform: translate3d(-2%, -2.5%, 0) scale(1.07) rotate(-4deg); } }
+@keyframes cw-dots { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-28px, -28px, 0); } }
+
+/* ---- Extra paint, 2 of 3: a slow glint that crosses each display, so the rims keep catching light ----
+   A wide diagonal band on the widget's ::after, moved with transform only, painted under the content (z-index -1, so
+   NEEDS: .w is positioned, forms a stacking context (backdrop-filter does), clips its children to its rounded shape
+   (overflow: hidden) and leaves ::after free). Left off the 1x1 tiles. */
+[data-theme="clear-water"] .w--display::after {
+  content: "";
+  position: absolute;
+  z-index: -1; /* under the letters: a glint must never wash out text */
+  inset: -20% -70%;
+  background: linear-gradient(103deg, transparent 40%, oklch(1 0 0 / 0.5) 49%, oklch(1 0 0 / 0.14) 54%, transparent 62%);
+  opacity: var(--specular);
+  transform: translate3d(-62%, 0, 0);
+  animation: cw-glint 15s ease-in-out infinite;
+  pointer-events: none;
+}
+/* stagger: by the optional --i (the item's index, if the board sets it on .w), plus by sibling position */
+[data-theme="clear-water"] .w--display::after { animation-delay: calc(var(--i, 0) * -2.7s); }
+[data-theme="clear-water"] .w--display:nth-child(5n + 2)::after { animation-delay: calc(var(--i, 0) * -2.7s - 3s); }
+[data-theme="clear-water"] .w--display:nth-child(5n + 3)::after { animation-delay: calc(var(--i, 0) * -2.7s - 6s); }
+[data-theme="clear-water"] .w--display:nth-child(5n + 4)::after { animation-delay: calc(var(--i, 0) * -2.7s - 9s); }
+[data-theme="clear-water"] .w--display:nth-child(5n)::after { animation-delay: calc(var(--i, 0) * -2.7s - 12s); }
+[data-theme="clear-water"][data-mode="dark"] .w--display::after {
+  background: linear-gradient(103deg, transparent 40%, oklch(1 0 0 / 0.26) 49%, oklch(1 0 0 / 0.08) 54%, transparent 62%);
+}
+@keyframes cw-glint { 0%, 100% { transform: translate3d(-62%, 0, 0); } 50% { transform: translate3d(62%, 0, 0); } }
+
+/* ---- Extra paint, 3 of 3: letters lifted off clear glass (a pale halo in light, a dark one in dark) ----
+   NEEDS: the board resets text-shadow on accent-filled controls (white-on-accent text must not glow). */
+[data-theme="clear-water"] .w,
+[data-theme="clear-water"] .bar,
+[data-theme="clear-water"] .chat,
+[data-theme="clear-water"] .menu,
+[data-theme="clear-water"] .sheet,
+[data-theme="clear-water"] .folder-open {
+  text-shadow: 0 0 12px oklch(1 0 0 / 0.55), 0 1px 0 oklch(1 0 0 / 0.35);
+}
+[data-theme="clear-water"][data-mode="dark"] .w,
+[data-theme="clear-water"][data-mode="dark"] .bar,
+[data-theme="clear-water"][data-mode="dark"] .chat,
+[data-theme="clear-water"][data-mode="dark"] .menu,
+[data-theme="clear-water"][data-mode="dark"] .sheet,
+[data-theme="clear-water"][data-mode="dark"] .folder-open {
+  text-shadow: 0 1px 10px oklch(0.1 0.04 var(--hue) / 0.55);
+}
+
+/* no drift and no glint when motion is reduced */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="clear-water"] .wallpaper-fx > i,
+  [data-theme="clear-water"] .w--display::after { animation: none; }
+}

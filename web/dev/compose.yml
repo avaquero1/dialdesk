@@ -1,0 +1,67 @@
+# The web app's local stack: Postgres, Valkey and Caddy, in their own Compose project (vha-web) on their own ports, so
+# they never touch vha-dev. Caddy serves web/dist with the production Content-Security-Policy and sends /api/* and /live
+# to edge, like deploy/Caddyfile. The services run natively (web/dev/stack.sh starts them).
+#
+#   web/dev/stack.sh up      (and: web/dev/stack.sh down)
+#
+# Images are the same versions and digests as deploy/compose.dev.yml.
+name: vha-web
+
+services:
+  postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD:?set PG_SUPERUSER_PASSWORD in .env}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust"
+      DB_PASSWORD_ACCOUNTS: ${DB_PASSWORD_ACCOUNTS:?}
+      DB_PASSWORD_BOARD: ${DB_PASSWORD_BOARD:?}
+      DB_PASSWORD_AGENT: ${DB_PASSWORD_AGENT:?}
+      DB_PASSWORD_RUNNER: ${DB_PASSWORD_RUNNER:?}
+      DB_PASSWORD_MARKETS: ${DB_PASSWORD_MARKETS:?}
+      DB_PASSWORD_CONNECTIONS: ${DB_PASSWORD_CONNECTIONS:?}
+      DB_PASSWORD_MODELS: ${DB_PASSWORD_MODELS:?}
+      DB_PASSWORD_AUDIT: ${DB_PASSWORD_AUDIT:?}
+    ports:
+      - "127.0.0.1:${WEB_PG_PORT:-55491}:5432"
+    volumes:
+      - ../../deploy/db-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  valkey:
+    image: valkey/valkey:8.1-alpine@sha256:2602ace2be6569bc2bbb06f873776516ab9089821525be34f4305c67eb9db02a
+    command: ["valkey-server", "--aclfile", "/etc/valkey/users.acl"]
+    environment:
+      VALKEY_HEALTH_PASSWORD: ${VALKEY_HEALTH_PASSWORD:?}
+    ports:
+      - "127.0.0.1:${WEB_VALKEY_PORT:-56491}:6379"
+    volumes:
+      - ../../deploy/.dev/valkey-users.acl:/etc/valkey/users.acl:ro
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli --no-auth-warning --user health --pass \"$$VALKEY_HEALTH_PASSWORD\" ping | grep -q PONG"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Host network: it reaches edge on 127.0.0.1 and listens on 127.0.0.1:${WEB_PORT}.
+  caddy:
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    network_mode: host
+    read_only: true
+    environment:
+      WEB_PORT: ${WEB_PORT:-8490}
+      WEB_EDGE: ${WEB_EDGE:-127.0.0.1:18480}
+    tmpfs:
+      - /data
+      - /config
+    volumes:
+      - ../dist:/srv/web:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro

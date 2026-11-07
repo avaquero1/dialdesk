@@ -1,0 +1,363 @@
+/* =====================================================================================================================
+   Theme 05 · Deep Sea
+   Liquid glass, literally underwater. Dark is the deep: teal-navy glass under a slow net of caustic light, light
+   shafts from the surface, drifting marine snow and a few glowing specks. Light is shallow tropical water: aqua
+   over sand, sun lines crawling across the sea floor, a bright milky-aqua glass.
+   Everything follows --hue (the sea, the sand, the light, the glass, the accent). The inks, the movement colors,
+   green for verified, red for blocked and amber for "needs you" stay fixed, so their meaning survives any hue.
+   Caustics are gradients only: three families of thin rings around far-off centres read as curved lines, they
+   slide and turn against each other (transform only), and a soft mask lets the net show in drifting patches.
+   Never changes layout, sizes or positions.
+   ===================================================================================================================== */
+
+/* ---------- light = shallow tropical water: aqua over sand ---------- */
+[data-theme="deep-sea"] {
+  --hue-default: 200;
+
+  --ds-line: oklch(1 .02 calc(var(--hue) + 40));
+  --ds-snow: oklch(1 .02 calc(var(--hue) - 10));
+  --ds-glow: oklch(1 .04 calc(var(--hue) + 60));
+  /* the same light at six strengths (they read whichever mode's --ds-line is current) */
+  --ds-a1: color-mix(in oklab, var(--ds-line) 18%, transparent);
+  --ds-a2: color-mix(in oklab, var(--ds-line) 28%, transparent);
+  --ds-a3: color-mix(in oklab, var(--ds-line) 40%, transparent);
+  --ds-a4: color-mix(in oklab, var(--ds-line) 54%, transparent);
+  --ds-a5: color-mix(in oklab, var(--ds-line) 68%, transparent);
+  --ds-a6: color-mix(in oklab, var(--ds-line) 84%, transparent);
+  --ds-s1: color-mix(in oklab, var(--ds-snow) 30%, transparent);
+  --ds-s2: color-mix(in oklab, var(--ds-snow) 52%, transparent);
+  --ds-s3: color-mix(in oklab, var(--ds-snow) 74%, transparent);
+  --ds-g1: color-mix(in oklab, var(--ds-glow) 55%, transparent);
+  --ds-g2: color-mix(in oklab, var(--ds-glow) 85%, transparent);
+
+  --font-ui: "Avenir Next", "Nunito Sans", "Segoe UI Variable Text", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-num: "Avenir Next", "Segoe UI Variable Text", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-display: ui-rounded, "SF Pro Rounded", "Avenir Next", "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif;
+
+  --wallpaper:
+    radial-gradient(58% 62% at -8% 112%, oklch(.945 .055 calc(var(--hue) + 246)) 0 66%, oklch(.995 .03 calc(var(--hue) - 6)) 71%, oklch(.9 .09 calc(var(--hue) - 10) / 0) 81%),
+    radial-gradient(48% 54% at 108% 110%, oklch(.935 .058 calc(var(--hue) + 242)) 0 64%, oklch(.995 .03 calc(var(--hue) - 6)) 69%, oklch(.9 .09 calc(var(--hue) - 10) / 0) 79%),
+    radial-gradient(62% 42% at 26% -10%, oklch(.99 .04 calc(var(--hue) - 4) / .95), transparent 72%),
+    radial-gradient(44% 36% at 96% 8%, oklch(.9 .1 calc(var(--hue) - 24) / .8), transparent 72%),
+    radial-gradient(70% 40% at 50% 52%, oklch(.78 .125 calc(var(--hue) - 8) / .6), transparent 78%),
+    linear-gradient(180deg, oklch(.9 .09 calc(var(--hue) - 12)) 0%, oklch(.82 .118 calc(var(--hue) - 10)) 50%, oklch(.87 .09 calc(var(--hue) - 4)) 100%);
+
+  --text: oklch(.23 .06 calc(var(--hue) + 22));
+  --text-2: oklch(.33 .06 calc(var(--hue) + 20));
+  --text-3: oklch(.43 .06 calc(var(--hue) + 16));
+  --text-on-accent: oklch(.99 .01 var(--hue));
+
+  --accent: oklch(.48 .115 calc(var(--hue) - 8));
+  --attention: oklch(.58 .14 66);
+  --danger: oklch(.5 .21 26);
+  --ok: oklch(.44 .13 155);
+  --up: oklch(.42 .1 205);
+  --down: oklch(.5 .19 350);
+  --flat: oklch(.43 .06 calc(var(--hue) + 16));
+
+  --ink-1: oklch(.5 .17 258);    /* plankton blue: Kalshi */
+  --ink-2: oklch(.53 .14 160);   /* comb-jelly green: Polymarket */
+  --ink-3: oklch(.55 .2 350);    /* jelly magenta */
+  --ink-4: oklch(.5 .17 298);    /* siphonophore violet */
+  --ink-5: oklch(.56 .15 125);   /* lure lime */
+  --ink-6: oklch(.6 .16 38);     /* krill coral */
+
+  /* widget = bright aqua milk, the sea floor shows through */
+  --glass-widget-bg: linear-gradient(180deg, oklch(.995 .02 calc(var(--hue) - 12) / .58) 0%, oklch(.96 .045 calc(var(--hue) - 12) / .4) 100%);
+  --glass-widget-blur: 12px;
+  --glass-widget-sat: 170%;
+  --glass-widget-rim: oklch(1 .02 calc(var(--hue) - 12) / .6);
+  --glass-widget-top: oklch(1 0 0 / .95);
+  --glass-widget-shadow: 0 22px 46px -14px oklch(.42 .09 calc(var(--hue) + 14) / .36), 0 3px 10px oklch(.42 .09 calc(var(--hue) + 14) / .14), 0 0 0 1px oklch(.55 .09 calc(var(--hue) - 6) / .12);
+  --glass-widget-sheen: linear-gradient(180deg, oklch(1 0 0 / .6), transparent 40%), radial-gradient(90% 50% at 50% 122%, oklch(.88 .09 calc(var(--hue) - 10) / .4), transparent 70%);
+
+  /* panel = chat, menus, sheets, open folders: denser under long text */
+  --glass-panel-bg: linear-gradient(180deg, oklch(.995 .02 calc(var(--hue) - 12) / .76) 0%, oklch(.97 .035 calc(var(--hue) - 12) / .66) 100%);
+  --glass-panel-blur: 26px;
+  --glass-panel-sat: 165%;
+  --glass-panel-rim: oklch(1 .02 calc(var(--hue) - 12) / .68);
+  --glass-panel-top: oklch(1 0 0 / .98);
+  --glass-panel-shadow: 0 30px 66px -16px oklch(.4 .09 calc(var(--hue) + 14) / .42), 0 4px 12px oklch(.4 .09 calc(var(--hue) + 14) / .16), 0 0 0 1px oklch(.55 .09 calc(var(--hue) - 6) / .12);
+  --glass-panel-sheen: linear-gradient(180deg, oklch(1 0 0 / .66), transparent 38%), radial-gradient(90% 40% at 50% 120%, oklch(.88 .09 calc(var(--hue) - 10) / .32), transparent 70%);
+
+  /* chip = buttons, chips, bubbles: clear and bright */
+  --glass-chip-bg: linear-gradient(180deg, oklch(1 .012 calc(var(--hue) - 12) / .84), oklch(.96 .045 calc(var(--hue) - 12) / .62));
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(.55 .09 calc(var(--hue) - 8) / .2);
+  --glass-chip-top: oklch(1 0 0 / 1);
+  --glass-chip-shadow: 0 6px 14px -4px oklch(.42 .09 calc(var(--hue) + 14) / .28), 0 0 0 1px oklch(.55 .09 calc(var(--hue) - 6) / .1);
+  --glass-chip-sheen: radial-gradient(90% 80% at 30% 0%, oklch(1 0 0 / .85), transparent 62%);
+
+  /* bar = the top bar, a little airier */
+  --glass-bar-bg: linear-gradient(180deg, oklch(.995 .02 calc(var(--hue) - 12) / .6) 0%, oklch(.97 .035 calc(var(--hue) - 12) / .46) 100%);
+  --glass-bar-blur: 20px;
+  --glass-bar-sat: 170%;
+  --glass-bar-rim: oklch(1 .02 calc(var(--hue) - 12) / .66);
+  --glass-bar-top: oklch(1 0 0 / .96);
+  --glass-bar-shadow: 0 18px 40px -14px oklch(.42 .09 calc(var(--hue) + 14) / .32), 0 2px 8px oklch(.42 .09 calc(var(--hue) + 14) / .12), 0 0 0 1px oklch(.55 .09 calc(var(--hue) - 6) / .1);
+  --glass-bar-sheen: linear-gradient(180deg, oklch(1 0 0 / .6), transparent 60%);
+
+  --refraction: .72;
+  --specular: .9;
+
+  --r-widget: 30px;
+  --r-panel: 32px;
+  --r-chip: 999px;
+  --gap: 12px;
+  --pad: 16px;
+
+  /* water: slow and buoyant, one soft overshoot · honey: words rising · pour: opening · drain: closing */
+  --ease-water: cubic-bezier(.25, 1.28, .45, 1);
+  --t-water: 720ms;
+  --ease-honey: cubic-bezier(.16, .9, .26, 1);
+  --t-honey: 1100ms;
+  --ease-pour: cubic-bezier(.24, 1.12, .38, 1);
+  --t-pour: 860ms;
+  --ease-drain: cubic-bezier(.52, .02, .22, 1);
+  --t-drain: 560ms;
+
+  --lift-scale: 1.05;
+  --wobble: 8px;
+
+  --hair: oklch(.3 .07 calc(var(--hue) + 20) / .14);
+  --hair-strong: oklch(.3 .07 calc(var(--hue) + 20) / .26);
+  --hover: oklch(.5 .1 calc(var(--hue) - 8) / .12);
+  --field: oklch(1 .02 calc(var(--hue) - 10) / .5);
+  --scrim: oklch(.3 .08 calc(var(--hue) + 20) / .3);
+  --lift-shadow: 0 40px 64px -18px oklch(.36 .09 calc(var(--hue) + 16) / .5), 0 10px 22px oklch(.36 .09 calc(var(--hue) + 16) / .22);
+  --label-shadow: 0 0 10px oklch(1 .02 calc(var(--hue) - 10) / .75), 0 0 2px oklch(1 .02 calc(var(--hue) - 10) / .6);
+  --bead: radial-gradient(circle at 34% 28%, #fff 0 11%, oklch(.97 .035 calc(var(--hue) - 10) / .95) 30%, oklch(.74 .1 calc(var(--hue) - 10)) 100%);
+  --bead-accent: radial-gradient(circle at 34% 28%, #fff 0 11%, oklch(.86 .1 calc(var(--hue) - 8)) 34%, oklch(.5 .12 calc(var(--hue) - 8)) 100%);
+  --bead-shadow: inset 0 -2px 4px oklch(.4 .1 calc(var(--hue) + 10) / .35), 0 2px 7px oklch(.4 .1 calc(var(--hue) + 10) / .3);
+  --bead-shadow-sm: 0 1px 3px oklch(.4 .1 calc(var(--hue) + 10) / .4);
+  --neck: linear-gradient(180deg, oklch(.9 .08 calc(var(--hue) - 8)), oklch(.55 .12 calc(var(--hue) - 8)));
+  --slot-bg: oklch(.4 .1 calc(var(--hue) + 10) / .08);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.4 .1 calc(var(--hue) + 10) / .22), inset 0 8px 18px -8px oklch(.3 .1 calc(var(--hue) + 10) / .3);
+  --g-ring: linear-gradient(150deg, oklch(1 0 0 / .95), oklch(1 0 0 / .12) 34%, oklch(.9 .08 calc(var(--hue) - 10) / .1) 62%, oklch(1 0 0 / .55));
+}
+
+/* ---------- dark = the deep: teal-navy glass, bioluminescent inks ---------- */
+[data-theme="deep-sea"][data-mode="dark"] {
+  --ds-line: oklch(.93 .075 calc(var(--hue) - 14));
+  --ds-snow: oklch(.92 .05 calc(var(--hue) - 10));
+  --ds-glow: oklch(.88 .14 calc(var(--hue) - 4));
+
+  --wallpaper:
+    radial-gradient(70% 48% at 18% -10%, oklch(.62 .125 calc(var(--hue) - 14) / .9), transparent 72%),
+    radial-gradient(50% 42% at 92% -2%, oklch(.5 .12 calc(var(--hue) + 6) / .7), transparent 72%),
+    radial-gradient(64% 40% at 52% 58%, oklch(.3 .09 calc(var(--hue) + 2) / .6), transparent 80%),
+    radial-gradient(70% 30% at 2% 118%, oklch(.34 .055 calc(var(--hue) + 232) / .55), transparent 72%),
+    radial-gradient(60% 28% at 100% 118%, oklch(.32 .055 calc(var(--hue) + 236) / .45), transparent 72%),
+    linear-gradient(180deg, oklch(.4 .1 calc(var(--hue) - 8)) 0%, oklch(.27 .085 calc(var(--hue) + 14)) 42%, oklch(.15 .065 calc(var(--hue) + 34)) 100%);
+
+  --text: oklch(.965 .018 calc(var(--hue) - 8));
+  --text-2: oklch(.89 .03 calc(var(--hue) - 6));
+  --text-3: oklch(.8 .04 calc(var(--hue) - 4));
+  --text-on-accent: oklch(.17 .05 calc(var(--hue) + 24));
+
+  --accent: oklch(.84 .12 calc(var(--hue) - 8));
+  --attention: oklch(.82 .15 76);
+  --danger: oklch(.73 .19 24);
+  --ok: oklch(.82 .19 150);
+  --up: oklch(.88 .15 188);
+  --down: oklch(.78 .19 350);
+  --flat: oklch(.8 .04 calc(var(--hue) - 4));
+
+  --ink-1: oklch(.78 .15 255);
+  --ink-2: oklch(.87 .17 162);
+  --ink-3: oklch(.76 .2 352);
+  --ink-4: oklch(.74 .16 298);
+  --ink-5: oklch(.9 .18 118);
+  --ink-6: oklch(.78 .15 32);
+
+  /* widget = deep teal glass, lit from above */
+  --glass-widget-bg: linear-gradient(180deg, oklch(.31 .06 calc(var(--hue) - 2) / .5) 0%, oklch(.2 .055 calc(var(--hue) + 22) / .6) 100%);
+  --glass-widget-blur: 12px;
+  --glass-widget-sat: 155%;
+  --glass-widget-rim: oklch(.85 .08 calc(var(--hue) - 10) / .16);
+  --glass-widget-top: oklch(.96 .06 calc(var(--hue) - 12) / .5);
+  --glass-widget-shadow: 0 26px 52px -14px oklch(.08 .05 calc(var(--hue) + 32) / .72), 0 3px 12px oklch(.08 .05 calc(var(--hue) + 32) / .4), 0 0 34px -10px oklch(.76 .12 calc(var(--hue) - 10) / .24);
+  --glass-widget-sheen: linear-gradient(180deg, oklch(.92 .07 calc(var(--hue) - 12) / .16), transparent 36%), radial-gradient(90% 46% at 50% 122%, oklch(.74 .11 calc(var(--hue) - 8) / .14), transparent 70%);
+
+  --glass-panel-bg: linear-gradient(180deg, oklch(.27 .055 calc(var(--hue) - 2) / .7) 0%, oklch(.18 .05 calc(var(--hue) + 22) / .78) 100%);
+  --glass-panel-blur: 24px;
+  --glass-panel-sat: 155%;
+  --glass-panel-rim: oklch(.85 .08 calc(var(--hue) - 10) / .18);
+  --glass-panel-top: oklch(.96 .06 calc(var(--hue) - 12) / .52);
+  --glass-panel-shadow: 0 32px 72px -16px oklch(.06 .05 calc(var(--hue) + 32) / .78), 0 4px 14px oklch(.06 .05 calc(var(--hue) + 32) / .42), 0 0 40px -12px oklch(.76 .12 calc(var(--hue) - 10) / .2);
+  --glass-panel-sheen: linear-gradient(180deg, oklch(.92 .07 calc(var(--hue) - 12) / .15), transparent 34%), radial-gradient(90% 40% at 50% 120%, oklch(.74 .11 calc(var(--hue) - 8) / .12), transparent 70%);
+
+  --glass-chip-bg: linear-gradient(180deg, oklch(.92 .06 calc(var(--hue) - 8) / .17), oklch(.82 .08 calc(var(--hue) - 8) / .08));
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(.9 .07 calc(var(--hue) - 10) / .24);
+  --glass-chip-top: oklch(.97 .05 calc(var(--hue) - 12) / .5);
+  --glass-chip-shadow: 0 6px 14px -4px oklch(.06 .05 calc(var(--hue) + 32) / .5);
+  --glass-chip-sheen: radial-gradient(90% 80% at 30% 0%, oklch(.96 .06 calc(var(--hue) - 12) / .26), transparent 62%);
+
+  --glass-bar-bg: linear-gradient(180deg, oklch(.3 .06 calc(var(--hue) - 2) / .52) 0%, oklch(.2 .055 calc(var(--hue) + 22) / .56) 100%);
+  --glass-bar-blur: 20px;
+  --glass-bar-sat: 160%;
+  --glass-bar-rim: oklch(.85 .08 calc(var(--hue) - 10) / .16);
+  --glass-bar-top: oklch(.96 .06 calc(var(--hue) - 12) / .5);
+  --glass-bar-shadow: 0 18px 44px -10px oklch(.06 .05 calc(var(--hue) + 32) / .6), 0 3px 10px oklch(.06 .05 calc(var(--hue) + 32) / .36), 0 0 30px -10px oklch(.76 .12 calc(var(--hue) - 10) / .2);
+  --glass-bar-sheen: linear-gradient(180deg, oklch(.92 .07 calc(var(--hue) - 12) / .16), transparent 60%);
+
+  --refraction: .8;
+  --specular: .6;
+
+  --hair: oklch(.92 .05 calc(var(--hue) - 8) / .14);
+  --hair-strong: oklch(.92 .05 calc(var(--hue) - 8) / .26);
+  --hover: oklch(.92 .06 calc(var(--hue) - 8) / .1);
+  --field: oklch(.1 .04 calc(var(--hue) + 28) / .4);
+  --scrim: oklch(.1 .04 calc(var(--hue) + 28) / .5);
+  --lift-shadow: 0 44px 70px -18px oklch(.05 .04 calc(var(--hue) + 30) / .8), 0 10px 24px oklch(.05 .04 calc(var(--hue) + 30) / .5), 0 0 46px -8px oklch(.76 .12 calc(var(--hue) - 10) / .3);
+  --label-shadow: 0 1px 8px oklch(.06 .04 calc(var(--hue) + 30) / .8), 0 0 2px oklch(.06 .04 calc(var(--hue) + 30) / .6);
+  --bead: radial-gradient(circle at 34% 28%, #fff 0 10%, oklch(.9 .06 calc(var(--hue) - 10) / .9) 26%, oklch(.58 .11 calc(var(--hue) - 8) / .85) 100%);
+  --bead-accent: radial-gradient(circle at 34% 28%, #fff 0 10%, oklch(.92 .12 calc(var(--hue) - 8)) 30%, oklch(.72 .14 calc(var(--hue) - 8)) 100%);
+  --bead-shadow: inset 0 -2px 4px oklch(.2 .08 calc(var(--hue) + 20) / .5), 0 0 12px oklch(.8 .14 calc(var(--hue) - 8) / .4), 0 2px 6px oklch(.05 .04 calc(var(--hue) + 30) / .5);
+  --bead-shadow-sm: 0 0 6px oklch(.8 .14 calc(var(--hue) - 8) / .5);
+  --neck: linear-gradient(180deg, oklch(.9 .12 calc(var(--hue) - 8)), oklch(.66 .13 calc(var(--hue) - 8)));
+  --slot-bg: oklch(.1 .04 calc(var(--hue) + 28) / .28);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.9 .07 calc(var(--hue) - 8) / .18), inset 0 8px 18px -8px oklch(.03 .03 calc(var(--hue) + 30) / .6);
+  --g-ring: linear-gradient(150deg, oklch(.97 .07 calc(var(--hue) - 12) / .75), oklch(.8 .1 calc(var(--hue) - 10) / .1) 32%, oklch(.7 .12 calc(var(--hue) + 30) / .08) 62%, oklch(.85 .1 calc(var(--hue) - 10) / .35));
+}
+
+/* phones: lighter blur and slightly tighter spacing, fewer moving layers (the Pixel blurs every glass piece on screen) */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="deep-sea"],
+  [data-theme="deep-sea"][data-mode="dark"] {
+    --glass-widget-blur: 12px;
+    --glass-panel-blur: 18px;
+    --glass-bar-blur: 14px;
+    --refraction: .5;
+  }
+  [data-theme="deep-sea"] .wallpaper-fx .fx3::before,
+  [data-theme="deep-sea"] .wallpaper-fx .fx3::after {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  [data-theme="deep-sea"],
+  [data-theme="deep-sea"][data-mode="dark"] {
+    --pad: 13px;
+    --r-widget: 26px;
+  }
+}
+
+/* ---------- this theme's own paint 1 of 2: the water behind the glass (.wallpaper-fx) ---------- */
+/* fx1 = shafts of light from the surface, swaying about their source */
+[data-theme="deep-sea"] .wallpaper-fx .fx1 {
+  position: absolute;
+  left: -16%; right: -16%; top: -10%; height: 128%;
+  background: conic-gradient(from 0deg at 36% -4%, transparent 0deg, transparent 149.9deg, var(--ds-a2) 153.2deg, transparent 156.5deg, transparent 156.3deg, var(--ds-a3) 158.7deg, transparent 161.1deg, transparent 161.7deg, var(--ds-a1) 165.1deg, transparent 168.6deg, transparent 171.1deg, var(--ds-a1) 173.1deg, transparent 175.0deg, transparent 176.9deg, var(--ds-a2) 178.9deg, transparent 180.8deg, transparent 181.4deg, var(--ds-a3) 183.3deg, transparent 185.2deg, transparent 188.1deg, var(--ds-a2) 190.8deg, transparent 193.5deg, transparent 195.9deg, var(--ds-a2) 198.8deg, transparent 201.8deg, transparent 202.3deg, var(--ds-a1) 205.1deg, transparent 207.8deg, transparent 210.4deg, var(--ds-a2) 213.7deg, transparent 216.9deg, transparent 360deg);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .55) 38%, transparent 84%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, .55) 38%, transparent 84%);
+  transform-origin: 36% -4%;
+  opacity: .9;
+  animation: ds-sway 46s ease-in-out infinite alternate;
+}
+/* fx2 = the caustic net: three families of curved lines. This layer holds the third and drifts; its two
+   pseudo-layers hold the others and slide and turn against it. A soft mask shows the net in patches. */
+[data-theme="deep-sea"] .wallpaper-fx .fx2 {
+  position: absolute;
+  inset: -14%;
+  background: radial-gradient(circle at 48% -85%, transparent 653px, var(--ds-a3) 671px, transparent 689px, transparent 751px, var(--ds-a3) 769px, transparent 787px, transparent 806px, var(--ds-a2) 829px, transparent 852px, transparent 905px, var(--ds-a2) 921px, transparent 938px, transparent 1016px, var(--ds-a2) 1036px, transparent 1057px, transparent 1127px, var(--ds-a2) 1139px, transparent 1152px, transparent 1195px, var(--ds-a2) 1213px, transparent 1230px, transparent 1321px, var(--ds-a2) 1342px, transparent 1363px, transparent 1424px, var(--ds-a2) 1445px, transparent 1465px, transparent 1552px, var(--ds-a3) 1567px, transparent 1583px, transparent 1610px, var(--ds-a2) 1631px, transparent 1652px);
+  -webkit-mask-image: radial-gradient(44% 50% at 22% 30%, #000 20%, transparent 100%), radial-gradient(40% 48% at 78% 22%, #000 20%, transparent 100%), radial-gradient(48% 50% at 56% 78%, #000 20%, transparent 100%), radial-gradient(34% 42% at 8% 82%, #000 20%, transparent 100%), radial-gradient(34% 40% at 96% 64%, #000 20%, transparent 100%);
+  mask-image: radial-gradient(44% 50% at 22% 30%, #000 20%, transparent 100%), radial-gradient(40% 48% at 78% 22%, #000 20%, transparent 100%), radial-gradient(48% 50% at 56% 78%, #000 20%, transparent 100%), radial-gradient(34% 42% at 8% 82%, #000 20%, transparent 100%), radial-gradient(34% 40% at 96% 64%, #000 20%, transparent 100%);
+  opacity: 1;
+  animation: ds-patch 74s ease-in-out infinite alternate;
+}
+[data-theme="deep-sea"] .wallpaper-fx .fx2::before,
+[data-theme="deep-sea"] .wallpaper-fx .fx2::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  will-change: transform;
+}
+[data-theme="deep-sea"] .wallpaper-fx .fx2::before {
+  background: radial-gradient(circle at -55% 135%, transparent 707px, var(--ds-a3) 713px, transparent 720px, transparent 771px, var(--ds-a4) 776px, transparent 781px, transparent 805px, var(--ds-a3) 814px, transparent 823px, transparent 892px, var(--ds-a5) 900px, transparent 909px, transparent 981px, var(--ds-a5) 987px, transparent 994px, transparent 1036px, var(--ds-a5) 1044px, transparent 1052px, transparent 1105px, var(--ds-a5) 1114px, transparent 1124px, transparent 1168px, var(--ds-a4) 1178px, transparent 1187px, transparent 1265px, var(--ds-a4) 1272px, transparent 1279px, transparent 1306px, var(--ds-a5) 1314px, transparent 1322px, transparent 1393px, var(--ds-a3) 1399px, transparent 1404px, transparent 1463px, var(--ds-a5) 1473px, transparent 1483px, transparent 1546px, var(--ds-a4) 1556px, transparent 1565px, transparent 1643px, var(--ds-a4) 1649px, transparent 1656px, transparent 1725px, var(--ds-a4) 1731px, transparent 1737px, transparent 1788px, var(--ds-a5) 1797px, transparent 1806px, transparent 1880px, var(--ds-a5) 1886px, transparent 1892px, transparent 1943px, var(--ds-a5) 1949px, transparent 1955px, transparent 1992px, var(--ds-a5) 1999px, transparent 2005px, transparent 2032px, var(--ds-a4) 2041px, transparent 2050px, transparent 2078px, var(--ds-a5) 2085px, transparent 2092px, transparent 2150px, var(--ds-a4) 2158px, transparent 2165px);
+  animation: ds-net-a 52s ease-in-out infinite alternate;
+}
+[data-theme="deep-sea"] .wallpaper-fx .fx2::after {
+  background: radial-gradient(circle at 152% 146%, transparent 809px, var(--ds-a5) 819px, transparent 829px, transparent 908px, var(--ds-a3) 913px, transparent 918px, transparent 940px, var(--ds-a4) 951px, transparent 962px, transparent 1015px, var(--ds-a5) 1024px, transparent 1032px, transparent 1111px, var(--ds-a5) 1120px, transparent 1130px, transparent 1170px, var(--ds-a4) 1176px, transparent 1183px, transparent 1208px, var(--ds-a4) 1217px, transparent 1225px, transparent 1257px, var(--ds-a4) 1262px, transparent 1267px, transparent 1317px, var(--ds-a4) 1324px, transparent 1331px, transparent 1379px, var(--ds-a5) 1387px, transparent 1395px, transparent 1455px, var(--ds-a2) 1461px, transparent 1467px, transparent 1539px, var(--ds-a5) 1546px, transparent 1553px, transparent 1611px, var(--ds-a5) 1620px, transparent 1630px, transparent 1670px, var(--ds-a4) 1676px, transparent 1683px, transparent 1735px, var(--ds-a4) 1740px, transparent 1745px, transparent 1798px, var(--ds-a4) 1807px, transparent 1816px, transparent 1858px, var(--ds-a5) 1867px, transparent 1876px, transparent 1912px, var(--ds-a4) 1918px, transparent 1924px, transparent 2004px, var(--ds-a3) 2015px, transparent 2025px, transparent 2054px, var(--ds-a4) 2061px, transparent 2068px, transparent 2124px, var(--ds-a3) 2132px, transparent 2140px, transparent 2194px, var(--ds-a5) 2203px, transparent 2212px);
+  animation: ds-net-b 61s ease-in-out infinite alternate;
+}
+/* fx3 = the snow. The layer itself stays put; two pseudo-layers fall through it: marine snow (::before) and
+   glowing specks that breathe (::after). Each tile is as tall as the distance it falls, so the loop has no seam. */
+[data-theme="deep-sea"] .wallpaper-fx .fx3 {
+  position: absolute;
+  inset: 0;
+}
+[data-theme="deep-sea"] .wallpaper-fx .fx3::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: -700px; bottom: 0;
+  background:
+    radial-gradient(circle at 33.9% 27.3%, var(--ds-s1) 0, transparent 13.4px),
+    radial-gradient(circle at 28.4% 53.1%, var(--ds-s1) 0, transparent 9.8px),
+    radial-gradient(circle at 79.6% 29.6%, var(--ds-s1) 0, transparent 13.7px),
+    radial-gradient(circle at 51.2% 94.7%, var(--ds-s1) 0, transparent 8.5px),
+    radial-gradient(circle at 90.6% 66.7%, var(--ds-s1) 0, transparent 9.4px),
+    radial-gradient(circle at 68.3% 35.3%, var(--ds-s1) 0, transparent 11.9px),
+    radial-gradient(circle at 45.4% 8.4%, var(--ds-s1) 0, transparent 10.7px),
+    radial-gradient(circle at 55.6% 49.1%, var(--ds-s1) 0, transparent 9.8px),
+    radial-gradient(circle at 88.4% 21.4%, var(--ds-s1) 0, transparent 13.6px),
+    radial-gradient(circle at 98.6% 70.9%, var(--ds-s3) 0, transparent 4.5px),
+    radial-gradient(circle at 99.8% 0.1%, var(--ds-s3) 0, transparent 3.1px),
+    radial-gradient(circle at 46.6% 83.7%, var(--ds-s2) 0, transparent 4.6px),
+    radial-gradient(circle at 81.5% 88.3%, var(--ds-s3) 0, transparent 4.2px),
+    radial-gradient(circle at 82.4% 36.1%, var(--ds-s3) 0, transparent 5.5px),
+    radial-gradient(circle at 91.8% 22.2%, var(--ds-s2) 0, transparent 5.5px),
+    radial-gradient(circle at 23.7% 27.2%, var(--ds-s2) 0, transparent 6.0px),
+    radial-gradient(circle at 3.5% 97.5%, var(--ds-s3) 0, transparent 5.0px),
+    radial-gradient(circle at 19.3% 8.3%, var(--ds-s2) 0, transparent 4.3px),
+    radial-gradient(circle at 70.0% 85.0%, var(--ds-s3) 0, transparent 5.3px),
+    radial-gradient(circle at 46.8% 55.2%, var(--ds-s2) 0, transparent 4.1px);
+  background-size: 700px 700px;
+  will-change: transform;
+  animation: ds-fall-a 150s linear infinite;
+}
+[data-theme="deep-sea"] .wallpaper-fx .fx3::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: -940px; bottom: 0;
+  background:
+    radial-gradient(circle at 27.5% 53.8%, var(--ds-g2) 0, transparent 19.4px),
+    radial-gradient(circle at 58.7% 72.2%, var(--ds-g1) 0, transparent 14.8px),
+    radial-gradient(circle at 70.6% 20.8%, var(--ds-g1) 0, transparent 12.9px),
+    radial-gradient(circle at 91.9% 10.0%, var(--ds-g2) 0, transparent 12.7px),
+    radial-gradient(circle at 30.9% 27.8%, var(--ds-g1) 0, transparent 18.5px),
+    radial-gradient(circle at 78.9% 56.4%, var(--ds-g1) 0, transparent 21.6px),
+    radial-gradient(circle at 21.6% 11.1%, var(--ds-g1) 0, transparent 14.7px);
+  background-size: 940px 940px;
+  will-change: transform, opacity;
+  animation: ds-fall-c 170s linear infinite, ds-pulse 9s ease-in-out infinite alternate;
+}
+[data-theme="deep-sea"][data-mode="dark"] .wallpaper-fx .fx2 { opacity: .68; }
+[data-theme="deep-sea"][data-mode="dark"] .wallpaper-fx .fx1 { opacity: .86; }
+
+@keyframes ds-sway { from { transform: rotate(-2.6deg); } to { transform: rotate(2.6deg); } }
+@keyframes ds-patch { from { transform: translate3d(-3%, 2%, 0); } to { transform: translate3d(4%, -3%, 0); } }
+@keyframes ds-net-a { from { transform: translate3d(-5%, 2%, 0) rotate(-3.5deg) scale(1); } to { transform: translate3d(6%, -4%, 0) rotate(4deg) scale(1.07); } }
+@keyframes ds-net-b { from { transform: translate3d(5%, -3%, 0) rotate(3deg) scale(1.05); } to { transform: translate3d(-6%, 4%, 0) rotate(-4.5deg) scale(1); } }
+@keyframes ds-fall-a { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 700px, 0); } }
+@keyframes ds-fall-c { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 940px, 0); } }
+@keyframes ds-pulse { from { opacity: .2; } to { opacity: .95; } }
+
+/* ---------- own paint 2 of 2: letters. Plankton glow in the deep, plain in the shallows ---------- */
+[data-theme="deep-sea"][data-mode="dark"] .big,
+[data-theme="deep-sea"][data-mode="dark"] .bal,
+[data-theme="deep-sea"][data-mode="dark"] .game .g-p {
+  text-shadow: 0 0 24px oklch(.82 .14 calc(var(--hue) - 8) / .38);
+}
+[data-theme="deep-sea"][data-mode="dark"] .mv--up { text-shadow: 0 0 10px color-mix(in oklab, var(--up) 55%, transparent); }
+[data-theme="deep-sea"][data-mode="dark"] .mv--down { text-shadow: 0 0 10px color-mix(in oklab, var(--down) 50%, transparent); }
+
+/* with reduced motion the board stops every layer; the net, the rays and the snow stay where they are */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="deep-sea"] .wallpaper-fx > i,
+  [data-theme="deep-sea"] .wallpaper-fx > i::before,
+  [data-theme="deep-sea"] .wallpaper-fx > i::after { animation: none; }
+}

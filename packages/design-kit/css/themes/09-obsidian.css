@@ -1,0 +1,336 @@
+/* =============================================================================
+   Theme 09 · Obsidian
+   Polished volcanic glass. Near-black slabs with little blur, a hard-edged gloss plane, a crisp bevel
+   and sharp white type: a pro trading screen that still moves like liquid. Reflections do the moving:
+   soft-box strips drift across the wallpaper, a glint slides over a slab when you hover it and keeps
+   gliding while you drag it.
+   Dark:  black glass on a deep black table. White pearls, pale hue-tinted accent.
+   Light: the inverse. White lacquer on a pale studio table, ink-black type, black pearls.
+   The hue tints the reflections, the under-glow, the bevel and the accent. Inks, up, down, ok and
+   danger stay fixed. Amber (--attention) is only for "this needs you".
+   Never changes layout, sizes or positions.
+   ============================================================================= */
+
+/* ---------- light = white lacquer on a pale studio table ---------- */
+[data-theme="obsidian"] {
+  --hue-default: 292;
+
+  --font-ui: "Inter", "Adwaita Sans", "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-num: "JetBrains Mono", "JetBrainsMono Nerd Font", "JetBrainsMono NF", "Adwaita Mono", "SF Mono", "Cascadia Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-display: "Inter Display", "Inter", "Adwaita Sans", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+
+  --wallpaper:
+    linear-gradient(114deg, transparent 0 8%, oklch(.36 .05 var(--hue) / .1) 8% 13.5%, transparent 13.5% 15%, rgba(255, 255, 255, .85) 15% 16.1%, transparent 16.1% 100%),
+    linear-gradient(114deg, transparent 0 64%, oklch(.4 .06 calc(var(--hue) - 24) / .09) 64% 71%, transparent 71% 72.4%, rgba(255, 255, 255, .8) 72.4% 73.3%, transparent 73.3% 100%),
+    radial-gradient(90% 44% at 50% 122%, oklch(.72 .12 var(--hue) / .42), transparent 74%),
+    radial-gradient(56% 46% at 4% -6%, rgba(255, 255, 255, .85), transparent 72%),
+    linear-gradient(180deg, oklch(.89 .005 var(--hue)), oklch(.81 .01 var(--hue)));
+
+  --text: oklch(.13 .006 var(--hue));
+  --text-2: oklch(.29 .01 var(--hue));
+  --text-3: oklch(.43 .014 var(--hue));
+  --text-on-accent: #fff;
+
+  --accent: oklch(.5 .21 var(--hue));
+  --attention: #F0A000;
+  --danger: #D4202C;
+  --ok: #0B8A68;
+  --up: #0B6FB8;
+  --down: #B72D7D;
+  --flat: oklch(.43 .014 var(--hue));
+
+  --ink-1: #4A56E8;   /* Kalshi */
+  --ink-2: #0A9C86;   /* Polymarket */
+  --ink-3: #16161D;   /* ink */
+  --ink-4: #1478C8;
+  --ink-5: #C42C8C;
+  --ink-6: #6A8E10;
+
+  /* widget = white lacquer: a slightly grey base, a white gloss plane with a hard edge, a hue-tinted bottom bounce */
+  --glass-widget-bg: linear-gradient(180deg, oklch(.99 .003 var(--hue) / .96), oklch(.93 .008 var(--hue) / .94));
+  --glass-widget-blur: 7px;
+  --glass-widget-sat: 130%;
+  --glass-widget-rim: rgba(14, 14, 24, .15);
+  --glass-widget-top: #fff;
+  --glass-widget-shadow: 0 1px 2px rgba(10, 10, 20, .2), 0 22px 32px -20px oklch(.3 .09 var(--hue) / .5), 0 0 0 1px rgba(255, 255, 255, .6);
+  --glass-widget-sheen: linear-gradient(114deg, #fff 0, rgba(255, 255, 255, .95) 38%, rgba(255, 255, 255, 0) 38.5%), linear-gradient(114deg, rgba(255, 255, 255, 0) 0 43%, rgba(255, 255, 255, .8) 43% 46.5%, rgba(255, 255, 255, 0) 46.5%), linear-gradient(0deg, oklch(.82 .08 var(--hue) / .5), transparent 22%);
+
+  /* panel = lacquer, denser (chat, menus, sheets, open folders) */
+  --glass-panel-bg: linear-gradient(180deg, oklch(.995 .003 var(--hue) / .97), oklch(.935 .007 var(--hue) / .96));
+  --glass-panel-blur: 14px;
+  --glass-panel-sat: 130%;
+  --glass-panel-rim: rgba(14, 14, 24, .16);
+  --glass-panel-top: #fff;
+  --glass-panel-shadow: 0 2px 4px rgba(10, 10, 20, .18), 0 38px 70px -26px rgba(10, 10, 24, .55), 0 0 0 1px rgba(255, 255, 255, .55);
+  --glass-panel-sheen: linear-gradient(114deg, #fff 0, rgba(255, 255, 255, .95) 30%, rgba(255, 255, 255, 0) 30.4%), linear-gradient(114deg, rgba(255, 255, 255, 0) 0 34%, rgba(255, 255, 255, .75) 34% 36.5%, rgba(255, 255, 255, 0) 36.5%), linear-gradient(0deg, oklch(.84 .07 var(--hue) / .4), transparent 16%);
+
+  /* chip = a small lacquer bead (buttons, chips, pills) */
+  --glass-chip-bg: linear-gradient(180deg, #fff, oklch(.94 .007 var(--hue)));
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: rgba(14, 14, 24, .17);
+  --glass-chip-top: #fff;
+  --glass-chip-shadow: 0 3px 6px -2px rgba(10, 10, 20, .3), 0 1px 1px rgba(10, 10, 20, .12);
+  --glass-chip-sheen: linear-gradient(180deg, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0) 56%);
+
+  /* bar */
+  --glass-bar-bg: linear-gradient(180deg, rgba(255, 255, 255, .97), oklch(.93 .008 var(--hue) / .94));
+  --glass-bar-blur: 8px;
+  --glass-bar-sat: 130%;
+  --glass-bar-rim: rgba(14, 14, 24, .15);
+  --glass-bar-top: #fff;
+  --glass-bar-shadow: 0 1px 2px rgba(10, 10, 20, .2), 0 18px 28px -20px oklch(.3 .09 var(--hue) / .5), 0 0 0 1px rgba(255, 255, 255, .6);
+  --glass-bar-sheen: linear-gradient(180deg, #fff, rgba(255, 255, 255, 0) 60%), linear-gradient(114deg, rgba(255, 255, 255, 0) 0 70%, rgba(255, 255, 255, .9) 70% 77%, rgba(255, 255, 255, 0) 77%);
+
+  --refraction: .5;
+  --specular: .8;
+
+  --r-widget: 18px;
+  --r-panel: 24px;
+  --r-chip: 11px;
+  --gap: 10px;
+  --pad: 15px;
+
+  /* liquid timings: quick and controlled; one clean overshoot on water and pour */
+  --ease-water: cubic-bezier(.26, 1.32, .46, 1);
+  --t-water: 560ms;
+  --ease-honey: cubic-bezier(.2, 1, .3, 1);
+  --t-honey: 820ms;
+  --ease-pour: cubic-bezier(.24, 1.12, .38, 1);
+  --t-pour: 640ms;
+  --ease-drain: cubic-bezier(.55, 0, .25, 1);
+  --t-drain: 380ms;
+
+  --lift-scale: 1.04;
+  --wobble: 7px;
+
+  --hair: rgba(14, 14, 24, .12);
+  --hair-strong: rgba(14, 14, 24, .24);
+  --hover: rgba(14, 14, 24, .07);
+  --field: rgba(14, 14, 24, .05);
+  --scrim: rgba(18, 20, 30, .36);
+  --lift-shadow: 0 46px 62px -26px rgba(10, 10, 24, .6), 0 12px 24px rgba(10, 10, 24, .26), 0 0 0 1px oklch(.5 .18 var(--hue) / .45), 0 0 44px -6px oklch(.68 .17 var(--hue) / .45);
+  --label-shadow: none;
+  /* black pearls on white lacquer */
+  --bead: radial-gradient(circle at 34% 26%, #fff 0 7%, #a3a6b4 17%, #2c2d37 50%, #050507 100%);
+  --bead-accent: radial-gradient(circle at 34% 26%, #fff 0 7%, oklch(.84 .11 var(--hue)) 18%, oklch(.52 .22 var(--hue)) 56%, oklch(.3 .15 var(--hue)) 100%);
+  --bead-shadow: inset 0 -2px 3px rgba(0, 0, 0, .4), 0 2px 5px rgba(0, 0, 0, .35);
+  --bead-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --neck: linear-gradient(180deg, #4b4d5b, #0a0a0e);
+  --slot-bg: rgba(14, 14, 24, .04);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.5 .15 var(--hue) / .42), inset 0 9px 20px -10px rgba(10, 10, 24, .38);
+  /* the bevel: bright on the upper left and lower right, ink on the other two corners */
+  --g-ring: conic-gradient(from 200deg at 50% 50%, #fff 0deg, rgba(14, 14, 24, .3) 70deg, rgba(14, 14, 24, .12) 140deg, rgba(255, 255, 255, .95) 215deg, rgba(14, 14, 24, .3) 290deg, #fff 360deg);
+}
+
+/* ---------- dark = black glass on a deep black table ---------- */
+[data-theme="obsidian"][data-mode="dark"] {
+  --wallpaper:
+    linear-gradient(114deg, transparent 0 8%, oklch(.66 .1 var(--hue) / .115) 8% 13.5%, transparent 13.5% 15.2%, oklch(.86 .05 calc(var(--hue) + 24) / .1) 15.2% 16.1%, transparent 16.1% 100%),
+    linear-gradient(114deg, transparent 0 66%, oklch(.72 .09 calc(var(--hue) - 22) / .09) 66% 74%, transparent 74% 75.4%, oklch(.9 .03 var(--hue) / .09) 75.4% 76.2%, transparent 76.2% 100%),
+    radial-gradient(92% 44% at 50% 122%, oklch(.4 .12 var(--hue) / .5), transparent 74%),
+    radial-gradient(56% 46% at 4% -6%, oklch(.32 .07 calc(var(--hue) + 18) / .55), transparent 72%),
+    linear-gradient(180deg, oklch(.115 .006 var(--hue)), oklch(.07 .004 var(--hue)));
+
+  --text: oklch(.99 .002 var(--hue));
+  --text-2: oklch(.88 .008 var(--hue));
+  --text-3: oklch(.72 .012 var(--hue));
+  --text-on-accent: oklch(.13 .02 var(--hue));
+
+  --accent: oklch(.79 .15 var(--hue));
+  --attention: #FFB648;
+  --danger: #FF6B72;
+  --ok: #4EE6B5;
+  --up: #9FE9FF;
+  --down: #FFA6C9;
+  --flat: oklch(.72 .012 var(--hue));
+
+  --ink-1: #A5B4FF;
+  --ink-2: #56E6D0;
+  --ink-3: #F2F3FA;
+  --ink-4: #6CC8FF;
+  --ink-5: #F59BD6;
+  --ink-6: #CBE86B;
+
+  /* widget = black glass: lighter at the top, darker at the bottom, a gloss plane with a hard edge, a tinted bounce along the bottom */
+  --glass-widget-bg: linear-gradient(180deg, oklch(.2 .008 var(--hue) / .6), oklch(.095 .005 var(--hue) / .72));
+  --glass-widget-blur: 7px;
+  --glass-widget-sat: 150%;
+  --glass-widget-rim: rgba(255, 255, 255, .1);
+  --glass-widget-top: rgba(255, 255, 255, .55);
+  --glass-widget-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 24px 36px -22px oklch(.52 .16 var(--hue) / .45), 0 0 0 1px rgba(0, 0, 0, .85);
+  --glass-widget-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12) 0, rgba(255, 255, 255, 0) 8px), linear-gradient(114deg, rgba(255, 255, 255, .17) 0, rgba(255, 255, 255, .07) 24%, rgba(255, 255, 255, .04) 35.4%, rgba(255, 255, 255, .17) 35.5% 37.1%, rgba(255, 255, 255, 0) 37.2%), linear-gradient(114deg, rgba(255, 255, 255, 0) 0 42%, rgba(255, 255, 255, .075) 42% 45.5%, rgba(255, 255, 255, 0) 45.5%), linear-gradient(0deg, oklch(.7 .12 var(--hue) / .17), transparent 26%);
+
+  /* panel = black glass, denser */
+  --glass-panel-bg: linear-gradient(180deg, oklch(.19 .008 var(--hue) / .87), oklch(.1 .005 var(--hue) / .9));
+  --glass-panel-blur: 14px;
+  --glass-panel-sat: 150%;
+  --glass-panel-rim: rgba(255, 255, 255, .12);
+  --glass-panel-top: rgba(255, 255, 255, .6);
+  --glass-panel-shadow: 0 2px 4px rgba(0, 0, 0, .6), 0 36px 70px -20px rgba(0, 0, 0, .95), 0 0 0 1px rgba(0, 0, 0, .9), 0 34px 80px -40px oklch(.5 .16 var(--hue) / .45);
+  --glass-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12) 0, rgba(255, 255, 255, 0) 8px), linear-gradient(114deg, rgba(255, 255, 255, .15) 0, rgba(255, 255, 255, .06) 20%, rgba(255, 255, 255, .035) 29.4%, rgba(255, 255, 255, .15) 29.5% 31%, rgba(255, 255, 255, 0) 31.1%), linear-gradient(114deg, rgba(255, 255, 255, 0) 0 35%, rgba(255, 255, 255, .06) 35% 37.5%, rgba(255, 255, 255, 0) 37.5%), linear-gradient(0deg, oklch(.7 .12 var(--hue) / .12), transparent 18%);
+
+  /* chip = a small gloss bead */
+  --glass-chip-bg: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .05));
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: rgba(255, 255, 255, .17);
+  --glass-chip-top: rgba(255, 255, 255, .42);
+  --glass-chip-shadow: 0 5px 10px -4px rgba(0, 0, 0, .9), 0 0 0 1px rgba(0, 0, 0, .55);
+  --glass-chip-sheen: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0) 50%);
+
+  /* bar */
+  --glass-bar-bg: linear-gradient(180deg, oklch(.21 .008 var(--hue) / .7), oklch(.1 .005 var(--hue) / .78));
+  --glass-bar-blur: 8px;
+  --glass-bar-sat: 150%;
+  --glass-bar-rim: rgba(255, 255, 255, .12);
+  --glass-bar-top: rgba(255, 255, 255, .55);
+  --glass-bar-shadow: 0 1px 2px rgba(0, 0, 0, .7), 0 18px 30px -18px oklch(.5 .15 var(--hue) / .32), 0 0 0 1px rgba(0, 0, 0, .85);
+  --glass-bar-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 55%), linear-gradient(114deg, rgba(255, 255, 255, 0) 0 70%, rgba(255, 255, 255, .05) 70% 77%, rgba(255, 255, 255, 0) 77%);
+
+  --refraction: .62;
+  --specular: .9;
+
+  --hair: rgba(255, 255, 255, .1);
+  --hair-strong: rgba(255, 255, 255, .2);
+  --hover: rgba(255, 255, 255, .09);
+  --field: rgba(255, 255, 255, .055);
+  --scrim: rgba(0, 0, 0, .64);
+  --lift-shadow: 0 50px 70px -22px rgba(0, 0, 0, .95), 0 14px 28px rgba(0, 0, 0, .7), 0 0 0 1px oklch(.8 .12 var(--hue) / .5), 0 0 48px -4px oklch(.6 .18 var(--hue) / .45);
+  /* white pearls on black glass */
+  --bead: radial-gradient(circle at 34% 26%, #fff 0 8%, #f1f3fb 15%, #aeb2c4 52%, #4b4e5f 100%);
+  --bead-accent: radial-gradient(circle at 34% 26%, #fff 0 8%, oklch(.93 .08 var(--hue)) 17%, oklch(.68 .2 var(--hue)) 55%, oklch(.36 .15 var(--hue)) 100%);
+  --bead-shadow: inset 0 -2px 3px rgba(0, 0, 0, .3), 0 0 0 1px rgba(255, 255, 255, .2), 0 2px 6px rgba(0, 0, 0, .7);
+  --bead-shadow-sm: 0 0 0 .5px rgba(255, 255, 255, .3), 0 1px 2px rgba(0, 0, 0, .8);
+  --neck: linear-gradient(180deg, #fff, oklch(.72 .13 var(--hue)));
+  --slot-bg: rgba(255, 255, 255, .03);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.8 .1 var(--hue) / .42), inset 0 10px 22px -10px rgba(0, 0, 0, .9);
+  --g-ring: conic-gradient(from 200deg at 50% 50%, rgba(255, 255, 255, .7) 0deg, oklch(.85 .08 var(--hue) / .12) 70deg, rgba(255, 255, 255, 0) 130deg, oklch(.9 .06 var(--hue) / .3) 205deg, rgba(255, 255, 255, .55) 232deg, rgba(255, 255, 255, 0) 295deg, rgba(255, 255, 255, .7) 360deg);
+}
+
+/* phones: lighter blur and slightly tighter spacing (the Pixel blurs every glass piece on screen) */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="obsidian"],
+  [data-theme="obsidian"][data-mode="dark"] {
+    --glass-widget-blur: 5px;
+    --glass-panel-blur: 10px;
+    --glass-bar-blur: 6px;
+    --refraction: .4;
+  }
+}
+@media (max-width: 720px) {
+  [data-theme="obsidian"],
+  [data-theme="obsidian"][data-mode="dark"] {
+    --pad: 13px;
+    --r-widget: 16px;
+    --r-panel: 22px;
+  }
+  [data-theme="obsidian"] .wallpaper-fx .fx2 { opacity: .55; }
+}
+
+/* ---------- this theme's own paint ---------- */
+
+/* the table: tall soft-box strips drift slowly across the black, bending at every slab edge */
+[data-theme="obsidian"] .wallpaper-fx > i {
+  position: absolute;
+  will-change: transform;
+}
+[data-theme="obsidian"] .wallpaper-fx .fx1 {
+  width: 17vmax; height: 190vmax; left: 6vw; top: -45vmax;
+  background: linear-gradient(90deg, transparent, oklch(.55 .08 var(--hue) / .06) 28%, rgba(255, 255, 255, .72) 50%, oklch(.55 .08 var(--hue) / .06) 72%, transparent);
+  transform: rotate(24deg);
+  animation: obs-pass-1 84s ease-in-out infinite alternate;
+}
+[data-theme="obsidian"] .wallpaper-fx .fx2 {
+  width: 4.5vmax; height: 190vmax; left: 52vw; top: -45vmax;
+  background: linear-gradient(90deg, transparent, oklch(.4 .06 var(--hue) / .08) 30%, rgba(255, 255, 255, .6) 50%, oklch(.4 .06 var(--hue) / .08) 70%, transparent);
+  transform: rotate(24deg);
+  animation: obs-pass-2 66s ease-in-out infinite alternate;
+}
+[data-theme="obsidian"] .wallpaper-fx .fx3 {
+  width: 150vmax; height: 44vmax; left: -25vmax; bottom: -26vmax;
+  background: radial-gradient(closest-side, oklch(.8 .12 var(--hue) / .3), transparent);
+  animation: obs-breathe 24s ease-in-out infinite alternate;
+}
+[data-theme="obsidian"][data-mode="dark"] .wallpaper-fx .fx1 {
+  background: linear-gradient(90deg, transparent, oklch(.62 .1 var(--hue) / .05) 26%, oklch(.84 .08 calc(var(--hue) + 14) / .1) 50%, oklch(.62 .1 var(--hue) / .05) 74%, transparent);
+}
+[data-theme="obsidian"][data-mode="dark"] .wallpaper-fx .fx2 {
+  background: linear-gradient(90deg, transparent, oklch(.8 .06 var(--hue) / .05) 30%, rgba(255, 255, 255, .075) 50%, oklch(.8 .06 var(--hue) / .05) 70%, transparent);
+}
+[data-theme="obsidian"][data-mode="dark"] .wallpaper-fx .fx3 {
+  background: radial-gradient(closest-side, oklch(.5 .16 var(--hue) / .34), transparent);
+}
+@keyframes obs-pass-1 {
+  from { transform: translate3d(-12vw, 0, 0) rotate(24deg); }
+  to   { transform: translate3d(64vw, 0, 0) rotate(24deg); }
+}
+@keyframes obs-pass-2 {
+  from { transform: translate3d(26vw, 0, 0) rotate(24deg); }
+  to   { transform: translate3d(-48vw, 0, 0) rotate(24deg); }
+}
+@keyframes obs-breathe {
+  from { transform: translate3d(-4vmax, 0, 0) scale(.94); opacity: .65; }
+  to   { transform: translate3d(5vmax, -3vmax, 0) scale(1.06); opacity: 1; }
+}
+
+/* the cursor light: a hard little glare with a thin streak, not a soft blob */
+[data-theme="obsidian"] .w-spot {
+  background:
+    radial-gradient(closest-side, oklch(.9 .07 var(--hue) / calc(.26 * var(--specular))), transparent),
+    linear-gradient(114deg, transparent 42%, rgba(255, 255, 255, calc(.55 * var(--specular))) 49.4%, rgba(255, 255, 255, calc(.55 * var(--specular))) 50.6%, transparent 58%);
+  -webkit-mask-image: radial-gradient(closest-side, #000 30%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 30%, transparent 100%);
+}
+[data-theme="obsidian"]:not([data-mode="dark"]) .w-spot {
+  background:
+    radial-gradient(closest-side, oklch(.74 .1 var(--hue) / calc(.18 * var(--specular))), transparent),
+    linear-gradient(114deg, transparent 42%, oklch(.55 .12 var(--hue) / calc(.4 * var(--specular))) 49.4%, oklch(.55 .12 var(--hue) / calc(.4 * var(--specular))) 50.6%, transparent 58%);
+}
+[data-theme="obsidian"] .w-shimmer {
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0), oklch(.9 .09 var(--hue) / calc(.5 * var(--specular))) 48%, rgba(255, 255, 255, calc(.55 * var(--specular))) 52%, rgba(255, 255, 255, 0));
+}
+
+/* the glint: on hover a reflection slides across the slab once; while a slab is held it keeps gliding */
+[data-theme="obsidian"] .g-clip::before {
+  content: "";
+  position: absolute;
+  top: -35%; bottom: -35%; left: 0; width: 30%;
+  background: linear-gradient(100deg, transparent 0 22%, oklch(.9 .07 var(--hue) / .04) 22%, oklch(.92 .06 var(--hue) / .26) 43%, transparent 43% 50%, rgba(255, 255, 255, .14) 50% 58%, transparent 58%);
+  transform: translateX(-170%) skewX(-22deg);
+  opacity: 0;
+  transition: opacity 180ms ease, transform 0s linear 180ms;
+}
+[data-theme="obsidian"]:not([data-mode="dark"]) .g-clip::before {
+  background: linear-gradient(100deg, transparent 0 22%, oklch(.72 .1 var(--hue) / .05) 22%, oklch(.72 .1 var(--hue) / .26) 43%, #fff 43% 50%, oklch(.72 .1 var(--hue) / .18) 50% 58%, transparent 58%);
+}
+[data-theme="obsidian"] .w:hover .g-clip::before {
+  transform: translateX(420%) skewX(-22deg);
+  opacity: 1;
+  transition: opacity 120ms ease, transform 1150ms var(--ease-honey);
+}
+[data-theme="obsidian"] .w.is-lifted .g-clip::before {
+  animation: obs-glide 2.3s linear infinite;
+}
+@keyframes obs-glide {
+  0%   { transform: translateX(-170%) skewX(-22deg); opacity: 0; }
+  14%  { opacity: 1; }
+  86%  { opacity: 1; }
+  100% { transform: translateX(420%) skewX(-22deg); opacity: 0; }
+}
+/* a held slab is denser: while it moves the board drops the lens, and the slab beneath must not read through */
+[data-theme="obsidian"][data-mode="dark"] .w--display.is-lifted,
+[data-theme="obsidian"][data-mode="dark"] .is-lifted > .f-tile,
+[data-theme="obsidian"][data-mode="dark"] .is-lifted > .a-tile {
+  background: linear-gradient(180deg, oklch(.21 .008 var(--hue) / .94), oklch(.1 .005 var(--hue) / .97));
+}
+/* a thin catch-light along the bottom edge of every slab and tile */
+[data-theme="obsidian"] .g-clip::after {
+  content: "";
+  position: absolute;
+  left: 12%; right: 12%; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, oklch(.86 .11 var(--hue) / .6), transparent);
+}
+[data-theme="obsidian"]:not([data-mode="dark"]) .g-clip::after {
+  background: linear-gradient(90deg, transparent, oklch(.62 .15 var(--hue) / .5), transparent);
+}

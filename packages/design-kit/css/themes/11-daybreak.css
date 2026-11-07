@@ -1,0 +1,355 @@
+/* =============================================================================
+   Theme 11 · Daybreak
+   Milky glass over a warm morning sky.
+   Light (the hero): soft sky blue rises from a peach-to-apricot horizon. A low sun glow drifts slowly behind the
+   glass and warms whatever it passes. Every pane is cool at the top (sky light) and warm underneath (horizon light),
+   with violet shadows, the way a real sunrise throws them.
+   Dark: the hour before dawn. Deep indigo, a few stars, one thin coral band at the horizon.
+
+   The hue moves the whole sky and the glass. The horizon follows it only a little (--hz), so it stays rose to
+   apricot and never turns the amber that means "needs you". Inks stay fixed. --attention is only for "this needs you".
+   One block for light, one for dark, then this theme's own paint. It never changes layout, sizes or positions.
+   ============================================================================= */
+
+/* ---------- light = milk glass over a sunrise sky ---------- */
+[data-theme="daybreak"] {
+  --hue-default: 232;
+  --hz: calc(38 + (var(--hue) - 232) * .2);   /* the horizon's hue: follows the sky a little, stays rose to apricot */
+
+  --font-ui: "Avenir Next", "Nunito Sans", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num: "Avenir Next", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: ui-rounded, "SF Pro Rounded", "Avenir Next Rounded", "Nunito", "Varela Round", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --wallpaper:
+    radial-gradient(130% 30% at 50% 106%, oklch(.86 .11 var(--hz) / .85), transparent 72%),
+    linear-gradient(180deg,
+      oklch(.87 .054 calc(var(--hue) + 4)) 0%,
+      oklch(.915 .046 calc(var(--hue) + 2)) 24%,
+      oklch(.948 .036 calc(var(--hue) + 20)) 44%,
+      oklch(.958 .03 calc(var(--hue) + 58)) 58%,
+      oklch(.952 .05 calc(var(--hz) - 30)) 71%,
+      oklch(.93 .085 calc(var(--hz) + 4)) 85%,
+      oklch(.88 .112 calc(var(--hz) - 1)) 100%);
+
+  --text: oklch(.262 .08 calc(var(--hue) + 40));
+  --text-2: oklch(.265 .058 calc(var(--hue) + 36) / .8);
+  --text-3: oklch(.265 .058 calc(var(--hue) + 36) / .64);
+  --text-on-accent: #fff;
+
+  --accent: oklch(.52 .165 calc(var(--hue) + 24));
+  --attention: #F0A000;
+  --danger: #C8302F;
+  --ok: #0B7F67;
+  --up: oklch(.5 .125 228);
+  --down: oklch(.5 .17 322);
+  --flat: oklch(.265 .058 calc(var(--hue) + 36) / .52);
+
+  --ink-1: #4C5DDB;   /* Indigo: Kalshi */
+  --ink-2: #1595A0;   /* Lagoon: Polymarket */
+  --ink-3: #E2606C;   /* Rose coral: the sunrise end of every line */
+  --ink-4: #2E86D6;   /* Sky */
+  --ink-5: #B94AC0;   /* Orchid */
+  --ink-6: #4E9F5A;   /* Leaf */
+
+  /* widget = milk tiles: cool at the top, warm underneath */
+  --glass-widget-bg: linear-gradient(180deg, oklch(.995 .02 var(--hue) / .62), oklch(.988 .034 calc(var(--hz) + 10) / .68));
+  --glass-widget-blur: 30px;
+  --glass-widget-sat: 165%;
+  --glass-widget-rim: oklch(1 .02 var(--hz) / .8);
+  --glass-widget-top: rgba(255, 255, 255, .98);
+  --glass-widget-shadow: 0 24px 46px -14px oklch(.45 .1 calc(var(--hue) + 50) / .3), 0 3px 9px oklch(.45 .1 calc(var(--hue) + 50) / .12), 0 0 0 1px oklch(.5 .09 calc(var(--hue) + 50) / .06);
+  --glass-widget-sheen: linear-gradient(180deg, oklch(1 .012 var(--hue) / .62), oklch(1 0 0 / 0) 38%), radial-gradient(92% 46% at 50% 118%, oklch(.93 .1 var(--hz) / .62), transparent 72%);
+
+  /* panel = denser milk (chat, menus, sheets, open folders) */
+  --glass-panel-bg: linear-gradient(180deg, oklch(.995 .02 var(--hue) / .72), oklch(.988 .034 calc(var(--hz) + 10) / .8));
+  --glass-panel-blur: 38px;
+  --glass-panel-sat: 165%;
+  --glass-panel-rim: oklch(1 .02 var(--hz) / .85);
+  --glass-panel-top: rgba(255, 255, 255, 1);
+  --glass-panel-shadow: 0 32px 68px -16px oklch(.42 .11 calc(var(--hue) + 50) / .36), 0 4px 12px oklch(.42 .11 calc(var(--hue) + 50) / .14), 0 0 0 1px oklch(.5 .09 calc(var(--hue) + 50) / .07);
+  --glass-panel-sheen: linear-gradient(180deg, oklch(1 .012 var(--hue) / .7), oklch(1 0 0 / 0) 36%), radial-gradient(96% 40% at 50% 120%, oklch(.93 .1 var(--hz) / .55), transparent 72%);
+
+  /* chip = clear milk drops (buttons, chips, bubbles; never blurred) */
+  --glass-chip-bg: oklch(1 .016 calc(var(--hue) + 10) / .64);
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(1 .02 var(--hz) / .85);
+  --glass-chip-top: rgba(255, 255, 255, 1);
+  --glass-chip-shadow: 0 7px 15px -6px oklch(.45 .1 calc(var(--hue) + 50) / .3), 0 0 0 1px oklch(.5 .09 calc(var(--hue) + 50) / .08);
+  --glass-chip-sheen: radial-gradient(90% 80% at 30% 0%, rgba(255, 255, 255, .85), rgba(255, 255, 255, 0) 62%);
+
+  /* bar = a strip of morning sky */
+  --glass-bar-bg: linear-gradient(180deg, oklch(.998 .016 var(--hue) / .66), oklch(.995 .022 calc(var(--hue) + 24) / .56));
+  --glass-bar-blur: 28px;
+  --glass-bar-sat: 170%;
+  --glass-bar-rim: oklch(1 .02 var(--hz) / .8);
+  --glass-bar-top: rgba(255, 255, 255, 1);
+  --glass-bar-shadow: 0 18px 38px -14px oklch(.45 .1 calc(var(--hue) + 50) / .28), 0 2px 8px oklch(.45 .1 calc(var(--hue) + 50) / .12), 0 0 0 1px oklch(.5 .09 calc(var(--hue) + 50) / .06);
+  --glass-bar-sheen: linear-gradient(180deg, rgba(255, 255, 255, .62), rgba(255, 255, 255, 0) 70%);
+
+  --refraction: .4;
+  --specular: .9;
+
+  --r-widget: 30px;
+  --r-panel: 32px;
+  --r-chip: 999px;
+  --gap: 14px;
+  --pad: 16px;
+
+  /* unhurried, like the light coming up: soft overshoot, slow words */
+  --ease-water: cubic-bezier(.32, 1.34, .5, 1);
+  --t-water: 580ms;
+  --ease-honey: cubic-bezier(.22, 1, .32, 1);
+  --t-honey: 1000ms;
+  --ease-pour: cubic-bezier(.26, 1.14, .4, 1);
+  --t-pour: 760ms;
+  --ease-drain: cubic-bezier(.5, 0, .22, 1);
+  --t-drain: 460ms;
+
+  --lift-scale: 1.04;
+  --wobble: 6px;
+
+  /* helpers */
+  --hair: oklch(.3 .06 calc(var(--hue) + 36) / .12);
+  --hair-strong: oklch(.3 .06 calc(var(--hue) + 36) / .24);
+  --hover: oklch(.3 .06 calc(var(--hue) + 36) / .07);
+  --field: oklch(1 .014 var(--hue) / .55);
+  --scrim: oklch(.32 .08 calc(var(--hue) + 44) / .24);
+  --lift-shadow: 0 38px 64px -18px oklch(.4 .11 calc(var(--hue) + 50) / .42), 0 10px 22px oklch(.4 .11 calc(var(--hue) + 50) / .16);
+  --bead: radial-gradient(circle at 35% 28%, oklch(1 .02 calc(var(--hz) + 30)) 0 13%, oklch(.93 .075 calc(var(--hz) + 8)) 44%, oklch(.8 .125 calc(var(--hz) - 2)) 100%);
+  --bead-accent: radial-gradient(circle at 35% 28%, oklch(1 .01 var(--hue)) 0 12%, oklch(.82 .09 calc(var(--hue) + 14)) 40%, var(--accent) 100%);
+  --bead-shadow: inset 0 -2px 4px oklch(.55 .12 var(--hz) / .32), 0 2px 7px oklch(.4 .1 calc(var(--hue) + 50) / .3);
+  --bead-shadow-sm: 0 1px 3px oklch(.4 .1 calc(var(--hue) + 50) / .4);
+  --neck: linear-gradient(90deg, oklch(.88 .09 var(--hz)), color-mix(in oklch, var(--accent) 62%, #fff));
+  --slot-bg: oklch(.3 .06 calc(var(--hue) + 36) / .05);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.3 .06 calc(var(--hue) + 36) / .14), inset 0 8px 18px -8px oklch(.3 .08 calc(var(--hue) + 50) / .2);
+  /* a 1.5 px rim on every pane: sky white along the top, horizon light along the bottom */
+  --g-ring: linear-gradient(180deg, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .3) 42%, oklch(.9 .1 var(--hz) / .55) 78%, oklch(.85 .13 var(--hz) / .95) 100%);
+}
+
+/* ---------- dark = the hour before dawn ---------- */
+[data-theme="daybreak"][data-mode="dark"] {
+  --wallpaper:
+    radial-gradient(112% 20% at 50% 108%, oklch(.68 .15 calc(var(--hz) - 12) / .85), transparent 72%),
+    linear-gradient(0deg,
+      oklch(.8 .12 calc(var(--hz) - 6)) 0%,
+      oklch(.62 .15 calc(var(--hz) - 22)) 2.6%,
+      oklch(.43 .13 calc(var(--hz) - 84)) 9%,
+      oklch(.32 .105 calc(var(--hz) - 104)) 24%,
+      oklch(.235 .095 calc(var(--hue) + 30)) 52%,
+      oklch(.18 .078 calc(var(--hue) + 22)) 100%);
+
+  --text: oklch(.97 .014 calc(var(--hz) + 28));
+  --text-2: oklch(.97 .014 calc(var(--hz) + 28) / .8);
+  --text-3: oklch(.97 .014 calc(var(--hz) + 28) / .62);
+  --text-on-accent: oklch(.2 .06 calc(var(--hue) + 30));
+
+  --accent: oklch(.79 .12 calc(var(--hue) + 20));
+  --attention: #FFB648;
+  --danger: #FF7A78;
+  --ok: #3FD6B0;
+  --up: oklch(.8 .11 228);
+  --down: oklch(.78 .13 330);
+  --flat: oklch(.97 .014 calc(var(--hz) + 28) / .5);
+
+  --ink-1: #9AA6FF;
+  --ink-2: #4FD3D8;
+  --ink-3: #FF8A94;
+  --ink-4: #66B4FF;
+  --ink-5: #E58BEA;
+  --ink-6: #8BD392;
+
+  /* widget = indigo smoke, lit faintly from below */
+  --glass-widget-bg: linear-gradient(180deg, oklch(.27 .06 calc(var(--hue) + 34) / .5), oklch(.3 .08 calc(var(--hz) - 84) / .56));
+  --glass-widget-blur: 32px;
+  --glass-widget-sat: 160%;
+  --glass-widget-rim: rgba(255, 255, 255, .1);
+  --glass-widget-top: rgba(255, 255, 255, .34);
+  --glass-widget-shadow: 0 26px 56px -12px rgba(8, 4, 34, .62), 0 3px 10px rgba(8, 4, 34, .36);
+  --glass-widget-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 36%), radial-gradient(92% 44% at 50% 120%, oklch(.62 .13 calc(var(--hz) - 12) / .24), transparent 72%);
+
+  /* panel = denser */
+  --glass-panel-bg: linear-gradient(180deg, oklch(.24 .056 calc(var(--hue) + 34) / .72), oklch(.27 .07 calc(var(--hz) - 84) / .78));
+  --glass-panel-blur: 40px;
+  --glass-panel-sat: 160%;
+  --glass-panel-rim: rgba(255, 255, 255, .11);
+  --glass-panel-top: rgba(255, 255, 255, .36);
+  --glass-panel-shadow: 0 32px 72px -12px rgba(8, 4, 34, .68), 0 4px 12px rgba(8, 4, 34, .38);
+  --glass-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 34%), radial-gradient(96% 38% at 50% 122%, oklch(.62 .13 calc(var(--hz) - 12) / .22), transparent 72%);
+
+  /* chip = clear drops */
+  --glass-chip-bg: oklch(.92 .03 calc(var(--hz) - 80) / .1);
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: rgba(255, 255, 255, .17);
+  --glass-chip-top: rgba(255, 255, 255, .46);
+  --glass-chip-shadow: 0 7px 15px -4px rgba(8, 4, 34, .4);
+  --glass-chip-sheen: radial-gradient(90% 70% at 30% 0%, rgba(255, 255, 255, .3), rgba(255, 255, 255, 0) 62%);
+
+  /* bar */
+  --glass-bar-bg: oklch(.2 .05 calc(var(--hue) + 34) / .56);
+  --glass-bar-blur: 26px;
+  --glass-bar-sat: 170%;
+  --glass-bar-rim: rgba(255, 255, 255, .12);
+  --glass-bar-top: rgba(255, 255, 255, .4);
+  --glass-bar-shadow: 0 18px 44px -8px rgba(8, 4, 34, .55), 0 3px 8px rgba(8, 4, 34, .32);
+  --glass-bar-sheen: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0) 60%);
+
+  --refraction: .46;
+  --specular: .55;
+
+  --hair: rgba(255, 255, 255, .1);
+  --hair-strong: rgba(255, 255, 255, .2);
+  --hover: rgba(255, 255, 255, .08);
+  --field: rgba(255, 255, 255, .07);
+  --scrim: rgba(6, 3, 26, .5);
+  --lift-shadow: 0 44px 72px -18px rgba(6, 2, 28, .76), 0 12px 24px rgba(6, 2, 28, .4);
+  --bead: radial-gradient(circle at 35% 28%, oklch(.99 .03 calc(var(--hz) + 30)) 0 13%, oklch(.86 .09 calc(var(--hz) + 4)) 44%, oklch(.66 .14 calc(var(--hz) - 12)) 100%);
+  --bead-accent: radial-gradient(circle at 35% 28%, oklch(.99 .01 var(--hue)) 0 12%, oklch(.86 .08 calc(var(--hue) + 14)) 40%, var(--accent) 100%);
+  --bead-shadow: inset 0 -2px 4px oklch(.4 .12 var(--hz) / .4), 0 2px 7px rgba(6, 2, 28, .5);
+  --bead-shadow-sm: 0 1px 3px rgba(6, 2, 28, .55);
+  --neck: linear-gradient(90deg, oklch(.8 .1 calc(var(--hz) - 8)), color-mix(in oklch, var(--accent) 80%, #fff));
+  --slot-bg: rgba(0, 0, 0, .18);
+  --slot-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .14), inset 0 8px 18px -8px rgba(0, 0, 0, .5);
+  --g-ring: linear-gradient(180deg, rgba(255, 255, 255, .34) 0%, rgba(255, 255, 255, .06) 45%, oklch(.66 .14 calc(var(--hz) - 12) / .4) 80%, oklch(.78 .13 calc(var(--hz) - 6) / .85) 100%);
+}
+
+/* phones: lighter blur and slightly tighter spacing (the Pixel blurs every pane on screen) */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="daybreak"],
+  [data-theme="daybreak"][data-mode="dark"] {
+    --glass-widget-blur: 22px;
+    --glass-panel-blur: 28px;
+    --glass-bar-blur: 20px;
+    --refraction: .32;
+  }
+}
+@media (max-width: 720px) {
+  [data-theme="daybreak"],
+  [data-theme="daybreak"][data-mode="dark"] {
+    --pad: 14px;
+    --gap: 12px;
+    --r-widget: 28px;
+  }
+}
+
+/* ---------- this theme's own paint ---------- */
+
+/* the sky: a low sun glow, a breathing haze on the horizon, and slow clouds */
+[data-theme="daybreak"] .wallpaper-fx > i {
+  position: absolute;
+  will-change: transform;
+}
+[data-theme="daybreak"] .wallpaper-fx .fx1 {
+  left: calc(50% - 40vmax); top: calc(84% - 40vmax); width: 80vmax; height: 80vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side,
+    oklch(.995 .025 calc(var(--hz) + 40) / 1) 0%,
+    oklch(.96 .07 calc(var(--hz) + 16) / .9) 8%,
+    oklch(.91 .115 var(--hz) / .66) 24%,
+    oklch(.87 .105 calc(var(--hz) - 16) / .32) 48%,
+    transparent 76%);
+  animation: db-sun 110s ease-in-out infinite alternate;
+}
+[data-theme="daybreak"] .wallpaper-fx .fx2 {
+  left: -12vw; top: 70%; width: 124vw; height: 38%;
+  background: radial-gradient(60% 52% at 50% 100%, oklch(.9 .1 calc(var(--hz) - 10) / .62), transparent 78%);
+  animation: db-haze 28s ease-in-out infinite alternate;
+}
+[data-theme="daybreak"] .wallpaper-fx .fx3 {
+  left: -40vw; top: 5%; width: 180vw; height: 44%;
+  background:
+    radial-gradient(ellipse 9% 17% at 8% 38%, oklch(1 .02 calc(var(--hz) + 10) / .88), transparent),
+    radial-gradient(ellipse 12% 14% at 27% 66%, oklch(1 .02 calc(var(--hz) + 10) / .71), transparent),
+    radial-gradient(ellipse 10% 16% at 47% 30%, oklch(1 .02 calc(var(--hz) + 10) / .82), transparent),
+    radial-gradient(ellipse 13% 15% at 66% 62%, oklch(1 .02 calc(var(--hz) + 10) / .66), transparent),
+    radial-gradient(ellipse 9% 18% at 85% 36%, oklch(1 .02 calc(var(--hz) + 10) / .82), transparent);
+  animation: db-clouds 150s ease-in-out infinite alternate;
+}
+
+/* dark: a dawn glow that has not risen yet, a thin horizon line that breathes, a few stars */
+[data-theme="daybreak"][data-mode="dark"] .wallpaper-fx .fx1 {
+  left: calc(50% - 62vmax); top: calc(100% - 22vmax); width: 124vmax; height: 44vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, oklch(.66 .15 calc(var(--hz) - 12) / .62), oklch(.46 .12 calc(var(--hz) - 30) / .3) 46%, transparent 76%);
+  animation: db-dawn 90s ease-in-out infinite alternate;
+}
+[data-theme="daybreak"][data-mode="dark"] .wallpaper-fx .fx2 {
+  left: -6vw; top: calc(100% - 4.5vh); width: 112vw; height: 4.5vh;
+  background: linear-gradient(0deg, oklch(.84 .12 calc(var(--hz) - 4) / .9), oklch(.66 .15 calc(var(--hz) - 20) / .5) 55%, transparent);
+  animation: db-line 9s ease-in-out infinite alternate;
+}
+[data-theme="daybreak"][data-mode="dark"] .wallpaper-fx .fx3 {
+  left: 0; top: 0; width: 100%; height: 64%;
+  background:
+    radial-gradient(circle 1.5px at 9% 14%, rgba(255, 255, 255, .85), transparent),
+    radial-gradient(circle 1px at 21% 31%, rgba(255, 255, 255, .6), transparent),
+    radial-gradient(circle 1.4px at 33% 9%, rgba(255, 255, 255, .8), transparent),
+    radial-gradient(circle 1px at 44% 24%, rgba(255, 255, 255, .55), transparent),
+    radial-gradient(circle 1.6px at 56% 12%, rgba(255, 255, 255, .85), transparent),
+    radial-gradient(circle 1px at 67% 36%, rgba(255, 255, 255, .5), transparent),
+    radial-gradient(circle 1.3px at 78% 8%, rgba(255, 255, 255, .8), transparent),
+    radial-gradient(circle 1px at 88% 27%, rgba(255, 255, 255, .6), transparent),
+    radial-gradient(circle 1.5px at 94% 15%, rgba(255, 255, 255, .8), transparent),
+    radial-gradient(circle 1px at 15% 52%, rgba(255, 255, 255, .42), transparent),
+    radial-gradient(circle 1.2px at 38% 46%, rgba(255, 255, 255, .5), transparent),
+    radial-gradient(circle 1px at 72% 55%, rgba(255, 255, 255, .42), transparent);
+  animation: db-stars 11s ease-in-out infinite alternate;
+}
+
+@keyframes db-sun {
+  0%   { transform: translate3d(-30vmax, 3vmax, 0) scale(1); }
+  50%  { transform: translate3d(2vmax, -5vmax, 0) scale(1.1); }
+  100% { transform: translate3d(30vmax, 2vmax, 0) scale(.96); }
+}
+@keyframes db-haze {
+  0%   { opacity: .62; transform: translate3d(-3vw, 0, 0); }
+  100% { opacity: 1; transform: translate3d(3vw, -1vh, 0); }
+}
+@keyframes db-clouds {
+  0%   { transform: translate3d(-9vw, 0, 0); }
+  100% { transform: translate3d(11vw, 2vh, 0); }
+}
+@keyframes db-dawn {
+  0%   { transform: translate3d(-22vmax, 0, 0) scale(1); }
+  100% { transform: translate3d(22vmax, -2vmax, 0) scale(1.08); }
+}
+@keyframes db-line {
+  0%   { opacity: .55; }
+  100% { opacity: 1; }
+}
+@keyframes db-stars {
+  0%   { opacity: .55; }
+  100% { opacity: 1; }
+}
+
+/* the glass: two glints (sky light top left, horizon light bottom right) */
+[data-theme="daybreak"] .g-clip {
+  background:
+    radial-gradient(70% 44% at 10% -8%, oklch(1 .02 var(--hue) / .6), transparent 72%),
+    radial-gradient(62% 40% at 98% 114%, oklch(.93 .09 var(--hz) / .5), transparent 72%);
+}
+[data-theme="daybreak"][data-mode="dark"] .g-clip {
+  background:
+    radial-gradient(70% 44% at 10% -8%, rgba(255, 255, 255, .1), transparent 72%),
+    radial-gradient(62% 40% at 98% 114%, oklch(.62 .13 calc(var(--hz) - 12) / .2), transparent 72%);
+}
+
+/* the cursor is a little sun; a refresh is a sweep of dawn light; the agent is a pearl of it */
+[data-theme="daybreak"] .w-spot {
+  background: radial-gradient(closest-side, oklch(.99 .05 calc(var(--hz) + 24) / calc(.5 * var(--specular))), oklch(.95 .08 var(--hz) / calc(.18 * var(--specular))) 55%, transparent);
+}
+[data-theme="daybreak"] .w-shimmer {
+  background: linear-gradient(100deg, transparent, oklch(.98 .07 calc(var(--hz) + 20) / .6), transparent);
+}
+[data-theme="daybreak"] .agent-bead {
+  box-shadow: var(--bead-shadow), 0 0 20px oklch(.9 .1 var(--hz) / .7);
+}
+[data-theme="daybreak"][data-mode="dark"] .agent-bead {
+  box-shadow: var(--bead-shadow), 0 0 20px oklch(.7 .13 var(--hz) / .55);
+}
+
+/* the footer note sits on the horizon: in the dark it needs a body of its own */
+[data-theme="daybreak"][data-mode="dark"] .foot span {
+  background: oklch(.25 .06 calc(var(--hue) + 34) / .78);
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" data-theme="@@THEME0@@" data-mode="light" data-layout="desktop" data-view="boot">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>My board</title>
+<link rel="stylesheet" href="/assets/@@CSS@@">
+<script type="module" src="/assets/@@JS@@"></script>
+</head>
+<body>
+<div class="wallpaper"></div>
+<div class="wallpaper-fx" aria-hidden="true"><i class="fx1"></i><i class="fx2"></i><i class="fx3"></i></div>
+
+<div class="app" id="app">
+  <header class="bar">
+    <h1>My board</h1>
+    <span class="chip chip--trust" title="The trust page arrives in the next build"><span class="shield" data-ic="shield"></span><span class="long">Every run in a fresh sandbox</span><span class="short">Sandboxed</span></span>
+    <span class="spacer"></span>
+    <button class="btn btn--look" id="look-btn" type="button" aria-haspopup="dialog"><i class="dropmark"></i><span>Look</span></button>
+    <button class="avatar" id="avatar" type="button" aria-label="Account"><span data-ic="user"></span></button>
+  </header>
+  <main class="stage">
+    <div class="board-wrap" id="board-wrap"><div class="board" id="board"><i class="slot" id="slot"></i></div></div>
+  </main>
+  <footer class="foot"><span>Math from public data. Not investment advice.</span></footer>
+</div>
+
+<aside class="chat" id="chat" aria-label="Chat with your agent">
+  <div class="chat-in">
+    <i class="chat-handle"></i>
+    <div class="chat-head">
+      <i class="agent-bead"></i>
+      <div class="who2"><b>Your agent</b><small>Reads public data. Does the math.</small></div>
+      <button class="iconbtn chat-close" id="chat-close" type="button" aria-label="Close chat"><span data-ic="close"></span></button>
+    </div>
+    <div class="chat-log" id="chat-log" aria-live="polite"></div>
+    <div class="chat-quick" id="chat-quick"></div>
+    <form class="chat-form" id="chat-form" autocomplete="off">
+      <input id="chat-input" type="text" placeholder="Ask your agent…" aria-label="Message your agent" enterkeyhint="send">
+      <button class="send" id="chat-send" type="submit" aria-label="Send"><span data-ic="send"></span></button>
+    </form>
+  </div>
+</aside>
+
+<div class="auth" id="auth"></div>
+<div class="scrim" id="scrim"></div>
+<div class="layer" id="layer"></div>
+<div class="toast" id="toast" role="status"></div>
+<div class="notice" id="notice" role="alert"></div>
+
+<svg class="svg-defs" width="0" height="0" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="sg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" class="sg-a"/><stop offset="1" class="sg-b"/></linearGradient>
+    <linearGradient id="sa" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="sa-a"/><stop offset="1" class="sa-b"/></linearGradient>
+    <filter id="lens-s" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage preserveAspectRatio="none" result="m"/><feDisplacementMap in="SourceGraphic" in2="m" scale="20" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <filter id="lens-m" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage preserveAspectRatio="none" result="m"/><feDisplacementMap in="SourceGraphic" in2="m" scale="20" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <filter id="lens-l" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage preserveAspectRatio="none" result="m"/><feDisplacementMap in="SourceGraphic" in2="m" scale="20" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <filter id="lens-xl" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage preserveAspectRatio="none" result="m"/><feDisplacementMap in="SourceGraphic" in2="m" scale="20" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <filter id="lens-bar" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage preserveAspectRatio="none" result="m"/><feDisplacementMap in="SourceGraphic" in2="m" scale="20" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <filter id="lens-chat" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feImage preserveAspectRatio="none" result="m"/><feDisplacementMap in="SourceGraphic" in2="m" scale="20" xChannelSelector="R" yChannelSelector="G"/></filter>
+  </defs>
+</svg>
+</body>
+</html>

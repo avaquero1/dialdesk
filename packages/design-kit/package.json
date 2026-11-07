@@ -1,0 +1,14 @@
+{
+  "name": "@app/design-kit",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./css/*": "./css/*"
+  },
+  "devDependencies": {
+    "@app/contracts": "*"
+  }
+}

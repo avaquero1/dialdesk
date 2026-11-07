@@ -1,0 +1,350 @@
+/* =============================================================================
+   Theme 04 · Stadium Night
+   Smoked glass under floodlights.
+
+   Dark:  a dark pitch-side night. Floodlight glare in the top corners, haze beams falling through it, a turf-green
+          glow along the bottom, mown stripes receding into the dark. Smoked glass, crisp white numbers, a turf-green accent.
+   Light: a day game. Bright sky, drifting clouds, a sunlit pitch at the bottom, white glass, deep ink numbers.
+   The hue control retints the turf, the sky, the haze and the glass tint together.
+   Movement colors (--up, --down) are cool and violet on purpose: they never read as good or bad.
+   Amber (--attention) is only for "this needs you".
+
+   One block: tokens for light, tokens for dark, then this theme's own paint.
+   It never changes layout, sizes or positions.
+   ============================================================================= */
+
+/* ---------- light = a day game: bright sky, white glass ---------- */
+[data-theme="stadium-night"] {
+  --hue-default: 142;
+  /* the sky, the haze and the ink lean cool whatever the hue: a sine of the hue keeps it between teal and violet-blue */
+  --sn-sky: calc(220 + 42 * sin((var(--hue) - 142) * 1deg));
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num: "Bahnschrift SemiCondensed", "Roboto Condensed", "Avenir Next Condensed", "Arial Narrow", "Nimbus Sans Narrow", "Liberation Sans Narrow", sans-serif-condensed, system-ui, sans-serif;
+  --font-display: var(--font-num);
+
+  --wallpaper:
+    radial-gradient(34% 30% at 4% -4%, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(24% 9% at 74% 17%, rgba(255, 255, 255, .9), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(30% 10% at 30% 31%, rgba(255, 255, 255, .62), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(18% 7% at 92% 42%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(100% 30% at 50% 114%, oklch(.7 .19 var(--hue) / .95), oklch(.8 .13 var(--hue) / .55) 56%, transparent 80%),
+    linear-gradient(180deg, oklch(.78 .12 var(--sn-sky)) 0%, oklch(.88 .07 var(--sn-sky)) 52%, oklch(.95 .035 var(--sn-sky)) 100%);
+
+  --text: oklch(.2 .03 var(--sn-sky));
+  --text-2: oklch(.2 .03 var(--sn-sky) / .78);
+  --text-3: oklch(.2 .03 var(--sn-sky) / .68);
+  --text-on-accent: #fff;
+
+  --accent: oklch(.5 .16 var(--hue));
+  --attention: oklch(.5 .12 66);
+  --danger: oklch(.44 .2 27);
+  --ok: oklch(.46 .13 160);
+  --up: oklch(.48 .14 238);
+  --down: oklch(.5 .17 335);
+  --flat: oklch(.2 .03 var(--sn-sky) / .66);
+
+  --ink-1: oklch(.5 .16 var(--hue));       /* turf: Kalshi */
+  --ink-2: oklch(.3 .04 var(--sn-sky));  /* ink: Polymarket */
+  --ink-3: oklch(.52 .14 238);             /* sky blue */
+  --ink-4: oklch(.5 .15 275);              /* indigo */
+  --ink-5: oklch(.52 .17 335);             /* rose */
+  --ink-6: oklch(.55 .1 200);              /* teal */
+
+  /* widget = white glass, with a little turf light thrown up from below */
+  --glass-widget-bg: oklch(.998 .004 var(--sn-sky) / .64);
+  --glass-widget-blur: 26px;
+  --glass-widget-sat: 170%;
+  --glass-widget-rim: rgba(255, 255, 255, .7);
+  --glass-widget-top: rgba(255, 255, 255, 1);
+  --glass-widget-shadow: 0 22px 46px -14px oklch(.4 .1 var(--sn-sky) / .32), 0 2px 8px oklch(.4 .1 var(--sn-sky) / .12), 0 0 0 1px oklch(.42 .08 var(--sn-sky) / .08);
+  --glass-widget-sheen: linear-gradient(180deg, rgba(255, 255, 255, .7), rgba(255, 255, 255, 0) 44%), radial-gradient(90% 44% at 50% 130%, oklch(.78 .17 var(--hue) / .22), transparent 72%);
+
+  /* panel = white glass, denser */
+  --glass-panel-bg: oklch(.998 .004 var(--sn-sky) / .74);
+  --glass-panel-blur: 34px;
+  --glass-panel-sat: 170%;
+  --glass-panel-rim: rgba(255, 255, 255, .78);
+  --glass-panel-top: rgba(255, 255, 255, 1);
+  --glass-panel-shadow: 0 30px 68px -16px oklch(.38 .1 var(--sn-sky) / .38), 0 3px 10px oklch(.38 .1 var(--sn-sky) / .14), 0 0 0 1px oklch(.42 .08 var(--sn-sky) / .09);
+  --glass-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, .74), rgba(255, 255, 255, 0) 38%);
+
+  /* chip = clear glass (buttons, chips, pills): never blurred */
+  --glass-chip-bg: oklch(1 .004 var(--sn-sky) / .6);
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: rgba(255, 255, 255, .85);
+  --glass-chip-top: rgba(255, 255, 255, 1);
+  --glass-chip-shadow: 0 6px 14px -5px oklch(.4 .1 var(--sn-sky) / .28), 0 0 0 1px oklch(.42 .08 var(--sn-sky) / .1);
+  --glass-chip-sheen: radial-gradient(90% 80% at 30% 0%, rgba(255, 255, 255, .85), rgba(255, 255, 255, 0) 62%);
+
+  /* bar = white glass strip */
+  --glass-bar-bg: oklch(.995 .006 var(--sn-sky) / .5);
+  --glass-bar-blur: 24px;
+  --glass-bar-sat: 170%;
+  --glass-bar-rim: rgba(255, 255, 255, .72);
+  --glass-bar-top: rgba(255, 255, 255, 1);
+  --glass-bar-shadow: 0 18px 40px -14px oklch(.4 .1 var(--sn-sky) / .3), 0 2px 8px oklch(.4 .1 var(--sn-sky) / .12), 0 0 0 1px oklch(.42 .08 var(--sn-sky) / .08);
+  --glass-bar-sheen: linear-gradient(180deg, rgba(255, 255, 255, .64), rgba(255, 255, 255, 0) 62%);
+
+  --refraction: .34;
+  --specular: .6;
+
+  --r-widget: 24px;
+  --r-panel: 28px;
+  --r-chip: 999px;
+  --gap: 12px;
+  --pad: 16px;
+
+  /* liquid timings, a little quicker and firmer than the others: sports energy */
+  --ease-water: cubic-bezier(.22, 1.5, .4, 1);
+  --t-water: 460ms;
+  --ease-honey: cubic-bezier(.2, 1, .3, 1);
+  --t-honey: 820ms;
+  --ease-pour: cubic-bezier(.24, 1.22, .36, 1);
+  --t-pour: 620ms;
+  --ease-drain: cubic-bezier(.55, 0, .25, 1);
+  --t-drain: 380ms;
+
+  --lift-scale: 1.05;
+  --wobble: 8px;
+
+  /* helpers */
+  --hair: oklch(.3 .05 var(--sn-sky) / .13);
+  --hair-strong: oklch(.3 .05 var(--sn-sky) / .24);
+  --hover: oklch(.3 .05 var(--sn-sky) / .08);
+  --field: oklch(1 0 0 / .55);
+  --scrim: oklch(.3 .06 var(--sn-sky) / .24);
+  --lift-shadow: 0 48px 72px -22px oklch(.35 .1 var(--sn-sky) / .5), 0 14px 26px oklch(.35 .1 var(--sn-sky) / .22);
+  --label-shadow: 0 1px 0 rgba(255, 255, 255, .55);
+  --g-ring: linear-gradient(158deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, .35) 30%, rgba(255, 255, 255, .1) 60%, oklch(.8 .15 var(--hue) / .45));
+  /* the bead is a floodlight bulb, the neck is the light between two bulbs */
+  --bead: radial-gradient(circle at 36% 30%, #fff 0 14%, oklch(.86 .035 var(--sn-sky)) 46%, oklch(.6 .06 var(--sn-sky)) 100%);
+  --bead-accent: radial-gradient(circle at 36% 30%, #fff 0 14%, oklch(.78 .16 var(--hue)) 40%, oklch(.5 .17 var(--hue)) 100%);
+  --bead-shadow: inset 0 -2px 3px oklch(.3 .06 var(--sn-sky) / .28), 0 2px 7px oklch(.3 .08 var(--sn-sky) / .32);
+  --bead-shadow-sm: 0 1px 3px oklch(.3 .08 var(--sn-sky) / .4);
+  --neck: linear-gradient(90deg, oklch(.96 .012 var(--sn-sky)), oklch(.62 .17 var(--hue)));
+  --slot-bg: oklch(.5 .16 var(--hue) / .08);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.5 .16 var(--hue) / .38), inset 0 0 30px -8px oklch(.5 .16 var(--hue) / .26);
+}
+
+/* ---------- dark = a pitch-side night under the floodlights ---------- */
+[data-theme="stadium-night"][data-mode="dark"] {
+  --wallpaper:
+    radial-gradient(26% 10% at 22% 100%, oklch(.74 .2 var(--hue) / .5), transparent 72%),
+    radial-gradient(26% 10% at 80% 100%, oklch(.74 .2 var(--hue) / .42), transparent 72%),
+    radial-gradient(84% 28% at 50% 114%, oklch(.6 .2 var(--hue) / .8), oklch(.38 .14 var(--hue) / .5) 52%, transparent 80%),
+    radial-gradient(44% 38% at 12% 22%, oklch(.9 .045 var(--sn-sky) / .42), transparent 72%),
+    radial-gradient(40% 34% at 86% 12%, oklch(.88 .05 var(--sn-sky) / .42), transparent 72%),
+    radial-gradient(40% 36% at 52% 52%, oklch(.6 .05 var(--sn-sky) / .2), transparent 76%),
+    radial-gradient(52% 44% at 0% -8%, oklch(.98 .04 var(--sn-sky) / .8), oklch(.8 .05 var(--sn-sky) / .24) 46%, transparent 76%),
+    radial-gradient(46% 40% at 100% -10%, oklch(.96 .045 var(--sn-sky) / .64), oklch(.78 .05 var(--sn-sky) / .22) 46%, transparent 76%),
+    radial-gradient(150% 130% at 50% 40%, transparent 46%, rgba(0, 0, 0, .5)),
+    oklch(.135 .018 var(--sn-sky));
+
+  --text: oklch(.988 .004 var(--hue));
+  --text-2: oklch(.988 .004 var(--hue) / .8);
+  --text-3: oklch(.988 .004 var(--hue) / .68);
+  --text-on-accent: oklch(.16 .05 var(--hue));
+
+  --accent: oklch(.82 .2 var(--hue));
+  --attention: #FFB648;
+  --danger: oklch(.78 .17 24);
+  --ok: oklch(.82 .17 163);
+  --up: oklch(.86 .1 212);
+  --down: oklch(.8 .13 335);
+  --flat: oklch(.988 .004 var(--hue) / .5);
+
+  --ink-1: oklch(.82 .2 var(--hue));
+  --ink-2: oklch(.96 .01 var(--hue));
+  --ink-3: oklch(.84 .11 212);
+  --ink-4: oklch(.78 .13 262);
+  --ink-5: oklch(.8 .14 335);
+  --ink-6: oklch(.8 .1 290);
+
+  /* widget = smoked glass: dark, neutral, lit from above, turf light along the underside */
+  --glass-widget-bg: oklch(.17 .012 var(--sn-sky) / .45);
+  --glass-widget-blur: 26px;
+  --glass-widget-sat: 150%;
+  --glass-widget-rim: rgba(255, 255, 255, .09);
+  --glass-widget-top: rgba(255, 255, 255, .42);
+  --glass-widget-shadow: 0 28px 60px -14px rgba(0, 0, 0, .7), 0 4px 12px rgba(0, 0, 0, .4), 0 0 0 1px rgba(0, 0, 0, .35);
+  --glass-widget-sheen: radial-gradient(100% 56% at 50% -14%, rgba(255, 255, 255, .17), rgba(255, 255, 255, 0) 66%), radial-gradient(90% 42% at 50% 128%, oklch(.72 .19 var(--hue) / .1), transparent 72%);
+
+  /* panel = smoked glass, denser */
+  --glass-panel-bg: oklch(.15 .012 var(--sn-sky) / .62);
+  --glass-panel-blur: 34px;
+  --glass-panel-sat: 150%;
+  --glass-panel-rim: rgba(255, 255, 255, .1);
+  --glass-panel-top: rgba(255, 255, 255, .44);
+  --glass-panel-shadow: 0 34px 76px -14px rgba(0, 0, 0, .75), 0 4px 14px rgba(0, 0, 0, .42), 0 0 0 1px rgba(0, 0, 0, .35);
+  --glass-panel-sheen: radial-gradient(100% 42% at 50% -10%, rgba(255, 255, 255, .15), rgba(255, 255, 255, 0) 68%);
+
+  /* chip = clear glass: never blurred */
+  --glass-chip-bg: rgba(255, 255, 255, .075);
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: rgba(255, 255, 255, .16);
+  --glass-chip-top: rgba(255, 255, 255, .42);
+  --glass-chip-shadow: 0 6px 14px -3px rgba(0, 0, 0, .42);
+  --glass-chip-sheen: radial-gradient(90% 70% at 30% 0%, rgba(255, 255, 255, .26), rgba(255, 255, 255, 0) 62%);
+
+  /* bar = smoked glass strip */
+  --glass-bar-bg: oklch(.14 .012 var(--sn-sky) / .68);
+  --glass-bar-blur: 24px;
+  --glass-bar-sat: 150%;
+  --glass-bar-rim: rgba(255, 255, 255, .1);
+  --glass-bar-top: rgba(255, 255, 255, .46);
+  --glass-bar-shadow: 0 18px 44px -10px rgba(0, 0, 0, .6), 0 3px 8px rgba(0, 0, 0, .36), 0 0 0 1px rgba(0, 0, 0, .3);
+  --glass-bar-sheen: radial-gradient(24% 170% at 0% -50%, rgba(255, 255, 255, .2), rgba(255, 255, 255, 0) 72%), radial-gradient(24% 170% at 100% -50%, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0) 72%), radial-gradient(60% 140% at 50% -40%, rgba(255, 255, 255, .12), rgba(255, 255, 255, 0) 70%);
+
+  --refraction: .4;
+  --specular: .9;
+
+  --hair: rgba(255, 255, 255, .11);
+  --hair-strong: rgba(255, 255, 255, .22);
+  --hover: rgba(255, 255, 255, .09);
+  --field: rgba(0, 0, 0, .3);
+  --scrim: rgba(2, 6, 4, .55);
+  --lift-shadow: 0 56px 84px -22px rgba(0, 0, 0, .88), 0 16px 30px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .1);
+  --label-shadow: 0 1px 10px rgba(0, 0, 0, .7);
+  --g-ring: linear-gradient(158deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, .07) 28%, rgba(255, 255, 255, 0) 58%, oklch(.82 .19 var(--hue) / .34));
+  --bead: radial-gradient(circle at 36% 30%, #fff 0 18%, oklch(.96 .02 var(--sn-sky)) 44%, oklch(.74 .05 var(--sn-sky)) 100%);
+  --bead-accent: radial-gradient(circle at 36% 30%, #fff 0 14%, oklch(.88 .17 var(--hue)) 40%, oklch(.64 .2 var(--hue)) 100%);
+  --bead-shadow: 0 0 0 1.5px rgba(255, 255, 255, .14), 0 0 12px rgba(255, 255, 255, .5), 0 2px 5px rgba(0, 0, 0, .5);
+  --bead-shadow-sm: 0 0 6px rgba(255, 255, 255, .55);
+  --neck: linear-gradient(90deg, oklch(.96 .02 var(--sn-sky)), oklch(.82 .2 var(--hue)));
+  --slot-bg: oklch(.82 .19 var(--hue) / .07);
+  --slot-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .26), inset 0 0 36px -8px oklch(.82 .19 var(--hue) / .32);
+}
+
+/* phones: lighter blur and slightly tighter spacing (the Pixel blurs every glass piece on screen) */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="stadium-night"],
+  [data-theme="stadium-night"][data-mode="dark"] {
+    --glass-widget-blur: 20px;
+    --glass-panel-blur: 26px;
+    --glass-bar-blur: 18px;
+    --refraction: .3;
+  }
+}
+@media (max-width: 720px) {
+  [data-theme="stadium-night"],
+  [data-theme="stadium-night"][data-mode="dark"] {
+    --pad: 14px;
+    --r-widget: 22px;
+  }
+}
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="stadium-night"] .wallpaper-fx > i,
+  [data-theme="stadium-night"] .wallpaper-fx::after { animation: none; }
+}
+
+/* ---------- this theme's own paint ---------- */
+
+/* the glass catches the floodlights: one soft diagonal glare across every widget and tile */
+[data-theme="stadium-night"] .g-clip::before {
+  content: "";
+  position: absolute;
+  left: -24%; top: -70%; width: 60%; height: 240%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .5) 48%, rgba(255, 255, 255, .12) 64%, rgba(255, 255, 255, 0));
+  transform: rotate(24deg);
+  opacity: calc(.3 * var(--specular));
+}
+[data-theme="stadium-night"][data-mode="dark"] .g-clip::before {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .16) 48%, rgba(255, 255, 255, .04) 64%, rgba(255, 255, 255, 0));
+  opacity: calc(.4 + .6 * var(--specular));
+}
+
+/* scoreboard numerals: a hairline of light around the big numbers */
+[data-theme="stadium-night"][data-mode="dark"] :is(.big, .game .g-p, .bal, .card .p, .stat .v) {
+  text-shadow: 0 0 .6px rgba(255, 255, 255, .8), 0 1px 12px rgba(0, 0, 0, .35);
+}
+
+/* the three empty <i> layers behind the glass, animated with transform and opacity only.
+   fx1 is the pitch (mown stripes receding to the horizon). Light: fx2 and fx3 are two slow clouds. Dark: they are the beam banks. */
+[data-theme="stadium-night"] .wallpaper-fx .fx1 {
+  left: 0; right: 0; bottom: 0; top: auto; width: auto; height: 38vh;
+  perspective: 60vh; perspective-origin: 50% 0%;
+}
+[data-theme="stadium-night"] .wallpaper-fx .fx1::before {
+  content: "";
+  position: absolute;
+  left: -60%; right: -60%; top: 0; height: 40vh;
+  transform-origin: 50% 0;
+  transform: rotateX(72deg);
+  background: repeating-linear-gradient(180deg, oklch(.76 .18 var(--hue) / .8) 0 3.2vh, oklch(.7 .19 var(--hue) / .8) 3.2vh 6.4vh);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 60%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 60%);
+}
+[data-theme="stadium-night"] .wallpaper-fx .fx2 {
+  left: -20vmax; top: 6vh; width: 72vmax; height: 16vmax; right: auto; bottom: auto;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, .8), rgba(255, 255, 255, 0));
+  animation: sn-cloud-a 90s ease-in-out infinite alternate;
+}
+[data-theme="stadium-night"] .wallpaper-fx .fx3 {
+  right: -16vmax; top: 24vh; width: 60vmax; height: 13vmax; left: auto; bottom: auto;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, .7), rgba(255, 255, 255, 0));
+  animation: sn-cloud-b 110s ease-in-out infinite alternate;
+}
+
+/* dark: the pitch at night, haze beams from two light banks swinging a degree or two, and ground fog */
+[data-theme="stadium-night"][data-mode="dark"] .wallpaper-fx .fx1::before {
+  background: repeating-linear-gradient(180deg, oklch(.43 .15 var(--hue) / .85) 0 3.2vh, oklch(.31 .12 var(--hue) / .85) 3.2vh 6.4vh);
+}
+[data-theme="stadium-night"][data-mode="dark"] .wallpaper-fx .fx2 {
+  left: -8vmax; top: -8vmax; right: auto; bottom: auto; width: 120vmax; height: 120vmax;
+  background: conic-gradient(from 92deg at 8vmax 8vmax,
+    transparent 0deg, oklch(.98 .035 var(--sn-sky) / .26) 6deg, transparent 12deg, transparent 17deg,
+    oklch(.98 .035 var(--sn-sky) / .16) 22deg, transparent 28deg, transparent 33deg,
+    oklch(.98 .035 var(--sn-sky) / .22) 39deg, transparent 46deg, transparent 52deg,
+    oklch(.98 .035 var(--sn-sky) / .13) 58deg, transparent 65deg, transparent 72deg,
+    oklch(.98 .035 var(--sn-sky) / .15) 78deg, transparent 86deg);
+  -webkit-mask-image: radial-gradient(circle 100vmax at 8vmax 8vmax, #000, rgba(0, 0, 0, .55) 48%, transparent);
+  mask-image: radial-gradient(circle 100vmax at 8vmax 8vmax, #000, rgba(0, 0, 0, .55) 48%, transparent);
+  transform-origin: 8vmax 8vmax;
+  animation: sn-sweep-a 46s ease-in-out infinite alternate;
+}
+[data-theme="stadium-night"][data-mode="dark"] .wallpaper-fx .fx3 {
+  right: -8vmax; top: -8vmax; left: auto; bottom: auto; width: 120vmax; height: 120vmax;
+  background: conic-gradient(from 182deg at calc(100% - 8vmax) 8vmax,
+    transparent 0deg, oklch(.96 .04 var(--sn-sky) / .2) 6deg, transparent 12deg, transparent 19deg,
+    oklch(.96 .04 var(--sn-sky) / .15) 25deg, transparent 32deg, transparent 38deg,
+    oklch(.96 .04 var(--sn-sky) / .2) 44deg, transparent 51deg, transparent 58deg,
+    oklch(.96 .04 var(--sn-sky) / .12) 64deg, transparent 71deg, transparent 77deg,
+    oklch(.96 .04 var(--sn-sky) / .13) 83deg, transparent 90deg);
+  -webkit-mask-image: radial-gradient(circle 100vmax at calc(100% - 8vmax) 8vmax, #000, rgba(0, 0, 0, .55) 48%, transparent);
+  mask-image: radial-gradient(circle 100vmax at calc(100% - 8vmax) 8vmax, #000, rgba(0, 0, 0, .55) 48%, transparent);
+  transform-origin: calc(100% - 8vmax) 8vmax;
+  animation: sn-sweep-b 58s ease-in-out infinite alternate;
+}
+
+/* dark: ground fog drifting over the pitch */
+[data-theme="stadium-night"][data-mode="dark"] .wallpaper-fx::after {
+  content: "";
+  position: absolute;
+  left: -30%; right: -30%; bottom: 4vh; height: 26vh;
+  background: radial-gradient(closest-side, oklch(.86 .06 var(--sn-sky) / .2), transparent);
+  animation: sn-fog 72s ease-in-out infinite alternate;
+}
+
+@keyframes sn-fog {
+  0%   { transform: translate3d(-9%, 0, 0); opacity: .75; }
+  100% { transform: translate3d(9%, -2vh, 0); opacity: 1; }
+}
+@keyframes sn-cloud-a {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(34vmax, 3vh, 0); }
+}
+@keyframes sn-cloud-b {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-30vmax, -2vh, 0); }
+}
+@keyframes sn-sweep-a {
+  0%   { transform: rotate(-1.6deg); opacity: .82; }
+  100% { transform: rotate(1.8deg); opacity: 1; }
+}
+@keyframes sn-sweep-b {
+  0%   { transform: rotate(1.4deg); opacity: 1; }
+  100% { transform: rotate(-1.8deg); opacity: .8; }
+}

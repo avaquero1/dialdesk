@@ -1,0 +1,320 @@
+/* =============================================================================
+   Theme 06 · Ice
+   Frosted cold glass, white-blue and crisp. Heavy frost (milk-thick, big blur), sharp rims
+   (a cold hairline inside, a white one outside, a bright ring at the corners), and the most
+   legible numbers of the set: solid deep ink, tabular lining figures, a bit of weight.
+
+   Light is the hero: snow-white frost over a bright glacier field.
+   Dark is polar night: smoked blue-ice slabs over a black-blue sky with a teal haze at the horizon.
+   Everything that has a color follows --hue (wallpaper, frost tint, ink, rims, light), so the
+   hue control turns the same ice into rose frost, mint frost, lilac frost. The movement colors,
+   chart inks 2 to 6 and the status colors stay fixed on purpose: they are identities.
+   Amber (--attention) is only for "this needs you".
+
+   It never changes layout, sizes or positions: tokens, plus paint on the wallpaper layers and
+   on the ::before / ::after layers of the glass.
+   ============================================================================= */
+
+/* ---------- light = snow-white frost over a bright glacier field ---------- */
+[data-theme="ice"] {
+  --hue-default: 234;
+
+  --font-ui: "Inter", "Adwaita Sans", "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-num: "Inter", "Adwaita Sans", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-display: var(--font-num);
+
+  --wallpaper:
+    radial-gradient(62% 50% at 4% 0%, oklch(1 .004 var(--hue)), oklch(1 .004 var(--hue) / 0) 72%),
+    radial-gradient(52% 60% at 100% 24%, oklch(.88 .06 calc(var(--hue) - 12) / .95), transparent 72%),
+    radial-gradient(66% 52% at 22% 106%, oklch(.85 .07 calc(var(--hue) + 8) / .95), transparent 72%),
+    radial-gradient(44% 38% at 96% 102%, oklch(.92 .05 calc(var(--hue) - 28) / .9), transparent 70%),
+    linear-gradient(168deg, oklch(.99 .008 var(--hue)), oklch(.955 .024 var(--hue)) 58%, oklch(.93 .04 calc(var(--hue) - 6)));
+
+  /* ink: solid, deep, tinted by the hue. Even the quietest text is 7:1 on the frost. */
+  --text: oklch(.2 .05 var(--hue));
+  --text-2: oklch(.32 .05 var(--hue));
+  --text-3: oklch(.43 .05 var(--hue));
+  --text-on-accent: #fff;
+
+  --accent: oklch(.5 .17 var(--hue));
+  --attention: oklch(.5 .125 64);
+  --danger: oklch(.5 .2 26);
+  --ok: oklch(.44 .12 165);
+  --up: oklch(.44 .14 242);
+  --down: oklch(.47 .2 328);
+  --flat: oklch(.43 .03 var(--hue));
+
+  --ink-1: oklch(.5 .17 var(--hue));
+  --ink-2: oklch(.5 .11 200);
+  --ink-3: oklch(.5 .17 298);
+  --ink-4: oklch(.54 .12 232);
+  --ink-5: oklch(.5 .17 345);
+  --ink-6: oklch(.5 .1 168);
+
+  /* widget = milk-thick frost tiles */
+  --glass-widget-bg: linear-gradient(160deg, oklch(.998 .006 var(--hue) / .9), oklch(.978 .02 var(--hue) / .8));
+  --glass-widget-blur: 38px;
+  --glass-widget-sat: 150%;
+  --glass-widget-rim: oklch(.76 .06 var(--hue) / .7);
+  --glass-widget-top: #fff;
+  --glass-widget-shadow: 0 22px 46px -16px oklch(.4 .1 var(--hue) / .36), 0 3px 10px -2px oklch(.4 .1 var(--hue) / .14), 0 0 0 1px oklch(1 0 0 / .7), inset 0 -2px 0 -1px oklch(.8 .07 var(--hue) / .55), inset 0 3px 9px oklch(1 0 0 / .8);
+  --glass-widget-sheen:
+    linear-gradient(180deg, oklch(1 0 0 / .8), oklch(1 0 0 / 0) 36%),
+    linear-gradient(118deg, transparent 52%, oklch(1 0 0 / .55) 52.6%, oklch(1 0 0 / .55) 53.2%, oklch(1 0 0 / .16) 53.8%, oklch(1 0 0 / .16) 66%, transparent 66.6%),
+    radial-gradient(64% 46% at 90% 104%, oklch(1 0 0 / .8), transparent 72%),
+    radial-gradient(46% 34% at 4% 74%, oklch(1 0 0 / .5), transparent 72%);
+
+  /* panel = the same frost, thicker (chat, menus, sheets, open folders) */
+  --glass-panel-bg: linear-gradient(165deg, oklch(.999 .004 var(--hue) / .94), oklch(.98 .018 var(--hue) / .88));
+  --glass-panel-blur: 44px;
+  --glass-panel-sat: 150%;
+  --glass-panel-rim: oklch(.75 .06 var(--hue) / .72);
+  --glass-panel-top: #fff;
+  --glass-panel-shadow: 0 34px 72px -20px oklch(.36 .11 var(--hue) / .44), 0 6px 18px -4px oklch(.36 .11 var(--hue) / .16), 0 0 0 1px oklch(1 0 0 / .72), inset 0 -2px 0 -1px oklch(.8 .07 var(--hue) / .55), inset 0 3px 10px oklch(1 0 0 / .8);
+  --glass-panel-sheen:
+    linear-gradient(180deg, oklch(1 0 0 / .8), oklch(1 0 0 / 0) 28%),
+    linear-gradient(118deg, transparent 56%, oklch(1 0 0 / .66) 56.4%, oklch(1 0 0 / .66) 56.8%, oklch(1 0 0 / .18) 57.2%, oklch(1 0 0 / .18) 70%, transparent 70.4%),
+    radial-gradient(60% 40% at 92% 104%, oklch(1 0 0 / .8), transparent 72%),
+    radial-gradient(40% 28% at 4% 80%, oklch(1 0 0 / .5), transparent 72%);
+
+  /* chip = crisp enamel (buttons, pills, bubbles; never blurred) */
+  --glass-chip-bg: linear-gradient(180deg, oklch(1 .004 var(--hue) / .97), oklch(.958 .026 var(--hue) / .86));
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(.72 .07 var(--hue) / .55);
+  --glass-chip-top: #fff;
+  --glass-chip-shadow: 0 1px 2px oklch(.3 .08 var(--hue) / .14), 0 6px 12px -5px oklch(.34 .1 var(--hue) / .3), inset 0 -1.5px 0 oklch(.78 .08 var(--hue) / .4);
+  --glass-chip-sheen: linear-gradient(180deg, oklch(1 0 0 / .85), oklch(1 0 0 / 0) 56%);
+
+  /* bar = thinner frost */
+  --glass-bar-bg: linear-gradient(170deg, oklch(.998 .006 var(--hue) / .84), oklch(.976 .02 var(--hue) / .74));
+  --glass-bar-blur: 32px;
+  --glass-bar-sat: 150%;
+  --glass-bar-rim: oklch(.76 .06 var(--hue) / .66);
+  --glass-bar-top: #fff;
+  --glass-bar-shadow: 0 18px 40px -14px oklch(.4 .1 var(--hue) / .34), 0 2px 8px -1px oklch(.4 .1 var(--hue) / .14), 0 0 0 1px oklch(1 0 0 / .68), inset 0 -2px 0 -1px oklch(.8 .07 var(--hue) / .5), inset 0 3px 9px oklch(1 0 0 / .7);
+  --glass-bar-sheen: linear-gradient(180deg, oklch(1 0 0 / .75), oklch(1 0 0 / 0) 60%), linear-gradient(118deg, transparent 38%, oklch(1 0 0 / .5) 38.4%, oklch(1 0 0 / .5) 38.8%, oklch(1 0 0 / .14) 39.2%, oklch(1 0 0 / .14) 48%, transparent 48.4%);
+
+  --refraction: .5;
+  --specular: .8;
+
+  --r-widget: 20px;
+  --r-panel: 24px;
+  --r-chip: 999px;
+  --gap: 12px;
+  --pad: 16px;
+
+  /* water: quick, one soft overshoot. pour: wide, then deep. drain: shallow, then narrow. honey: words, slow and clean. */
+  --ease-water: cubic-bezier(.28, 1.3, .42, 1);
+  --t-water: 560ms;
+  --ease-honey: cubic-bezier(.16, .9, .26, 1);
+  --t-honey: 840ms;
+  --ease-pour: cubic-bezier(.24, 1.14, .38, 1);
+  --t-pour: 720ms;
+  --ease-drain: cubic-bezier(.5, .02, .22, 1);
+  --t-drain: 420ms;
+
+  --lift-scale: 1.04;
+  --wobble: 7px;
+
+  /* optional helpers */
+  --hair: oklch(.4 .06 var(--hue) / .16);
+  --hair-strong: oklch(.4 .06 var(--hue) / .3);
+  --hover: oklch(.5 .1 var(--hue) / .1);
+  --field: oklch(1 .006 var(--hue) / .78);
+  --scrim: oklch(.28 .07 var(--hue) / .28);
+  --label-shadow: 0 1px 0 oklch(1 0 0 / .85);
+  --lift-shadow: 0 46px 74px -22px oklch(.3 .1 var(--hue) / .52), 0 14px 28px oklch(.3 .1 var(--hue) / .22), 0 0 0 1px oklch(1 0 0 / .85);
+  --bead: radial-gradient(circle at 34% 28%, #fff 0 13%, oklch(.93 .04 var(--hue)) 38%, oklch(.66 .1 var(--hue)) 100%);
+  --bead-accent: radial-gradient(circle at 34% 28%, #fff 0 12%, color-mix(in oklch, var(--accent) 48%, #fff) 36%, var(--accent) 100%);
+  --bead-shadow: inset 0 -2px 3px oklch(.35 .1 var(--hue) / .35), 0 2px 5px oklch(.35 .1 var(--hue) / .35);
+  --bead-shadow-sm: 0 1px 2px oklch(.35 .1 var(--hue) / .4);
+  --neck: linear-gradient(180deg, oklch(.92 .05 var(--hue)), oklch(.6 .14 var(--hue)));
+  --slot-bg: oklch(.5 .1 var(--hue) / .09);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.5 .1 var(--hue) / .32), inset 0 8px 18px -8px oklch(.3 .1 var(--hue) / .26);
+
+  /* a 1.5 px ring on every glass piece: white at the corners, cold blue between (cut crystal) */
+  --g-ring: linear-gradient(135deg, #fff 0%, oklch(.8 .08 var(--hue) / .6) 24%, oklch(.9 .04 var(--hue) / .22) 50%, oklch(.8 .08 var(--hue) / .55) 76%, #fff 100%);
+
+  /* this theme's own paint colors */
+  --ice-edge: oklch(1 0 0 / .95);
+  --ice-a: oklch(.8 .075 var(--hue) / .3);
+  --ice-b: oklch(1 0 0 / .5);
+}
+
+/* ---------- dark = polar night: blue-ice slabs over a black-blue sky ---------- */
+[data-theme="ice"][data-mode="dark"] {
+  --wallpaper:
+    radial-gradient(68% 56% at 10% 0%, oklch(.34 .12 var(--hue) / .9), transparent 72%),
+    radial-gradient(56% 50% at 100% 30%, oklch(.3 .1 calc(var(--hue) - 16) / .85), transparent 72%),
+    radial-gradient(60% 40% at 66% 108%, oklch(.46 .1 calc(var(--hue) - 36) / .6), transparent 72%),
+    linear-gradient(180deg, oklch(.165 .045 var(--hue)), oklch(.12 .035 calc(var(--hue) + 8)));
+
+  --text: oklch(.975 .012 var(--hue));
+  --text-2: oklch(.87 .025 var(--hue));
+  --text-3: oklch(.77 .035 var(--hue));
+  --text-on-accent: oklch(.17 .05 var(--hue));
+
+  --accent: oklch(.82 .11 var(--hue));
+  --attention: oklch(.84 .15 78);
+  --danger: oklch(.78 .15 22);
+  --ok: oklch(.82 .14 165);
+  --up: oklch(.84 .1 225);
+  --down: oklch(.82 .14 335);
+  --flat: oklch(.77 .03 var(--hue));
+
+  --ink-1: oklch(.82 .11 var(--hue));
+  --ink-2: oklch(.84 .11 195);
+  --ink-3: oklch(.78 .14 298);
+  --ink-4: oklch(.8 .11 232);
+  --ink-5: oklch(.8 .14 345);
+  --ink-6: oklch(.84 .11 168);
+
+  /* widget = blue ice, smoked */
+  --glass-widget-bg: linear-gradient(162deg, oklch(.34 .07 var(--hue) / .62), oklch(.22 .05 var(--hue) / .68));
+  --glass-widget-blur: 36px;
+  --glass-widget-sat: 150%;
+  --glass-widget-rim: oklch(.86 .09 var(--hue) / .26);
+  --glass-widget-top: oklch(.96 .05 var(--hue) / .62);
+  --glass-widget-shadow: 0 24px 54px -14px oklch(.06 .04 var(--hue) / .78), 0 3px 12px oklch(.06 .04 var(--hue) / .42), 0 0 0 1px oklch(.7 .1 var(--hue) / .12), inset 0 -2px 0 -1px oklch(.55 .12 var(--hue) / .5), inset 0 3px 10px oklch(.9 .08 var(--hue) / .1);
+  --glass-widget-sheen:
+    linear-gradient(180deg, oklch(.96 .05 var(--hue) / .2), oklch(.96 .05 var(--hue) / 0) 36%),
+    linear-gradient(118deg, transparent 52%, oklch(.96 .06 var(--hue) / .15) 52.6%, oklch(.96 .06 var(--hue) / .15) 53.2%, oklch(.9 .08 var(--hue) / .05) 53.8%, oklch(.9 .08 var(--hue) / .05) 66%, transparent 66.6%),
+    radial-gradient(64% 46% at 90% 104%, oklch(.9 .08 var(--hue) / .16), transparent 72%),
+    radial-gradient(46% 34% at 4% 74%, oklch(.9 .08 var(--hue) / .1), transparent 72%);
+
+  --glass-panel-bg: linear-gradient(165deg, oklch(.32 .065 var(--hue) / .82), oklch(.21 .05 var(--hue) / .86));
+  --glass-panel-blur: 44px;
+  --glass-panel-sat: 150%;
+  --glass-panel-rim: oklch(.86 .09 var(--hue) / .28);
+  --glass-panel-top: oklch(.96 .05 var(--hue) / .66);
+  --glass-panel-shadow: 0 34px 76px -18px oklch(.05 .04 var(--hue) / .84), 0 6px 18px oklch(.05 .04 var(--hue) / .46), 0 0 0 1px oklch(.7 .1 var(--hue) / .14), inset 0 -2px 0 -1px oklch(.55 .12 var(--hue) / .5), inset 0 3px 10px oklch(.9 .08 var(--hue) / .1);
+  --glass-panel-sheen:
+    linear-gradient(180deg, oklch(.96 .05 var(--hue) / .18), oklch(.96 .05 var(--hue) / 0) 30%),
+    linear-gradient(118deg, transparent 56%, oklch(.96 .06 var(--hue) / .14) 56.4%, oklch(.96 .06 var(--hue) / .14) 56.8%, oklch(.9 .08 var(--hue) / .045) 57.2%, oklch(.9 .08 var(--hue) / .045) 70%, transparent 70.4%),
+    radial-gradient(60% 40% at 92% 104%, oklch(.9 .08 var(--hue) / .14), transparent 72%),
+    radial-gradient(40% 28% at 4% 80%, oklch(.9 .08 var(--hue) / .09), transparent 72%);
+
+  --glass-chip-bg: linear-gradient(180deg, oklch(.5 .08 var(--hue) / .5), oklch(.36 .065 var(--hue) / .54));
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(.9 .08 var(--hue) / .32);
+  --glass-chip-top: oklch(.98 .04 var(--hue) / .6);
+  --glass-chip-shadow: 0 1px 2px oklch(.05 .04 var(--hue) / .4), 0 6px 12px -5px oklch(.05 .04 var(--hue) / .5), inset 0 -1.5px 0 oklch(.6 .11 var(--hue) / .4);
+  --glass-chip-sheen: linear-gradient(180deg, oklch(.98 .04 var(--hue) / .22), oklch(.98 .04 var(--hue) / 0) 56%);
+
+  --glass-bar-bg: linear-gradient(170deg, oklch(.3 .06 var(--hue) / .66), oklch(.2 .045 var(--hue) / .7));
+  --glass-bar-blur: 32px;
+  --glass-bar-sat: 150%;
+  --glass-bar-rim: oklch(.86 .09 var(--hue) / .26);
+  --glass-bar-top: oklch(.96 .05 var(--hue) / .6);
+  --glass-bar-shadow: 0 18px 44px -12px oklch(.05 .04 var(--hue) / .74), 0 2px 8px oklch(.05 .04 var(--hue) / .4), 0 0 0 1px oklch(.7 .1 var(--hue) / .12), inset 0 -2px 0 -1px oklch(.55 .12 var(--hue) / .45), inset 0 3px 9px oklch(.9 .08 var(--hue) / .09);
+  --glass-bar-sheen: linear-gradient(180deg, oklch(.96 .05 var(--hue) / .18), oklch(.96 .05 var(--hue) / 0) 60%), linear-gradient(118deg, transparent 38%, oklch(.96 .06 var(--hue) / .13) 38.4%, oklch(.96 .06 var(--hue) / .13) 38.8%, oklch(.9 .08 var(--hue) / .04) 39.2%, oklch(.9 .08 var(--hue) / .04) 48%, transparent 48.4%);
+
+  --refraction: .56;
+  --specular: .6;
+
+  --hair: oklch(.9 .06 var(--hue) / .16);
+  --hair-strong: oklch(.9 .06 var(--hue) / .3);
+  --hover: oklch(.9 .08 var(--hue) / .12);
+  --field: oklch(.12 .04 var(--hue) / .5);
+  --scrim: oklch(.05 .03 var(--hue) / .5);
+  --label-shadow: 0 1px 8px oklch(.08 .04 var(--hue) / .7);
+  --lift-shadow: 0 50px 80px -22px oklch(.03 .04 var(--hue) / .88), 0 14px 30px oklch(.03 .04 var(--hue) / .52), 0 0 0 1px oklch(.8 .1 var(--hue) / .26);
+  --bead: radial-gradient(circle at 34% 28%, #fff 0 12%, oklch(.86 .08 var(--hue)) 36%, oklch(.56 .13 var(--hue)) 100%);
+  --bead-accent: radial-gradient(circle at 34% 28%, #fff 0 12%, color-mix(in oklch, var(--accent) 60%, #fff) 34%, color-mix(in oklch, var(--accent) 80%, #000) 100%);
+  --bead-shadow: inset 0 -2px 3px oklch(.2 .08 var(--hue) / .6), 0 2px 7px oklch(.05 .04 var(--hue) / .6), 0 0 0 1px oklch(.9 .06 var(--hue) / .2);
+  --bead-shadow-sm: 0 1px 3px oklch(.05 .04 var(--hue) / .6);
+  --neck: linear-gradient(180deg, oklch(.9 .08 var(--hue)), oklch(.6 .13 var(--hue)));
+  --slot-bg: oklch(.05 .03 var(--hue) / .3);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.9 .08 var(--hue) / .22), inset 0 8px 18px -8px oklch(.02 .03 var(--hue) / .6);
+
+  --g-ring: linear-gradient(135deg, oklch(.98 .04 var(--hue) / .95) 0%, oklch(.8 .1 var(--hue) / .4) 24%, oklch(.7 .1 var(--hue) / .14) 50%, oklch(.8 .1 var(--hue) / .38) 76%, oklch(.98 .04 var(--hue) / .85) 100%);
+
+  --ice-edge: oklch(.94 .07 var(--hue) / .55);
+  --ice-a: oklch(.62 .13 var(--hue) / .2);
+  --ice-b: oklch(.8 .1 var(--hue) / .1);
+}
+
+/* phones: lighter blur and a tighter board (the Pixel does the blur of every glass piece on screen) */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="ice"],
+  [data-theme="ice"][data-mode="dark"] {
+    --glass-widget-blur: 26px;
+    --glass-panel-blur: 32px;
+    --glass-bar-blur: 22px;
+    --refraction: .38;
+  }
+}
+@media (max-width: 720px) {
+  [data-theme="ice"],
+  [data-theme="ice"][data-mode="dark"] {
+    --pad: 13px;
+    --r-widget: 18px;
+  }
+}
+
+/* ---------- the numbers: solid, tabular, lining, a little heavier ---------- */
+[data-theme="ice"] :is(.big, .g-p, .bal, .mv, .card .p, .stat .v) {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-weight: 700;
+}
+[data-theme="ice"] .big { letter-spacing: -.02em; }
+[data-theme="ice"][data-mode="dark"] .big { text-shadow: 0 0 22px oklch(.82 .12 var(--hue) / .3); }
+
+/* ---------- behind the glass: light, planes and dust. They drift with transform only. ---------- */
+[data-theme="ice"] .wallpaper-fx > .fx1 {
+  inset: -14%;
+  background:
+    radial-gradient(140% 120% at 50% 46%, transparent 58%, oklch(1 .004 var(--hue) / .6) 100%),
+    radial-gradient(36% 42% at 16% 20%, oklch(1 .004 var(--hue) / .95), transparent 72%),
+    radial-gradient(32% 40% at 86% 34%, oklch(.88 .07 calc(var(--hue) - 14) / .6), transparent 72%),
+    radial-gradient(40% 38% at 52% 92%, oklch(.86 .075 calc(var(--hue) + 10) / .55), transparent 72%);
+  animation: ice-pools 56s ease-in-out infinite alternate;
+}
+[data-theme="ice"] .wallpaper-fx > .fx2 {
+  inset: -16%;
+  background:
+    linear-gradient(112deg, transparent 12%, var(--ice-edge) 12.2%, var(--ice-edge) 12.6%, var(--ice-b) 13%, var(--ice-b) 31%, transparent 31.4%),
+    linear-gradient(112deg, transparent 36%, var(--ice-edge) 36.2%, var(--ice-edge) 36.7%, var(--ice-a) 37.1%, var(--ice-a) 58%, transparent 58.4%),
+    linear-gradient(64deg, transparent 52%, var(--ice-edge) 52.1%, var(--ice-edge) 52.4%, var(--ice-a) 52.8%, var(--ice-a) 70%, transparent 70.4%),
+    linear-gradient(146deg, transparent 60%, var(--ice-b) 60.4%, var(--ice-b) 74%, var(--ice-edge) 74.2%, var(--ice-edge) 74.5%, transparent 74.9%),
+    linear-gradient(112deg, transparent 72%, var(--ice-edge) 72.2%, var(--ice-edge) 72.6%, var(--ice-b) 73%, var(--ice-b) 88%, transparent 88.4%);
+  animation: ice-planes 80s ease-in-out infinite alternate;
+}
+[data-theme="ice"] .wallpaper-fx > .fx3 {
+  inset: -10%;
+  background:
+    radial-gradient(oklch(1 0 0 / .95) 0, oklch(1 0 0 / .95) 1px, transparent 1.6px) 0 0 / 181px 157px,
+    radial-gradient(oklch(1 0 0 / .8) 0, oklch(1 0 0 / .8) .8px, transparent 1.4px) 71px 53px / 131px 109px,
+    radial-gradient(oklch(.9 .1 var(--hue) / .8) 0, oklch(.9 .1 var(--hue) / .8) .8px, transparent 1.4px) 37px 91px / 223px 193px;
+  opacity: .75;
+  animation: ice-dust 110s ease-in-out infinite alternate;
+}
+[data-theme="ice"][data-mode="dark"] .wallpaper-fx > .fx1 {
+  background:
+    radial-gradient(140% 120% at 50% 46%, transparent 58%, oklch(.5 .1 var(--hue) / .22) 100%),
+    radial-gradient(36% 42% at 16% 20%, oklch(.5 .15 var(--hue) / .5), transparent 72%),
+    radial-gradient(32% 40% at 86% 34%, oklch(.46 .12 calc(var(--hue) - 20) / .45), transparent 72%),
+    radial-gradient(40% 30% at 56% 96%, oklch(.6 .11 calc(var(--hue) - 40) / .4), transparent 72%);
+}
+[data-theme="ice"][data-mode="dark"] .wallpaper-fx > .fx3 {
+  background:
+    radial-gradient(oklch(.96 .05 var(--hue) / .9) 0, oklch(.96 .05 var(--hue) / .9) 1px, transparent 1.6px) 0 0 / 181px 157px,
+    radial-gradient(oklch(.96 .05 var(--hue) / .7) 0, oklch(.96 .05 var(--hue) / .7) .8px, transparent 1.4px) 71px 53px / 131px 109px,
+    radial-gradient(oklch(.8 .12 var(--hue) / .7) 0, oklch(.8 .12 var(--hue) / .7) .8px, transparent 1.4px) 37px 91px / 223px 193px;
+  opacity: .5;
+}
+@keyframes ice-pools {
+  from { transform: translate3d(-3%, -2%, 0) scale(1); }
+  to   { transform: translate3d(4%, 3%, 0) scale(1.1); }
+}
+@keyframes ice-planes {
+  from { transform: translate3d(-4%, 1%, 0) scale(1); }
+  to   { transform: translate3d(5%, -2%, 0) scale(1.05); }
+}
+@keyframes ice-dust {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-60px, -80px, 0); }
+}

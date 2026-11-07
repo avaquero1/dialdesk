@@ -1,0 +1,466 @@
+/* =============================================================================
+   Theme 08 · Prism
+   Iridescent soap-bubble glass. Pearl-white glass over a pearl wallpaper; the rainbow lives on the rims
+   and in the highlights (thin-film conic rings, edge glows, a cursor halo), never behind the text.
+   Light: pearl and lavender ink, the hero.  Dark: an oil-slick sheen on near-black.
+
+   One spectrum drives everything: --film is a fixed run of colors (rose, violet, blue, cyan, pearl, mint,
+   lemon, peach) written as offsets from --hue, so the hue control swings the whole film.
+   Pale lemon and peach stay pale on purpose: this theme has no gold, and amber (--attention) is only "needs you".
+   Motion is transform and opacity only. It never changes layout, sizes or positions.
+   ============================================================================= */
+
+/* ---------- light = pearl glass over a pearl wallpaper ---------- */
+[data-theme="prism"] {
+  --hue-default: 305;
+
+  --font-ui: "Adwaita Sans", "Inter", "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-num: "Adwaita Sans", "Inter", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-display: var(--font-num);
+
+  /* the film: conic stops for rims, a plain run for strips, a glow version with gaps, a soft one for the wallpaper */
+  --film:
+    oklch(.99 .012 var(--hue)) 0deg,
+    oklch(.84 .14 calc(var(--hue) + 55)) 34deg,
+    oklch(.78 .15 var(--hue)) 76deg,
+    oklch(.8 .13 calc(var(--hue) - 55)) 118deg,
+    oklch(.86 .12 calc(var(--hue) - 105)) 158deg,
+    oklch(.99 .012 var(--hue)) 196deg,
+    oklch(.88 .12 calc(var(--hue) - 160)) 234deg,
+    oklch(.94 .09 calc(var(--hue) - 215)) 272deg,
+    oklch(.88 .09 calc(var(--hue) - 265)) 314deg,
+    oklch(.99 .012 var(--hue)) 360deg;
+  --film-line:
+    oklch(.88 .1 calc(var(--hue) - 265)), oklch(.84 .14 calc(var(--hue) + 55)), oklch(.78 .15 var(--hue)), oklch(.8 .13 calc(var(--hue) - 55)),
+    oklch(.86 .12 calc(var(--hue) - 105)), oklch(.99 .012 var(--hue)), oklch(.88 .12 calc(var(--hue) - 160)), oklch(.94 .09 calc(var(--hue) - 215)),
+    oklch(.84 .14 calc(var(--hue) + 55)), oklch(.78 .15 var(--hue)), oklch(.86 .12 calc(var(--hue) - 105)), oklch(.99 .012 var(--hue));
+  --film-glow:
+    oklch(1 0 0 / 0) 0deg,
+    oklch(.84 .15 calc(var(--hue) + 55) / .7) 38deg,
+    oklch(.78 .16 var(--hue) / .75) 82deg,
+    oklch(.8 .14 calc(var(--hue) - 55) / .7) 122deg,
+    oklch(.87 .12 calc(var(--hue) - 105) / .75) 162deg,
+    oklch(1 0 0 / 0) 204deg,
+    oklch(.88 .13 calc(var(--hue) - 160) / .65) 240deg,
+    oklch(.93 .09 calc(var(--hue) - 215) / .55) 278deg,
+    oklch(.87 .09 calc(var(--hue) - 265) / .55) 318deg,
+    oklch(1 0 0 / 0) 360deg;
+  --film-soft:
+    oklch(.92 .07 calc(var(--hue) + 55)) 0deg, oklch(.88 .09 var(--hue)) 55deg, oklch(.88 .08 calc(var(--hue) - 55)) 110deg,
+    oklch(.92 .07 calc(var(--hue) - 105)) 160deg, oklch(.95 .06 calc(var(--hue) - 160)) 210deg, oklch(.96 .05 calc(var(--hue) - 215)) 255deg,
+    oklch(.93 .06 calc(var(--hue) - 265)) 305deg, oklch(.92 .07 calc(var(--hue) + 55)) 360deg;
+  /* edge glows: color pools just inside the rim, rose on the left, cyan on the right, blue-violet below */
+  --fringe:
+    inset 18px 0 26px -18px oklch(.88 .12 calc(var(--hue) + 55) / .62),
+    inset -18px 0 26px -18px oklch(.9 .1 calc(var(--hue) - 105) / .62),
+    inset 0 -20px 28px -20px oklch(.87 .11 calc(var(--hue) - 55) / .5);
+
+  --wallpaper:
+    radial-gradient(58% 48% at 2% 0%, oklch(.925 .06 calc(var(--hue) + 55) / .78), transparent 72%),
+    radial-gradient(50% 44% at 100% 3%, oklch(.94 .055 calc(var(--hue) - 105) / .74), transparent 72%),
+    radial-gradient(44% 52% at 100% 64%, oklch(.93 .06 calc(var(--hue) - 55) / .68), transparent 72%),
+    radial-gradient(54% 44% at 0% 100%, oklch(.945 .055 calc(var(--hue) - 160) / .7), transparent 72%),
+    radial-gradient(50% 36% at 50% 108%, oklch(.965 .04 calc(var(--hue) - 235) / .6), transparent 72%),
+    linear-gradient(112deg, transparent 22%, oklch(.96 .045 calc(var(--hue) + 55) / .38) 31%, oklch(.96 .045 calc(var(--hue) - 55) / .38) 37%, oklch(.97 .04 calc(var(--hue) - 110) / .36) 43%, transparent 52%),
+    conic-gradient(from 205deg at 64% 34%, oklch(.975 .02 calc(var(--hue) + 55)), oklch(.965 .04 var(--hue)) 55deg, oklch(.965 .04 calc(var(--hue) - 60)) 110deg, oklch(.975 .035 calc(var(--hue) - 110)) 160deg, oklch(.98 .03 calc(var(--hue) - 165)) 205deg, oklch(.985 .03 calc(var(--hue) - 215)) 250deg, oklch(.975 .035 calc(var(--hue) - 265)) 305deg, oklch(.975 .02 calc(var(--hue) + 55))),
+    oklch(.975 .01 var(--hue));
+
+  --text: oklch(.23 .045 var(--hue));
+  --text-2: oklch(.27 .045 var(--hue) / .84);
+  --text-3: oklch(.31 .045 var(--hue) / .78);
+  --text-on-accent: #fff;
+
+  --accent: oklch(.5 .19 var(--hue));
+  --attention: oklch(.52 .12 68);
+  --danger: oklch(.54 .21 22);
+  --ok: oklch(.5 .12 165);
+  --up: oklch(.46 .14 245);
+  --down: oklch(.5 .2 335);
+  --flat: oklch(.31 .045 var(--hue) / .66);
+
+  --ink-1: oklch(.5 .2 290);
+  --ink-2: oklch(.58 .12 205);
+  --ink-3: oklch(.62 .2 350);
+  --ink-4: oklch(.52 .13 160);
+  --ink-5: oklch(.5 .17 255);
+  --ink-6: oklch(.58 .13 105);
+
+  /* widget = pearl glass (displays, folder tiles) */
+  --glass-widget-bg: oklch(1 .01 var(--hue) / .5);
+  --glass-widget-blur: 30px;
+  --glass-widget-sat: 165%;
+  --glass-widget-rim: oklch(1 .02 var(--hue) / .75);
+  --glass-widget-top: rgba(255, 255, 255, .98);
+  --glass-widget-shadow: var(--fringe), 0 26px 54px -18px oklch(.5 .14 var(--hue) / .36), 0 3px 10px oklch(.5 .1 var(--hue) / .12), 0 0 0 1px oklch(.55 .09 var(--hue) / .1);
+  --glass-widget-sheen:
+    radial-gradient(44% 24% at 15% 7%, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(75% 55% at 0% 100%, oklch(.91 .095 calc(var(--hue) + 55) / .42), transparent 70%),
+    radial-gradient(70% 55% at 100% 0%, oklch(.93 .085 calc(var(--hue) - 105) / .36), transparent 70%),
+    radial-gradient(70% 55% at 100% 100%, oklch(.91 .095 calc(var(--hue) - 55) / .34), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 40%);
+
+  /* panel = denser pearl (chat, menus, sheets, open folders) */
+  --glass-panel-bg: oklch(1 .01 var(--hue) / .68);
+  --glass-panel-blur: 36px;
+  --glass-panel-sat: 180%;
+  --glass-panel-rim: oklch(1 .02 var(--hue) / .8);
+  --glass-panel-top: rgba(255, 255, 255, 1);
+  --glass-panel-shadow: var(--fringe), 0 34px 72px -20px oklch(.48 .15 var(--hue) / .42), 0 4px 12px oklch(.5 .1 var(--hue) / .14), 0 0 0 1px oklch(.55 .09 var(--hue) / .1);
+  --glass-panel-sheen:
+    radial-gradient(36% 14% at 14% 4%, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(70% 40% at 0% 100%, oklch(.91 .09 calc(var(--hue) + 55) / .4), transparent 70%),
+    radial-gradient(70% 40% at 100% 100%, oklch(.91 .09 calc(var(--hue) - 105) / .4), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, .62), rgba(255, 255, 255, 0) 34%);
+
+  /* chip = small bubbles (buttons, chips, message bubbles; never blurred) */
+  --glass-chip-bg: oklch(1 .01 var(--hue) / .64);
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(.78 .07 var(--hue) / .38);
+  --glass-chip-top: rgba(255, 255, 255, 1);
+  --glass-chip-shadow: inset 3px 0 5px -3px oklch(.86 .13 calc(var(--hue) + 55) / .6), inset -3px 0 5px -3px oklch(.88 .11 calc(var(--hue) - 105) / .6), 0 6px 14px -5px oklch(.5 .12 var(--hue) / .28);
+  --glass-chip-sheen:
+    linear-gradient(115deg, oklch(.97 .05 calc(var(--hue) + 55) / .6), oklch(.97 .04 calc(var(--hue) - 105) / .46) 56%, rgba(255, 255, 255, 0) 82%),
+    radial-gradient(90% 80% at 30% 0%, rgba(255, 255, 255, .8), rgba(255, 255, 255, 0) 62%);
+
+  /* bar = a strip of film */
+  --glass-bar-bg: oklch(1 .01 var(--hue) / .5);
+  --glass-bar-blur: 28px;
+  --glass-bar-sat: 180%;
+  --glass-bar-rim: oklch(1 .02 var(--hue) / .75);
+  --glass-bar-top: rgba(255, 255, 255, 1);
+  --glass-bar-shadow: inset 70px 0 60px -56px oklch(.9 .1 calc(var(--hue) + 55) / .55), inset -90px 0 70px -70px oklch(.92 .09 calc(var(--hue) - 105) / .55), inset 0 -16px 22px -16px oklch(.88 .1 calc(var(--hue) - 55) / .4), 0 18px 40px -14px oklch(.5 .14 var(--hue) / .32), 0 2px 8px oklch(.5 .1 var(--hue) / .1), 0 0 0 1px oklch(.55 .09 var(--hue) / .1);
+  --glass-bar-sheen: none;
+
+  --refraction: .62;
+  --specular: .85;
+
+  --r-widget: 32px;
+  --r-panel: 34px;
+  --r-chip: 999px;
+  --gap: 13px;
+  --pad: 16px;
+
+  /* liquid timings: bubbles are springy. water = quick with one soft overshoot, pour = open, drain = close, honey = slow rise */
+  --ease-water: cubic-bezier(.3, 1.36, .5, 1);
+  --t-water: 600ms;
+  --ease-honey: cubic-bezier(.2, 1, .3, 1);
+  --t-honey: 900ms;
+  --ease-pour: cubic-bezier(.3, 1.3, .45, 1);
+  --t-pour: 760ms;
+  --ease-drain: cubic-bezier(.5, 0, .25, 1);
+  --t-drain: 440ms;
+
+  --lift-scale: 1.05;
+  --wobble: 9px;
+
+  /* helpers */
+  --hair: oklch(.4 .07 var(--hue) / .14);
+  --hair-strong: oklch(.4 .07 var(--hue) / .26);
+  --hover: oklch(.55 .1 var(--hue) / .1);
+  --field: oklch(1 .01 var(--hue) / .55);
+  --scrim: oklch(.3 .06 var(--hue) / .24);
+  --label-shadow: 0 0 10px rgba(255, 255, 255, .9), 0 0 2px rgba(255, 255, 255, .8);
+  --lift-shadow: var(--fringe), 0 46px 78px -20px oklch(.45 .17 var(--hue) / .5), 0 14px 28px oklch(.45 .12 var(--hue) / .2), 0 0 0 1px rgba(255, 255, 255, .7);
+  --bead: radial-gradient(circle at 30% 24%, #fff 0 9%, rgba(255, 255, 255, 0) 24%), conic-gradient(from 200deg, var(--film));
+  --bead-accent: radial-gradient(circle at 30% 24%, #fff 0 10%, rgba(255, 255, 255, 0) 26%), radial-gradient(circle at 50% 60%, oklch(.66 .18 var(--hue)), oklch(.44 .19 var(--hue)));
+  --bead-shadow: inset 0 0 0 1px rgba(255, 255, 255, .55), inset 0 -2px 3px oklch(.55 .12 var(--hue) / .3), 0 2px 7px oklch(.45 .14 var(--hue) / .3);
+  --bead-shadow-sm: 0 1px 3px oklch(.45 .14 var(--hue) / .4);
+  --neck: linear-gradient(90deg, oklch(.86 .11 calc(var(--hue) + 55)), oklch(.8 .13 var(--hue)), oklch(.82 .12 calc(var(--hue) - 55)), oklch(.88 .1 calc(var(--hue) - 105)));
+  --slot-bg: oklch(.6 .08 var(--hue) / .08);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.6 .1 var(--hue) / .28), inset 0 8px 18px -8px oklch(.4 .1 var(--hue) / .22);
+}
+
+/* ---------- dark = an oil-slick sheen on near-black ---------- */
+[data-theme="prism"][data-mode="dark"] {
+  --film:
+    oklch(.92 .04 var(--hue)) 0deg,
+    oklch(.7 .19 calc(var(--hue) + 45)) 34deg,
+    oklch(.62 .2 var(--hue)) 76deg,
+    oklch(.68 .17 calc(var(--hue) - 55)) 118deg,
+    oklch(.8 .14 calc(var(--hue) - 105)) 158deg,
+    oklch(.95 .03 var(--hue)) 196deg,
+    oklch(.8 .16 calc(var(--hue) - 160)) 234deg,
+    oklch(.82 .12 calc(var(--hue) - 125)) 272deg,
+    oklch(.72 .17 calc(var(--hue) - 25)) 314deg,
+    oklch(.92 .04 var(--hue)) 360deg;
+  --film-line:
+    oklch(.72 .17 calc(var(--hue) - 25)), oklch(.7 .19 calc(var(--hue) + 45)), oklch(.62 .2 var(--hue)), oklch(.68 .17 calc(var(--hue) - 55)),
+    oklch(.8 .14 calc(var(--hue) - 105)), oklch(.95 .03 var(--hue)), oklch(.8 .16 calc(var(--hue) - 160)), oklch(.82 .12 calc(var(--hue) - 125)),
+    oklch(.7 .19 calc(var(--hue) + 45)), oklch(.62 .2 var(--hue)), oklch(.8 .14 calc(var(--hue) - 105)), oklch(.92 .04 var(--hue));
+  --film-glow:
+    oklch(0 0 0 / 0) 0deg,
+    oklch(.68 .2 calc(var(--hue) + 45) / .6) 38deg,
+    oklch(.6 .21 var(--hue) / .66) 82deg,
+    oklch(.66 .18 calc(var(--hue) - 55) / .62) 122deg,
+    oklch(.78 .15 calc(var(--hue) - 105) / .62) 162deg,
+    oklch(0 0 0 / 0) 204deg,
+    oklch(.78 .17 calc(var(--hue) - 160) / .55) 240deg,
+    oklch(.8 .13 calc(var(--hue) - 125) / .5) 278deg,
+    oklch(.7 .17 calc(var(--hue) - 25) / .5) 318deg,
+    oklch(0 0 0 / 0) 360deg;
+  --film-soft:
+    oklch(.48 .17 calc(var(--hue) + 40)) 0deg, oklch(.42 .18 var(--hue)) 55deg, oklch(.48 .15 calc(var(--hue) - 55)) 110deg,
+    oklch(.58 .12 calc(var(--hue) - 105)) 165deg, oklch(.6 .13 calc(var(--hue) - 160)) 220deg, oklch(.5 .13 calc(var(--hue) - 120)) 270deg,
+    oklch(.44 .16 calc(var(--hue) - 25)) 315deg, oklch(.48 .17 calc(var(--hue) + 40)) 360deg;
+  --fringe:
+    inset 16px 0 24px -16px oklch(.62 .2 calc(var(--hue) + 55) / .4),
+    inset -16px 0 24px -16px oklch(.72 .15 calc(var(--hue) - 105) / .36),
+    inset 0 -18px 26px -18px oklch(.6 .18 calc(var(--hue) - 55) / .34);
+
+  --wallpaper:
+    radial-gradient(70% 50% at 10% 4%, oklch(.36 .15 calc(var(--hue) + 25) / .6), transparent 70%),
+    radial-gradient(58% 55% at 96% 22%, oklch(.4 .1 calc(var(--hue) - 110) / .5), transparent 72%),
+    radial-gradient(70% 50% at 66% 106%, oklch(.4 .15 calc(var(--hue) + 40) / .5), transparent 70%),
+    radial-gradient(50% 44% at 0% 92%, oklch(.36 .1 calc(var(--hue) - 160) / .45), transparent 72%),
+    linear-gradient(118deg, transparent 20%, oklch(.32 .11 var(--hue) / .38) 29%, oklch(.35 .11 calc(var(--hue) - 60) / .38) 35%, oklch(.38 .1 calc(var(--hue) - 120) / .34) 41%, oklch(.35 .1 calc(var(--hue) - 170) / .3) 46%, transparent 56%),
+    oklch(.12 .014 var(--hue));
+
+  --text: oklch(.97 .01 var(--hue));
+  --text-2: oklch(.97 .01 var(--hue) / .78);
+  --text-3: oklch(.97 .01 var(--hue) / .6);
+  --text-on-accent: oklch(.18 .04 var(--hue));
+
+  --accent: oklch(.8 .12 var(--hue));
+  --attention: oklch(.82 .15 76);
+  --danger: oklch(.72 .19 22);
+  --ok: oklch(.8 .14 165);
+  --up: oklch(.84 .11 225);
+  --down: oklch(.78 .16 345);
+  --flat: oklch(.97 .01 var(--hue) / .52);
+
+  --ink-1: oklch(.76 .16 290);
+  --ink-2: oklch(.82 .12 205);
+  --ink-3: oklch(.78 .17 350);
+  --ink-4: oklch(.8 .14 160);
+  --ink-5: oklch(.75 .15 255);
+  --ink-6: oklch(.84 .12 105);
+
+  /* widget = smoked glass with an oil film */
+  --glass-widget-bg: oklch(.18 .02 var(--hue) / .5);
+  --glass-widget-blur: 34px;
+  --glass-widget-sat: 180%;
+  --glass-widget-rim: oklch(.95 .04 var(--hue) / .14);
+  --glass-widget-top: oklch(.98 .03 var(--hue) / .44);
+  --glass-widget-shadow: var(--fringe), 0 28px 58px -14px rgba(2, 0, 12, .72), 0 3px 10px rgba(2, 0, 12, .4);
+  --glass-widget-sheen:
+    radial-gradient(44% 24% at 15% 7%, rgba(255, 255, 255, .2), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(75% 55% at 0% 100%, oklch(.6 .18 calc(var(--hue) + 45) / .2), transparent 70%),
+    radial-gradient(70% 55% at 100% 0%, oklch(.7 .14 calc(var(--hue) - 105) / .18), transparent 70%),
+    radial-gradient(70% 55% at 100% 100%, oklch(.6 .17 calc(var(--hue) - 55) / .18), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 36%);
+
+  --glass-panel-bg: oklch(.17 .02 var(--hue) / .7);
+  --glass-panel-blur: 40px;
+  --glass-panel-sat: 170%;
+  --glass-panel-rim: oklch(.95 .04 var(--hue) / .16);
+  --glass-panel-top: oklch(.98 .03 var(--hue) / .46);
+  --glass-panel-shadow: var(--fringe), 0 36px 76px -16px rgba(2, 0, 12, .78), 0 4px 12px rgba(2, 0, 12, .42);
+  --glass-panel-sheen:
+    radial-gradient(36% 14% at 14% 4%, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(70% 40% at 0% 100%, oklch(.6 .18 calc(var(--hue) + 55) / .18), transparent 70%),
+    radial-gradient(70% 40% at 100% 100%, oklch(.7 .14 calc(var(--hue) - 105) / .16), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 34%);
+
+  --glass-chip-bg: oklch(.97 .02 var(--hue) / .09);
+  --glass-chip-blur: 0px;
+  --glass-chip-sat: 100%;
+  --glass-chip-rim: oklch(.95 .05 var(--hue) / .2);
+  --glass-chip-top: oklch(.98 .03 var(--hue) / .5);
+  --glass-chip-shadow: inset 3px 0 5px -3px oklch(.66 .19 calc(var(--hue) + 55) / .5), inset -3px 0 5px -3px oklch(.76 .14 calc(var(--hue) - 105) / .45), 0 6px 14px -5px rgba(2, 0, 12, .5);
+  --glass-chip-sheen:
+    linear-gradient(115deg, oklch(.7 .17 calc(var(--hue) + 55) / .2), oklch(.76 .13 calc(var(--hue) - 105) / .16) 56%, rgba(255, 255, 255, 0) 82%),
+    radial-gradient(90% 70% at 30% 0%, rgba(255, 255, 255, .26), rgba(255, 255, 255, 0) 62%);
+
+  --glass-bar-bg: oklch(.16 .02 var(--hue) / .56);
+  --glass-bar-blur: 28px;
+  --glass-bar-sat: 180%;
+  --glass-bar-rim: oklch(.95 .04 var(--hue) / .15);
+  --glass-bar-top: oklch(.98 .03 var(--hue) / .46);
+  --glass-bar-shadow: inset 70px 0 60px -56px oklch(.6 .18 calc(var(--hue) + 55) / .4), inset -90px 0 70px -70px oklch(.7 .14 calc(var(--hue) - 105) / .36), inset 0 -16px 22px -16px oklch(.6 .17 calc(var(--hue) - 55) / .3), 0 20px 44px -10px rgba(2, 0, 12, .6), 0 3px 8px rgba(2, 0, 12, .34);
+  --glass-bar-sheen: none;
+
+  --refraction: .64;
+  --specular: .7;
+
+  --hair: oklch(.95 .04 var(--hue) / .13);
+  --hair-strong: oklch(.95 .04 var(--hue) / .24);
+  --hover: oklch(.95 .05 var(--hue) / .1);
+  --field: oklch(.97 .02 var(--hue) / .07);
+  --scrim: rgba(3, 0, 10, .58);
+  --label-shadow: 0 1px 8px rgba(0, 0, 0, .75);
+  --lift-shadow: var(--fringe), 0 48px 80px -18px rgba(2, 0, 12, .85), 0 14px 28px rgba(2, 0, 12, .5), 0 0 0 1px oklch(.9 .08 var(--hue) / .22);
+  --bead: radial-gradient(circle at 30% 24%, #fff 0 9%, rgba(255, 255, 255, 0) 24%), conic-gradient(from 200deg, var(--film));
+  --bead-accent: radial-gradient(circle at 30% 24%, #fff 0 10%, rgba(255, 255, 255, 0) 26%), radial-gradient(circle at 50% 60%, oklch(.84 .13 var(--hue)), oklch(.58 .19 var(--hue)));
+  --bead-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35), inset 0 -2px 3px oklch(.2 .08 var(--hue) / .5), 0 2px 8px rgba(2, 0, 12, .6), 0 0 12px oklch(.7 .17 var(--hue) / .3);
+  --bead-shadow-sm: 0 1px 3px rgba(2, 0, 12, .6), 0 0 6px oklch(.7 .17 var(--hue) / .4);
+  --neck: linear-gradient(90deg, oklch(.7 .17 calc(var(--hue) + 55)), oklch(.64 .19 var(--hue)), oklch(.68 .16 calc(var(--hue) - 55)), oklch(.8 .13 calc(var(--hue) - 105)));
+  --slot-bg: rgba(0, 0, 0, .22);
+  --slot-shadow: inset 0 0 0 1.5px oklch(.9 .08 var(--hue) / .22), inset 0 8px 18px -8px rgba(0, 0, 0, .6);
+}
+
+/* phones: lighter blur and slightly tighter spacing (the Pixel does the blur for every glass piece on screen) */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="prism"],
+  [data-theme="prism"][data-mode="dark"] {
+    --glass-widget-blur: 22px;
+    --glass-panel-blur: 28px;
+    --glass-bar-blur: 20px;
+    --refraction: .4;
+  }
+}
+@media (max-width: 720px) {
+  [data-theme="prism"],
+  [data-theme="prism"][data-mode="dark"] {
+    --pad: 13px;
+    --r-widget: 28px;
+    --gap: 12px;
+  }
+}
+
+/* ---------- rims: a conic thin-film ring on every glass piece (the board paints it 1.5 px wide) ---------- */
+[data-theme="prism"] .w--display,
+[data-theme="prism"] .f-tile,
+[data-theme="prism"] .a-tile {
+  --g-ring: conic-gradient(from var(--rf, 315deg), var(--film));
+}
+[data-theme="prism"] .w[data-id="chiefs"] { --rf: 292deg; }
+[data-theme="prism"] .w[data-id="gap"] { --rf: 338deg; }
+[data-theme="prism"] .w[data-id="positions"] { --rf: 270deg; }
+[data-theme="prism"] .w[data-id="news"] { --rf: 322deg; }
+[data-theme="prism"] .w[data-id="movement"] { --rf: 300deg; }
+[data-theme="prism"] .menu,
+[data-theme="prism"] .sheet,
+[data-theme="prism"] .folder-open {
+  --g-ring: conic-gradient(from 315deg, var(--film));
+}
+[data-theme="prism"] .bar { --g-ring: linear-gradient(96deg, var(--film-line)); }
+[data-theme="prism"] .chat { --g-ring: linear-gradient(168deg, var(--film-line)); }
+
+/* a thin-film shimmer that runs round the edge of every widget and tile: a slowly turning conic film,
+   seen only in a soft band along the rim (the mask keeps it off the numbers) */
+[data-theme="prism"] .w--display > .g-clip,
+[data-theme="prism"] .f-tile > .g-clip,
+[data-theme="prism"] .a-tile > .g-clip {
+  -webkit-mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .34) 4px, transparent 15px, transparent calc(100% - 15px), rgba(0, 0, 0, .34) calc(100% - 4px), #000),
+    linear-gradient(180deg, #000, rgba(0, 0, 0, .34) 4px, transparent 15px, transparent calc(100% - 15px), rgba(0, 0, 0, .34) calc(100% - 4px), #000);
+  mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, .34) 4px, transparent 15px, transparent calc(100% - 15px), rgba(0, 0, 0, .34) calc(100% - 4px), #000),
+    linear-gradient(180deg, #000, rgba(0, 0, 0, .34) 4px, transparent 15px, transparent calc(100% - 15px), rgba(0, 0, 0, .34) calc(100% - 4px), #000);
+}
+[data-theme="prism"] .f-tile > .g-clip,
+[data-theme="prism"] .a-tile > .g-clip { opacity: .8; }
+[data-theme="prism"] .g-clip::before,
+[data-theme="prism"] .g-clip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+}
+[data-theme="prism"] .g-clip::before {
+  background: conic-gradient(from 0deg, var(--film-glow));
+  animation: prism-spin 52s linear infinite;
+}
+/* hover and drag wake a second film that turns the other way, so the edge colors swim against each other */
+[data-theme="prism"] .g-clip::after {
+  background: conic-gradient(from 110deg, var(--film-glow));
+  opacity: 0;
+  transition: opacity 520ms ease;
+}
+[data-theme="prism"] .w--display:hover > .g-clip::after,
+[data-theme="prism"] .w.is-lifted > .g-clip::after,
+[data-theme="prism"] .w--app:hover > .a-tile > .g-clip::after,
+[data-theme="prism"] .w--folder:hover > .f-tile > .g-clip::after,
+[data-theme="prism"] .w.is-lifted > .a-tile > .g-clip::after,
+[data-theme="prism"] .w.is-lifted > .f-tile > .g-clip::after {
+  opacity: 1;
+  animation: prism-spin-back 17s linear infinite;
+}
+
+/* the cursor light is a prism: a white glow with a turning rainbow halo */
+[data-theme="prism"] .w-spot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--film-glow));
+  -webkit-mask-image: radial-gradient(closest-side, transparent 34%, rgba(0, 0, 0, .78) 64%, transparent 100%);
+  mask-image: radial-gradient(closest-side, transparent 34%, rgba(0, 0, 0, .78) 64%, transparent 100%);
+}
+[data-theme="prism"] .w.is-hot > .w-spot::before { animation: prism-halo 7s linear infinite; }
+[data-theme="prism"] .w-shimmer {
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0), oklch(.95 .08 calc(var(--hue) + 55) / .5), oklch(.95 .08 calc(var(--hue) - 105) / .5), rgba(255, 255, 255, 0));
+}
+[data-theme="prism"] .dropmark {
+  background: radial-gradient(circle at 34% 26%, #fff 0 12%, rgba(255, 255, 255, 0) 30%), conic-gradient(from 200deg, var(--film));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5), 0 1px 3px oklch(.4 .12 var(--hue) / .35);
+}
+[data-theme="prism"] .chat-form .send,
+[data-theme="prism"] .btn--accent {
+  background: linear-gradient(135deg, oklch(.56 .2 calc(var(--hue) - 30)), oklch(.5 .2 calc(var(--hue) + 30)));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 0 0 1.5px rgba(255, 255, 255, .4), 0 8px 18px -6px oklch(.5 .2 var(--hue) / .6);
+}
+[data-theme="prism"][data-mode="dark"] .chat-form .send,
+[data-theme="prism"][data-mode="dark"] .btn--accent {
+  background: linear-gradient(135deg, oklch(.84 .12 calc(var(--hue) - 30)), oklch(.78 .14 calc(var(--hue) + 30)));
+}
+
+/* the thumbnail in the Look sheet (it carries data-theme itself): a pearl tile on a pinwheel of film */
+[data-theme="prism"].tc-sw {
+  background: radial-gradient(circle at 22% 18%, rgba(255, 255, 255, .75), rgba(255, 255, 255, 0) 56%), conic-gradient(from 200deg at 56% 58%, var(--film)), oklch(.9 .02 var(--hue));
+}
+
+/* ---------- behind the glass: big soap bubbles drift across the pearl, seen as soft iridescent rings ---------- */
+[data-theme="prism"] .wallpaper-fx > i {
+  will-change: transform;
+  background: conic-gradient(from 20deg, var(--film-soft));
+  -webkit-mask-image: radial-gradient(closest-side, rgba(0, 0, 0, .2), rgba(0, 0, 0, .2) 60%, #000 86%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(closest-side, rgba(0, 0, 0, .2), rgba(0, 0, 0, .2) 60%, #000 86%, rgba(0, 0, 0, 0) 100%);
+}
+[data-theme="prism"][data-mode="dark"] .wallpaper-fx > i {
+  -webkit-mask-image: radial-gradient(closest-side, rgba(0, 0, 0, .22), rgba(0, 0, 0, .22) 58%, rgba(0, 0, 0, .9) 86%, rgba(0, 0, 0, 0) 100%);
+  mask-image: radial-gradient(closest-side, rgba(0, 0, 0, .22), rgba(0, 0, 0, .22) 58%, rgba(0, 0, 0, .9) 86%, rgba(0, 0, 0, 0) 100%);
+}
+[data-theme="prism"] .wallpaper-fx .fx1 {
+  width: 66vmax; height: 66vmax; left: -24vmax; top: -34vmax;
+  animation: prism-drift-1 68s ease-in-out infinite alternate;
+}
+[data-theme="prism"] .wallpaper-fx .fx2 {
+  width: 58vmax; height: 58vmax; right: -20vmax; bottom: -28vmax;
+  background: conic-gradient(from 200deg, var(--film-soft));
+  animation: prism-drift-2 80s ease-in-out infinite alternate;
+}
+[data-theme="prism"] .wallpaper-fx .fx3 {
+  width: 34vmax; height: 34vmax; left: 38vw; top: 58vh;
+  background: conic-gradient(from 120deg, var(--film-soft));
+  animation: prism-drift-3 58s ease-in-out infinite alternate;
+}
+@keyframes prism-drift-1 {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(8vmax, 5vmax, 0) scale(1.06); }
+  100% { transform: translate3d(2vmax, 12vmax, 0) scale(.97); }
+}
+@keyframes prism-drift-2 {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-10vmax, -4vmax, 0) scale(1.05); }
+  100% { transform: translate3d(-3vmax, -11vmax, 0) scale(.95); }
+}
+@keyframes prism-drift-3 {
+  0%   { transform: translate3d(-8vmax, -3vmax, 0) scale(.92); }
+  50%  { transform: translate3d(6vmax, 6vmax, 0) scale(1.08); }
+  100% { transform: translate3d(12vmax, -5vmax, 0) scale(1); }
+}
+@keyframes prism-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes prism-spin-back {
+  from { transform: translate(-50%, -50%) rotate(360deg); }
+  to   { transform: translate(-50%, -50%) rotate(0deg); }
+}
+@keyframes prism-halo {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
