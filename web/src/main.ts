@@ -13,6 +13,7 @@ import { fillIcons } from './icons.ts';
 import { Live } from './live.ts';
 import { initLook, lookFromServer } from './look.ts';
 import { closeSurface, initSurfaces, openApp, openFolder, openMenu, openNow, syncLook, toast } from './surfaces.ts';
+import { openHow } from './safety.ts';
 
 declare global {
   interface Window {
@@ -137,7 +138,7 @@ async function start(a: Account) {
   updateRefraction();
   const b = await api.board();
   mount(b.widgets);
-  bindBoard({ openMenu, openApp, openFolder, saveOrder, closeSurface });
+  bindBoard({ openMenu, openApp, openFolder, openHow, saveOrder, closeSurface });
   initSurfaces({
     account: () => account,
     logout,

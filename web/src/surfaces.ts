@@ -2,7 +2,7 @@
  * Surfaces: the ⋯ menu, the app sheets, the open folder and the Look sheet. Each pours from where it started (the
  * button or the tile) to its final box and drains back. Content is laid out at the final size; only the box moves.
  *
- * Not built yet: the menu's agent and How we got this rows, the chat, the trust page, the run trace, Accounts and Catalog.
+ * Safety (the trust page) and How we got this live in safety.ts. Not built yet: the menu's agent row, Accounts and Catalog.
  * They show as greyed items or a "next build" note, never as fake results.
  */
 import type { Account, Widget, WidgetResult } from '@app/contracts';
@@ -10,8 +10,9 @@ import { $, $$, clamp, css, cssNum, esc, mk, reduced, root } from './dom.ts';
 import { EL, S, buildLens } from './board.ts';
 import { IC, type IconName } from './icons.ts';
 import { L, THEMES, mqDark, resolveMode, setLook, themeHue } from './look.ts';
-import { cardHtml, fmtNum, fmtTime } from './widgets.ts';
+import { cardHtml, fmtNum, fmtTime, tileName } from './widgets.ts';
 import { foldersFor, menuRows, sizesFor, type MenuAction } from './menu.ts';
+import { openHow, openSafety } from './safety.ts';
 
 interface Box {
   x: number;
@@ -66,7 +67,7 @@ export function toast(msg: string) {
   toastT = window.setTimeout(() => toastEl.classList.remove('on'), 2600);
 }
 
-const boxOf = (b: { left: number; top: number; width: number; height: number }, r: number): Box => ({ x: b.left, y: b.top, w: b.width, h: b.height, r });
+export const boxOf = (b: { left: number; top: number; width: number; height: number }, r: number): Box => ({ x: b.left, y: b.top, w: b.width, h: b.height, r });
 
 interface Open {
   cls: string;
@@ -125,7 +126,7 @@ export function closeSurface(instant?: boolean) {
   setTimeout(() => s.remove(), reduced() ? 260 : 1100);
 }
 
-function panel(kind: string, html: string, o: { w?: number; at?: 'right'; clear?: boolean; from: Box; fromFn?: () => Box; after?: (s: Surface) => void }) {
+export function panel(kind: string, html: string, o: { w?: number; at?: 'right'; clear?: boolean; from: Box; fromFn?: () => Box; after?: (s: Surface) => void }) {
   const m = 12;
   const phone = S.phone;
   const W = phone ? innerWidth - 2 * m : Math.min(o.w ?? 520, innerWidth - 2 * m);
@@ -159,14 +160,14 @@ function panel(kind: string, html: string, o: { w?: number; at?: 'right'; clear?
   });
 }
 
-const rz = (i: number) => ` rz"${css(`--i:${i}`)}`;
-const closeBtn = (i: number) => `<button class="iconbtn${rz(i)} type="button" data-close aria-label="Close">${IC.close}</button>`;
-const sheetHead = (t: string, sub?: string) => `<div class="sh-head${rz(0)}><h2>${esc(t)}</h2>${closeBtn(0)}</div>` + (sub ? `<p class="sh-sub${rz(1)}>${esc(sub)}</p>` : '');
+export const rz = (i: number) => ` rz"${css(`--i:${i}`)}`;
+export const closeBtn = (i: number) => `<button class="iconbtn${rz(i)} type="button" data-close aria-label="Close">${IC.close}</button>`;
+export const sheetHead = (t: string, sub?: string) => `<div class="sh-head${rz(0)}><h2>${esc(t)}</h2>${closeBtn(0)}</div>` + (sub ? `<p class="sh-sub${rz(1)}>${esc(sub)}</p>` : '');
 const rowi = (ic: IconName, t: string, s: string, right: string, i: number) =>
   `<div class="rowitem${rz(i)}><span class="ic">${IC[ic]}</span><div class="grow"><div class="t">${esc(t)}</div><div class="s">${esc(s)}</div></div>${right}</div>`;
 /** A plain note for a part that is not built yet. */
 const nextBuild = (what: string, i: number) => `<div class="stub-note${rz(i)}><b>Next build.</b> ${esc(what)}</div>`;
-const tileFrom = (id: string) => {
+export const tileFrom = (id: string) => {
   const t = EL.get(id)?.querySelector('.a-tile, .f-tile');
   return t ? boxOf(t.getBoundingClientRect(), S.tile * 0.27) : boxOf({ left: innerWidth / 2 - 30, top: innerHeight / 2 - 30, width: 60, height: 60 }, 16);
 };
@@ -174,7 +175,7 @@ const tileFrom = (id: string) => {
 // ---------- the ⋯ menu: the same rows on every tile; what doesn't apply is greyed, never hidden ----------
 
 const ACT_ICON: Record<MenuAction, IconName> = { agent: 'chat', refresh: 'refresh', size: 'size', how: 'doc', move: 'folder', clear: 'drop', remove: 'trash' };
-const MENU_NOTE = 'Change it with the agent and How we got this come in the next build.';
+const MENU_NOTE = 'Change it with the agent comes in the next build.';
 
 function menuHTML(w: Widget) {
   let i = 0;
@@ -239,7 +240,7 @@ export function openMenu(id: string) {
     place: (h) => ({ x: clamp(b.right - MW, 12, innerWidth - MW - 12), y: clamp(b.top - 4, 12, innerHeight - h - 12), w: MW, h, r: 22 }),
     after: (s) => {
       s.setAttribute('role', 'menu');
-      s.setAttribute('aria-label', `Menu for ${w.spec.title}`);
+      s.setAttribute('aria-label', `Menu for ${tileName(w)}`);
       s.addEventListener('click', (e) => {
         const t = e.target as Element;
         const folder = t.closest<HTMLElement>('[data-folder]');
@@ -279,17 +280,22 @@ export function openFolder(id: string) {
 
 // ---------- apps ----------
 
+/** How we got it: every widget with numbers; a tap opens its How we got this. */
 function receiptsBody() {
   const rows: string[] = [];
   let i = 2;
   for (const w of S.widgets.values()) {
+    if (w.spec.kind !== 'display') continue;
     const r: WidgetResult | null = w.result;
-    if (!r) continue;
-    for (const n of r.numbers.slice(0, 4)) rows.push(rowi('receipts', w.spec.title, `${n.op.replace(/_/g, ' ')} ${fmtNum(n)} · ${fmtTime(r.created_at)}`, `<span class="mono">${esc(n.receipt_id)}</span>`, i++));
+    const first = r?.numbers[0];
+    const sub = r ? `${first ? fmtNum(first) + ' · ' : ''}updated ${fmtTime(r.created_at)}` : 'Exchange prices until its first run';
+    rows.push(
+      `<button class="rowitem how-row${rz(i++)} type="button" data-how="${esc(w.spec.widget_id)}"><span class="ic">${IC.receipts}</span><div class="grow"><div class="t">${esc(w.spec.title)}</div><div class="s">${esc(sub)}</div></div><span class="caret">${IC.caret}</span></button>`,
+    );
   }
   return (
-    sheetHead('Receipts', 'Each number on the board points to the run that made it.') +
-    (rows.length ? rows.join('') : `<div class="stub-note${rz(2)}>No receipts yet. The board shows cached exchange prices until each widget's first run.</div>`)
+    sheetHead('How we got it', 'Pick a widget to see where its numbers came from, step by step.') +
+    (rows.length ? rows.join('') : `<div class="stub-note${rz(2)}>No widgets with numbers yet.</div>`)
   );
 }
 
@@ -304,7 +310,6 @@ function settingsBody() {
 }
 
 const APP_BODY: Record<string, () => string> = {
-  trust: () => sheetHead('Trust', 'Every task runs in a fresh sandbox.') + nextBuild("Today's sandboxes, blocked requests, killed runs and the signed audit head, from the audit log.", 2),
   receipts: receiptsBody,
   accounts: () => sheetHead('Accounts', 'The agent reads. It never trades for you.') + nextBuild('Connect Kalshi or Polymarket with a read-only key.', 2),
   catalog: () => sheetHead('Catalog', 'Add a widget to your board.') + nextBuild('Adding widgets by hand and through the chat.', 2),
@@ -314,6 +319,7 @@ const APP_BODY: Record<string, () => string> = {
 export function openApp(id: string) {
   const w = S.widgets.get(id);
   if (!w || w.spec.kind !== 'app') return;
+  if (w.spec.app === 'trust') return void openSafety(id);
   const body = APP_BODY[w.spec.app];
   if (!body) return;
   panel('sheet', body(), {
@@ -322,6 +328,8 @@ export function openApp(id: string) {
     fromFn: () => tileFrom(id),
     after: (s) => {
       s.addEventListener('click', (e) => {
+        const how = (e.target as Element).closest<HTMLElement>('[data-how]');
+        if (how) return void openHow(how.dataset.how!);
         const t = (e.target as Element).closest<HTMLElement>('[data-toggle]');
         if (!t) return;
         const on = t.getAttribute('aria-pressed') !== 'true';

@@ -3,9 +3,12 @@
  * Every state-changing call carries the page's Origin (the browser adds it) and edge checks it.
  * Any route may answer 429 (rate limits) or 413 (body cap): both become a notice, never a crash.
  */
-import type { Account, Board, ChatReply, ChatTurn, Look, Proposal, Widget } from '@app/contracts';
+import type { Account, Board, ChatReply, ChatTurn, EDGE, Look, Output, Proposal, RunTraceStep, Widget } from '@app/contracts';
 
 export type { Account, Board, Look, Widget };
+/** The Safety app's data: audit's counts and models' spend, through edge. */
+export type TrustPage = Output<typeof EDGE.trust>;
+export type Verify = Output<typeof EDGE.auditVerify>;
 
 export class ApiError extends Error {
   constructor(
@@ -95,4 +98,8 @@ export const api = {
   reject: (id: string) => call<Proposal>('POST', `/api/proposals/${encodeURIComponent(id)}/reject`, {}, { quiet: true }),
   conversation: (id: string) =>
     call<{ conversation_id: string; turns: ChatTurn[] }>('GET', `/api/chat/${encodeURIComponent(id)}`, undefined, { quiet: true }),
+  // Safety and How we got this.
+  trust: () => call<TrustPage>('GET', '/api/trust'),
+  auditVerify: () => call<Verify>('GET', '/api/audit/verify'),
+  trace: (id: string) => call<{ steps: RunTraceStep[] }>('GET', `/api/widgets/${encodeURIComponent(id)}/trace`),
 };

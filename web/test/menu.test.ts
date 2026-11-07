@@ -85,7 +85,7 @@ beforeAll(async () => {
   const folders = grid.filter((s) => s.kind === 'folder').map((s) => s.title);
   T.folder1 = folders[0] ?? '';
   T.folder2 = folders[1] ?? '';
-  T.app = find((s) => s.app === 'receipts');
+  T.app = find((s) => s.app === 'receipts') && 'How we got it'; // the tile shows the app's plain name (W1.2.3)
   expect(Object.values(T).every(Boolean), JSON.stringify(T)).toBe(true);
 });
 afterAll(async () => {
@@ -110,7 +110,7 @@ describe('the ⋯ menu at phone size', () => {
     }
     const seven = ['Change it with the agent', 'Refresh now', 'Size', 'How we got this', 'Move to a folder', 'Clear all', 'Remove'];
     for (const s of Object.values(seen)) expect(s.labels).toEqual(seven);
-    expect(seen[T.market]!.off).toEqual(['How we got this']);
+    expect(seen[T.market]!.off).toEqual([]);
     expect(seen[T.app]!.off).toEqual(['Change it with the agent', 'Refresh now', 'Size', 'How we got this', 'Clear all']);
     expect(seen[T.folder1]!.off).toEqual(['Change it with the agent', 'Refresh now', 'Size', 'How we got this', 'Move to a folder', 'Clear all']);
   });

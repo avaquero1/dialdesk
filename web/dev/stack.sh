@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The web app's local stack, beside (never on) vha-dev's ports:
 #   Compose project vha-web: Postgres :55491, Valkey :56491, Caddy http://localhost:8490 (serves web/dist, policy on)
-#   real: edge :18480, accounts :18481, board :18482, agent :18483 (Postgres + Valkey)
-#   fakes: runner :18484, markets :18485, connections :18486, models :18487, audit :18488
+#   real: edge :18480, accounts :18481, board :18482, agent :18483, audit :18488 (Postgres + Valkey; audit chains and signs
+#   the real log)
+#   fakes: runner :18484, markets :18485, connections :18486, models :18487
 # The agent is the real one on the models fake (canned chat steps, no model calls), so first-visit picks, proposals
 # and set_look come from the agent's own code in the browser tests.
 #
@@ -16,8 +17,8 @@ export WEB_PORT="${WEB_PORT:-8490}" WEB_PG_PORT="${WEB_PG_PORT:-55491}" WEB_VALK
 compose() { docker compose -f "$here/compose.yml" --env-file "$repo/.env" "$@"; }
 
 declare -A PORT=([edge]=18480 [accounts]=18481 [board]=18482 [agent]=18483 [runner]=18484 [markets]=18485 [connections]=18486 [models]=18487 [audit]=18488)
-REAL="edge accounts board agent"
-FAKE="runner markets connections models audit"
+REAL="edge accounts board agent audit"
+FAKE="runner markets connections models"
 export WEB_EDGE="127.0.0.1:${PORT[edge]}"
 
 envs() {
@@ -32,7 +33,7 @@ envs() {
     [ -n "${!vk:-}" ] && export "$vk=${!vk/127.0.0.1:56379/127.0.0.1:$WEB_VALKEY_PORT}"
   done
   export EDGE_ALLOWED_ORIGINS="http://localhost:$WEB_PORT" EDGE_TRUST_PROXY=1 EDGE_HOST=127.0.0.1
-  export BOARD_SCREENSHOT_DIR="$run/screenshots"
+  export BOARD_SCREENSHOT_DIR="$run/screenshots" AUDIT_HEADS_DIR="$run/audit-heads"
 }
 
 start() {

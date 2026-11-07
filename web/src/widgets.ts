@@ -10,6 +10,11 @@ import { IC } from './icons.ts';
 type Num = WidgetResult['numbers'][number];
 type Display = Extract<Widget['spec'], { kind: 'display' }>;
 
+/** The apps' names on screen (design section 6); the inside names (trust, receipts, catalog) stay in code. */
+export const APP_NAMES: Record<string, string> = { trust: 'Safety', receipts: 'How we got it', accounts: 'Accounts', catalog: 'Add', settings: 'Settings' };
+/** A tile's name on screen: an app's plain name, else its title. */
+export const tileName = (w: Widget) => (w.spec.kind === 'app' ? (APP_NAMES[w.spec.app] ?? w.spec.title) : w.spec.title);
+
 // ---------- small formatters ----------
 
 export const fmtTime = (iso: string) => {

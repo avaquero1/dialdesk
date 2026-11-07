@@ -6,7 +6,7 @@ import type { Widget } from '@app/contracts';
 import { $, $$, clamp, cssNum, esc, mk, raf2, reduced, root, setHtml } from './dom.ts';
 import { IC } from './icons.ts';
 import { DESKTOP_COLS, PHONE_COLS, canonical, dimsOf, orderFromBoard, pack, placesFor, type Rect } from './layout.ts';
-import { displayHtml, miniHtml, type RenderCtx } from './widgets.ts';
+import { displayHtml, miniHtml, tileName, type RenderCtx } from './widgets.ts';
 
 export interface Placed extends Rect {
   x: number;
@@ -45,6 +45,8 @@ export interface BoardHooks {
   openMenu: (id: string) => void;
   openApp: (id: string) => void;
   openFolder: (id: string) => void;
+  /** A tap on a number: How we got this. */
+  openHow: (id: string) => void;
   /** The user dropped a tile: the new desktop order to save. */
   saveOrder: (order: string[]) => void;
   closeSurface: (instant?: boolean) => void;
@@ -197,7 +199,7 @@ const menuBtn = (n: string) => `<button class="w-menu-btn" type="button" aria-la
 function tileHtml(w: Widget): string {
   const s = w.spec;
   if (s.kind === 'display') return `<i class="g-clip"></i><i class="w-spot"></i><i class="w-shimmer"></i><div class="w-in">${displayHtml(w, renderCtx())}</div>${menuBtn(s.title)}`;
-  if (s.kind === 'app') return `<div class="a-tile"><i class="g-clip"></i>${IC[s.app]}${menuBtn(s.title)}</div><span class="a-label">${esc(s.title)}</span>`;
+  if (s.kind === 'app') return `<div class="a-tile"><i class="g-clip"></i>${IC[s.app]}${menuBtn(tileName(w))}</div><span class="a-label">${esc(tileName(w))}</span>`;
   const mini = (S.kids.get(s.widget_id) ?? [])
     .slice(0, 4)
     .map((k) => S.widgets.get(k))
@@ -219,7 +221,7 @@ function makeTile(w: Widget): HTMLElement {
   el.dataset.kind = w.spec.kind;
   el.tabIndex = 0;
   el.setAttribute('role', 'group');
-  el.setAttribute('aria-label', w.spec.title);
+  el.setAttribute('aria-label', tileName(w));
   el.className = tileClass(w);
   setHtml(el, tileHtml(w));
   return el;
@@ -236,7 +238,7 @@ function refreshTile(id: string) {
     if (inner) setHtml(inner, displayHtml(w, renderCtx()));
   } else setHtml(el, tileHtml(w));
   el.className = tileClass(w) + (keep.length ? ' ' + keep.join(' ') : '');
-  el.setAttribute('aria-label', w.spec.title);
+  el.setAttribute('aria-label', tileName(w));
 }
 
 /** First mount: every tile pours in, staggered. */
@@ -597,6 +599,7 @@ export function bindBoard(h: BoardHooks) {
     const it = S.widgets.get(w.dataset.id!);
     if (!it) return;
     if (t.closest('.w-menu-btn')) h.openMenu(it.spec.widget_id);
+    else if (it.spec.kind === 'display' && t.closest('.num')) h.openHow(it.spec.widget_id);
     else if (it.spec.kind === 'app') h.openApp(it.spec.widget_id);
     else if (it.spec.kind === 'folder') h.openFolder(it.spec.widget_id);
   });

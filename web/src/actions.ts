@@ -6,6 +6,8 @@ import { ApiError, api } from './api.ts';
 import { $, mk } from './dom.ts';
 import { S, hideTile, placesWithout, reconcile, saveLayout, shimmer, upsert } from './board.ts';
 import { closeSurface, toast } from './surfaces.ts';
+import { openHow } from './safety.ts';
+import { tileName } from './widgets.ts';
 import { Undo, type UndoView } from './undo.ts';
 import type { MenuAction, Size } from './menu.ts';
 
@@ -48,13 +50,17 @@ function shimmerOnce(id: string) {
   shimT.set(id, window.setTimeout(() => shimmer(id, false), 1900));
 }
 
-const title = (id: string) => S.widgets.get(id)?.spec.title ?? 'This widget';
+const title = (id: string) => {
+  const w = S.widgets.get(id);
+  return w ? tileName(w) : 'This widget';
+};
 
 export function menuAction(id: string, act: MenuAction, arg?: string) {
   const w = S.widgets.get(id);
   if (!w) return;
-  if (act === 'agent' || act === 'how') return; // W1.3 and W1.2 wire these
+  if (act === 'agent') return; // W1.3 wires this
   closeSurface();
+  if (act === 'how') return void openHow(id);
   if (act === 'refresh') {
     shimmerOnce(id);
     api.refresh(id).catch((e: unknown) => {
