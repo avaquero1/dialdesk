@@ -39,6 +39,11 @@ export function createFakeAudit() {
     const day = now().slice(0, 10);
     return rows.filter((r) => r.entry.account_id === account_id && r.entry.at.slice(0, 10) === day);
   };
+  const site = () => {
+    const day = now().slice(0, 10);
+    const n = (action: string) => rows.filter((r) => r.entry.action === action && r.entry.at.slice(0, 10) === day).length;
+    return { signups: n(A.accountCreated), guests_created: n(A.guestCreated), guests_deleted: n(A.accountDeleted), logins_refused: n(A.loginRefused) };
+  };
   const count = (action: string, account_id: string) => today(account_id).filter((r) => r.entry.action === action).length;
   const refused = (account_id: string) =>
     today(account_id)
@@ -69,6 +74,7 @@ export function createFakeAudit() {
         .filter((r) => r.entry.account_id === query.account_id && r.entry.action.startsWith(A.consentPrefix))
         .map((r) => ({ action: r.entry.action, at: r.entry.at, subject_id: r.entry.subject_id })),
       connected: connected(query.account_id),
+      site: site(),
       head: head(),
     }),
     head: () => head(),

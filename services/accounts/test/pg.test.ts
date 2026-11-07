@@ -51,7 +51,7 @@ describe.skipIf(!url)('accounts (real, Postgres)', () => {
   it('deleting a guest deletes its sessions', async () => {
     const store = pgStore(sql);
     const g: any = await (await app.request('/guests', { method: 'POST', headers: { authorization: `Bearer ${TEST_TOKENS.edge}`, 'content-type': 'application/json' }, body: '{}' })).json();
-    expect(await store.deleteGuests(new Date(Date.now() + 1000).toISOString())).toBeGreaterThanOrEqual(1);
+    expect(await store.deleteGuests(new Date(Date.now() + 1000).toISOString())).toContain(g.account.account_id);
     expect(await store.session(g.session.session_id)).toBeNull();
   });
 });

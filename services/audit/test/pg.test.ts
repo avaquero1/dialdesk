@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AUDIT, LOG_STREAM } from '@app/contracts';
+import { AUDIT, LOG_STREAM, TRUST_ACTIONS as A } from '@app/contracts';
 import { LogStreamReader, ValkeyBus, createLogger, logEntry, migrate, valkeyClient } from '@app/service-kit';
 import { rowHash, type ChainRow } from '../src/chain.ts';
 import { auditHandlers, openAudit, type AuditDeps } from '../src/real.ts';
@@ -254,6 +254,30 @@ describe.skipIf(!on)('audit on Postgres and Valkey', () => {
     expect(subjects).toContain('sbx_orphan');
     expect(await dead.read({ pending: true })).toEqual([]);
     expect((await call.trust(other)).sandboxes_created).toBe(4);
+    expect((await call.verify()).ok).toBe(true);
+  });
+
+  it("counts the site's sign-ups, guests, deleted guests and refused logins for today, the same on every account's page", async () => {
+    const accounts = new ValkeyBus(e.ACCOUNTS_VALKEY_URL!, 'accounts');
+    closers.push(() => accounts.close());
+    const before = (await call.trust(acc)).site;
+    expect(before).toEqual({ signups: 0, guests_created: 0, guests_deleted: 0, logins_refused: 0 });
+    const l = (action: string, rest: object) => accounts.log(logEntry('accounts', action, { outcome: 'ok', ...rest }));
+    await l(A.accountCreated, { account_id: 'acc_sitetest001', subject_id: 'acc_sitetest001', hashes: { email: 'a'.repeat(64) } });
+    await l(A.accountCreated, { account_id: 'acc_sitetest002', subject_id: 'acc_sitetest002', at: new Date(Date.now() - 86_400_000).toISOString() });
+    await l(A.guestCreated, { account_id: 'acc_sitetest003', subject_id: 'acc_sitetest003' });
+    await l(A.guestCreated, { account_id: 'acc_sitetest004', subject_id: 'acc_sitetest004' });
+    await l(A.accountDeleted, { account_id: 'acc_sitetest003', subject_id: 'acc_sitetest003', ids: { reason: 'guest_sweep' } });
+    await l('account.guests_swept', { sizes: { accounts: 1 } });
+    await l(A.loginRefused, { outcome: 'refused', ids: { reason: 'bad_login' }, hashes: { email: 'b'.repeat(64) } });
+    await l(A.loginRefused, { account_id: 'acc_sitetest001', outcome: 'refused', ids: { reason: 'bad_login' }, hashes: { email: 'a'.repeat(64) } });
+    await l(A.loginRefused, { outcome: 'refused', ids: { reason: 'locked' }, hashes: { email: 'b'.repeat(64) } });
+    expect(await drain()).toBe(9);
+    const site = { signups: 1, guests_created: 2, guests_deleted: 1, logins_refused: 3 };
+    expect((await call.trust(acc)).site).toEqual(site);
+    expect((await call.trust('acc_sitetest001')).site).toEqual(site);
+    // The site's rows don't leak into one account's own numbers.
+    expect((await call.trust('acc_sitetest001')).sandboxes_created).toBe(0);
     expect((await call.verify()).ok).toBe(true);
   });
 });

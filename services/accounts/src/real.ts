@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import postgres from 'postgres';
 import { z } from 'zod';
-import { ACCOUNTS, DEFAULT_LOOK, Look, newId, type Account } from '@app/contracts';
+import { ACCOUNTS, DEFAULT_LOOK, Look, TRUST_ACTIONS as A, newId, type Account } from '@app/contracts';
 import { HttpError, MemoryBus, busFromConfig, createLogger, logEntry, now, type Bus, type Handlers, type Logger } from '@app/service-kit';
 import { DEFAULT_COST, dummyHash, hashPassword, verifyPassword, type Argon2Cost } from './password.ts';
 import { loadSigningKey, signSession, type SigningKey } from './session.ts';
@@ -73,7 +73,7 @@ export function createAccounts(o: AccountsOptions): Handlers<typeof ACCOUNTS> {
       const email = normalize(body.email);
       const a = newAccount(email, await hashPassword(body.password, cost));
       if (!(await store.insertAccount(a))) throw new HttpError(409, 'exists', 'that email has an account');
-      await bus.log(logEntry('accounts', 'account.created', { account_id: a.account_id, subject_id: a.account_id, outcome: 'ok', hashes: { email: sha256(email) } }));
+      await bus.log(logEntry('accounts', A.accountCreated, { account_id: a.account_id, subject_id: a.account_id, outcome: 'ok', hashes: { email: sha256(email) } }));
       return startSession(a);
     },
 
@@ -83,7 +83,7 @@ export function createAccounts(o: AccountsOptions): Handlers<typeof ACCOUNTS> {
       times.push(clock());
       const a = newAccount(null, null);
       await store.insertAccount(a);
-      await bus.log(logEntry('accounts', 'account.guest_created', { account_id: a.account_id, subject_id: a.account_id, outcome: 'ok' }));
+      await bus.log(logEntry('accounts', A.guestCreated, { account_id: a.account_id, subject_id: a.account_id, outcome: 'ok' }));
       return startSession(a);
     },
 
@@ -91,7 +91,10 @@ export function createAccounts(o: AccountsOptions): Handlers<typeof ACCOUNTS> {
       const email = normalize(body.email);
       const tag = sha256(email);
       const fails = recent(failures.get(tag) ?? [], 15 * 60_000);
-      if (fails.length >= (o.loginFailures ?? 10)) throw new HttpError(429, 'locked', 'too many failed logins; try again in 15 minutes');
+      if (fails.length >= (o.loginFailures ?? 10)) {
+        await bus.log(logEntry('accounts', A.loginRefused, { outcome: 'refused', ids: { reason: 'locked' }, hashes: { email: tag } }));
+        throw new HttpError(429, 'locked', 'too many failed logins; try again in 15 minutes');
+      }
       const a = await store.accountByEmail(email);
       // Always run argon2, so an unknown email costs the same time as a wrong password.
       const ok = await verifyPassword(body.password, a?.password_hash ?? (await (dummy ??= dummyHash(cost))));
@@ -99,7 +102,8 @@ export function createAccounts(o: AccountsOptions): Handlers<typeof ACCOUNTS> {
         fails.push(clock());
         failures.set(tag, fails);
         if (failures.size > 100_000) failures.clear();
-        await bus.log(logEntry('accounts', 'login.failed', { outcome: 'refused', hashes: { email: tag } }));
+        // The trust page counts these (TRUST_ACTIONS); account_id only when the email has an account.
+        await bus.log(logEntry('accounts', A.loginRefused, { account_id: a?.account_id ?? null, outcome: 'refused', ids: { reason: 'bad_login' }, hashes: { email: tag } }));
         throw new HttpError(401, 'bad_login', 'wrong email or password');
       }
       failures.delete(tag);
@@ -147,10 +151,13 @@ export function scheduleGuestSweep(store: Store, log: Logger, bus: Bus, hourUtc 
     if (d.getUTCHours() !== hourUtc || day === lastDay) return null;
     lastDay = day;
     try {
-      const n = await store.deleteGuests(new Date(clock() - 3600_000).toISOString());
-      log.info({ deleted: n }, 'guest sweep');
-      await bus.log(logEntry('accounts', 'account.guests_swept', { outcome: 'ok', sizes: { accounts: n } }));
-      return n;
+      const gone = await store.deleteGuests(new Date(clock() - 3600_000).toISOString());
+      log.info({ deleted: gone.length }, 'guest sweep');
+      // One row per guest (the trust page counts account.deleted), then the sweep's own summary.
+      for (const account_id of gone)
+        await bus.log(logEntry('accounts', A.accountDeleted, { account_id, subject_id: account_id, outcome: 'ok', ids: { reason: 'guest_sweep' } }));
+      await bus.log(logEntry('accounts', 'account.guests_swept', { outcome: 'ok', sizes: { accounts: gone.length } }));
+      return gone.length;
     } catch (err) {
       log.error({ err: (err as Error).message }, 'guest sweep failed');
       return null;

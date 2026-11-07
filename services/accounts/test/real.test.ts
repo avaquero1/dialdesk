@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { ACCOUNTS, SessionClaims } from '@app/contracts';
+import { ACCOUNTS, SessionClaims, TRUST_ACTIONS } from '@app/contracts';
 import { MemoryBus, createLogger } from '@app/service-kit';
 import { outsider, runCase, TEST_TOKENS, type Ctx } from '@app/testkit';
 import { hashPassword, verifyPassword, TEST_COST } from '../src/password.ts';
@@ -100,6 +100,14 @@ describe('accounts (real): sign-up, login, sessions', () => {
     const logged = JSON.stringify((bus as MemoryBus).entries);
     expect(logged).not.toContain('lee@example.test');
     expect(logged).not.toContain('wrong password');
+    // Every refusal is a login.refused row for the trust page: 10 bad logins (account_id only for a known email), then the lock.
+    const refused = (bus as MemoryBus).entries.filter((e) => e.action === TRUST_ACTIONS.loginRefused);
+    expect(refused.map((e) => e.ids?.reason)).toEqual([...Array(11).fill('bad_login'), 'locked']);
+    expect(refused[0]!.account_id).toBeNull();
+    expect(refused[1]!.account_id).toBe(refused[2]!.account_id);
+    expect(refused[1]!.account_id).toMatch(/./);
+    expect(refused.every((e) => e.outcome === 'refused' && e.hashes?.email)).toBe(true);
+    expect((bus as MemoryBus).entries.some((e) => e.action === 'login.failed')).toBe(false);
   });
 
   it('logout revokes the session: sessionValid turns false', async () => {
@@ -163,7 +171,8 @@ describe('accounts (real): the nightly guest sweep', () => {
     const user: any = await (await post(app, '/accounts', { email: 'sue@example.test', password: 'correct horse battery' })).json();
     t = Date.parse('2026-11-08T07:30:00Z');
     const fresh: any = await (await post(app, '/guests', {})).json();
-    const sweep = scheduleGuestSweep(store, createLogger('accounts', 'silent'), new MemoryBus(), 8, () => t);
+    const sweepBus = new MemoryBus();
+    const sweep = scheduleGuestSweep(store, createLogger('accounts', 'silent'), sweepBus, 8, () => t);
     sweep.stop();
     expect(await sweep.tick()).toBeNull(); // not 08:00 yet
     t = Date.parse('2026-11-08T08:05:00Z');
@@ -174,6 +183,22 @@ describe('accounts (real): the nightly guest sweep', () => {
     expect(await valid(fresh.session.session_id)).toBe(true);
     expect(await valid(user.session.session_id)).toBe(true);
     expect((await app.request(`/accounts/${old.account.account_id}`, { headers: asEdge })).status).toBe(404);
+    // One account.deleted row per swept guest, then the sweep's summary.
+    expect(sweepBus.entries.map((e) => [e.action, e.account_id, e.sizes?.accounts])).toEqual([
+      [TRUST_ACTIONS.accountDeleted, old.account.account_id, undefined],
+      ['account.guests_swept', null, 1],
+    ]);
+  });
+
+  it('deleteGuests answers the deleted account ids', async () => {
+    const store = memoryStore();
+    const { app } = realAccounts({ store, clock: () => Date.parse('2026-11-08T06:00:00Z') });
+    const a: any = await (await post(app, '/guests', {})).json();
+    const b: any = await (await post(app, '/guests', {})).json();
+    await post(app, '/accounts', { email: 'kim@example.test', password: 'correct horse battery' });
+    const gone = await store.deleteGuests('2026-11-08T07:00:00Z');
+    expect(gone.sort()).toEqual([a.account.account_id, b.account.account_id].sort());
+    expect(await store.deleteGuests('2026-11-08T07:00:00Z')).toEqual([]);
   });
 });
 

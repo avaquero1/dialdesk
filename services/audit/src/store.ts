@@ -136,6 +136,15 @@ export class PgAuditStore {
         and (entry->>'at')::timestamptz >= ${`${day}T00:00:00Z`} and (entry->>'at')::timestamptz < ${next}
       group by 1`;
     const n = (a: string) => rows.find((r) => r.action === a)?.n ?? 0;
+    // The site's account rows: every account, counts only.
+    const siteActions = [A.accountCreated, A.guestCreated, A.accountDeleted, A.loginRefused];
+    const siteRows = await this.sql<{ action: string; n: number }[]>`
+      select entry->>'action' as action, count(*)::int as n
+      from chain
+      where entry->>'action' = any(${siteActions})
+        and (entry->>'at')::timestamptz >= ${`${day}T00:00:00Z`} and (entry->>'at')::timestamptz < ${next}
+      group by 1`;
+    const s = (a: string) => siteRows.find((r) => r.action === a)?.n ?? 0;
     const consents = await this.sql<{ action: string; at: string; subject_id: string | null }[]>`
       select entry->>'action' as action, entry->>'at' as at, entry->>'subject_id' as subject_id
       from chain where entry->>'account_id' = ${accountId} and starts_with(entry->>'action', ${A.consentPrefix}) order by seq`;
@@ -158,6 +167,7 @@ export class PgAuditStore {
       runs_poisoned: n(A.runPoisoned),
       consents: consents.map((c) => ({ action: c.action, at: c.at, subject_id: c.subject_id })),
       connected: [...by.values()].filter((c) => c !== null),
+      site: { signups: s(A.accountCreated), guests_created: s(A.guestCreated), guests_deleted: s(A.accountDeleted), logins_refused: s(A.loginRefused) },
     };
   }
 
