@@ -1,6 +1,7 @@
 //! The control socket between sandbox-manager and the proxy: a Unix socket, one JSON
 //! request line and one JSON response line per connection. Only the manager's user can
-//! open it (mode 0600), and no sandbox can reach it: it is not on any network.
+//! open it (mode 0600, or 0660 for the group given by `--control-gid` when the manager runs as its own user), and
+//! no sandbox can reach it: it is not on any network.
 //!
 //! The manager registers each sandbox's source address with its job's allowlist before
 //! the sandbox starts, drains the request log when the pages are read, and unregisters

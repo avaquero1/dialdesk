@@ -38,7 +38,7 @@ fn main() -> ExitCode {
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: egress-proxy serve --listen <ip:port> [--listen ...] --control <socket> \
+        "usage: egress-proxy serve --listen <ip:port> [--listen ...] --control <socket> [--control-gid <gid>] \
          [--dev-map <domain>=<host:port>] [--dev-resolve <name>=<ip[,ip]>]\n       \
          egress-proxy --check <host> <port> <resolved-ip[,ip...]|-> <allowlist,comma,separated>"
     );
@@ -56,6 +56,12 @@ fn parse_serve(args: &[&str]) -> Result<server::Config, String> {
                     .map_err(|_| format!("--listen {v:?}: not ip:port"))?,
             ),
             "--control" => cfg.control = v.into(),
+            "--control-gid" => {
+                cfg.control_gid = Some(
+                    v.parse()
+                        .map_err(|_| format!("--control-gid {v:?}: not a number"))?,
+                )
+            }
             "--dev-map" => {
                 let (d, t) = v
                     .split_once('=')

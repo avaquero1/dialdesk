@@ -45,6 +45,9 @@ pub struct Config {
     pub dev_map: Vec<(String, String)>,
     /// DEV ONLY: a name resolves to these addresses. Still range-checked (the rebinding test).
     pub dev_resolve: HashMap<String, Vec<IpAddr>>,
+    /// The group that may also open the control socket (mode 0660 instead of 0600): on the sandbox machine the
+    /// manager runs as its own user, in this group.
+    pub control_gid: Option<u32>,
 }
 
 struct Sandbox {
@@ -219,7 +222,14 @@ pub async fn start(cfg: Config) -> io::Result<Running> {
     let control = UnixListener::bind(&cfg.control)?;
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&cfg.control, std::fs::Permissions::from_mode(0o600))?;
+        let mode = match cfg.control_gid {
+            Some(gid) => {
+                std::os::unix::fs::chown(&cfg.control, None, Some(gid))?;
+                0o660
+            }
+            None => 0o600,
+        };
+        std::fs::set_permissions(&cfg.control, std::fs::Permissions::from_mode(mode))?;
     }
     let addrs = listeners
         .iter()

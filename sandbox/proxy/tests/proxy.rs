@@ -48,6 +48,7 @@ async fn proxy(dev_map: Vec<(String, String)>, dev_resolve: HashMap<String, Vec<
         control: control.clone(),
         dev_map,
         dev_resolve,
+        control_gid: None,
     })
     .await
     .unwrap();

@@ -34,6 +34,9 @@ pub const SANDBOX_USER: &str = "10001:10001";
 /// Slack on top of output_kb for the event framing.
 const OUTPUT_SLACK: usize = 16 * 1024;
 
+/// Under gVisor, the least `--pids-limit` (host tasks: the Sentry's threads plus the sandbox's).
+const RUNSC_PIDS_BACKSTOP: u32 = 1024;
+
 #[derive(Debug, Clone)]
 pub struct DockerConfig {
     /// The docker CLI (DOCKER_HOST and friends come from the manager's env).
@@ -401,12 +404,15 @@ impl DockerBackend {
         // only its processes; --pids-limit there counts host tasks, and a fork bomb would kill
         // the whole sandbox instead of being held (the VX1 spike). On runc RLIMIT_NPROC counts
         // uid 10001 across every sandbox on the host, so the cgroup's pids limit is the cap.
+        // The host backstop is never under RUNSC_PIDS_BACKSTOP: the Sentry's own threads count
+        // against it, and compute's 8 x 4 = 32 left the engine unable to start on the VX1
+        // (tini: "exec /engine failed: Cannot allocate memory").
         if self.cfg.runtime.starts_with("runsc") {
             a.extend([
                 "--ulimit".into(),
                 format!("nproc={0}:{0}", l.pids),
                 "--pids-limit".into(),
-                (l.pids * 4).to_string(),
+                (l.pids * 4).max(RUNSC_PIDS_BACKSTOP).to_string(),
             ]);
         } else {
             a.extend(["--pids-limit".into(), l.pids.to_string()]);
@@ -939,6 +945,10 @@ mod tests {
         // The spike's process cap under gVisor: nproc 256, the pids limit well above it.
         assert!(p.contains(&("--ulimit".into(), "nproc=256:256".into())));
         assert!(p.contains(&("--pids-limit".into(), "1024".into())));
+        // Compute: nproc 8 inside, and the host backstop still 1024 (the Sentry's threads count there).
+        let c = pairs(&b.hardening("s", "compute", &Limits::COMPUTE));
+        assert!(c.contains(&("--ulimit".into(), "nproc=8:8".into())));
+        assert!(c.contains(&("--pids-limit".into(), "1024".into())));
     }
 
     #[test]
