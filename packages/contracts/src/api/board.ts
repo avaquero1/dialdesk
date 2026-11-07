@@ -1,11 +1,27 @@
 import { z } from 'zod';
-import { AccountId, Domain, Ok, ProposalId, ReceiptId, ResultId, Timestamp, WidgetId } from '../common.ts';
+import { AccountId, CandidateId, Cents, Domain, Exchange, MarketId, Ok, ProposalId, ReceiptId, ResultId, RunId, Timestamp, WidgetId } from '../common.ts';
 import { DisplaySize } from '../catalog.ts';
 import { api } from '../endpoint.ts';
 import { RunTraceStep, WidgetResult } from '../result.ts';
 import { EngineReceipt } from '../rust.ts';
 import { Verdict } from '../verdict.ts';
 import { Place, WidgetDraft, WidgetProfile, WidgetSpec, WidgetState } from '../widget.ts';
+
+/**
+ * First paint: a market's cached price from markets, copied when board creates the widget, so a new board isn't empty
+ * before its first run. Exchange data shown with its "as of" stamp, not engine math: the first result replaces it.
+ */
+export const Quote = z
+  .object({
+    market_id: MarketId,
+    exchange: Exchange,
+    yes_price_cents: Cents,
+    previous_price_cents: Cents.nullable().describe('24 h ago'),
+    as_of: Timestamp,
+    stale: z.boolean(),
+  })
+  .strict();
+export type Quote = z.infer<typeof Quote>;
 
 export const Widget = z
   .object({
@@ -14,6 +30,7 @@ export const Widget = z
     state: WidgetState,
     result: WidgetResult.nullable(),
     previous: WidgetResult.nullable().describe('for "since you last looked"'),
+    quotes: z.array(Quote).max(12).optional().describe('first paint: cached prices for the spec\'s markets, until the first result'),
     updated_at: Timestamp,
   })
   .strict();
@@ -53,6 +70,10 @@ export const Board = z
   })
   .strict();
 export type Board = z.infer<typeof Board>;
+
+/** A screenshot of an external page, PNG, base64. About 2 MB at most. */
+const PngBase64 = z.string().max(2_800_000).regex(/^iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/, 'a base64 PNG');
+const screenshotParams = z.object({ widget_id: WidgetId, run_id: RunId, candidate_id: CandidateId });
 
 const acc = z.object({ account_id: AccountId });
 const wid = z.object({ widget_id: WidgetId });
@@ -208,6 +229,26 @@ export const BOARD = api('board', {
     response: z.object({ steps: z.array(RunTraceStep) }).strict(),
     errors: [404],
     summary: 'Sources and receipts: the last run trace.',
+  },
+  putScreenshot: {
+    method: 'PUT',
+    path: '/widgets/:widget_id/screenshots/:run_id/:candidate_id',
+    callers: ['runner'],
+    params: screenshotParams,
+    body: z.object({ account_id: AccountId, png_base64: PngBase64 }).strict(),
+    response: z.object({ screenshot_key: z.string() }).strict(),
+    errors: [400, 404],
+    summary: "A source's screenshot from the browse sandbox, stored in Object Storage. The key goes in the run trace.",
+  },
+  getScreenshot: {
+    method: 'GET',
+    path: '/widgets/:widget_id/screenshots/:run_id/:candidate_id',
+    callers: ['edge'],
+    params: screenshotParams,
+    query: accQuery,
+    response: z.object({ screenshot_key: z.string(), content_type: z.literal('image/png'), png_base64: PngBase64 }).strict(),
+    errors: [404],
+    summary: 'A screenshot for the run trace, shown as an image labelled "external page".',
   },
   getReceipt: {
     method: 'GET',

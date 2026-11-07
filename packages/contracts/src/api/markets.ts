@@ -48,11 +48,11 @@ export const MARKETS = api('markets', {
   get: {
     method: 'GET',
     path: '/markets/:market_id',
-    callers: ['agent', 'runner'],
+    callers: ['agent', 'runner', 'board'],
     params: mid,
     response: Market,
     errors: [404],
-    summary: 'One market, cached 10-30 s. quote_market reads this.',
+    summary: "One market, cached 10-30 s. quote_market reads this; board reads it for a new widget's first paint.",
   },
   history: {
     method: 'GET',

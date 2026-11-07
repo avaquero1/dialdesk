@@ -1,50 +1,87 @@
 import {
   BOARD,
   QUEUES,
+  SIZE_CELLS,
   WIDGET_CATALOG,
   WidgetSpec,
   displayEntry,
   newId,
-  widgetRunJobId,
   type Board,
-  type DefaultTile,
   type Proposal,
   type RunKind,
   type RunTraceStep,
   type Widget,
   type WidgetDraft,
-  type WidgetProfile,
   type WidgetRunJob,
 } from '@app/contracts';
-import { HttpError, MemoryBus, now, type Bus, type Handlers } from '@app/service-kit';
+import { HttpError, MemoryBus, calleeConfig, createClient, now, type Bus, type Call, type Handlers } from '@app/service-kit';
+import {
+  REFRESH_PER_HOUR,
+  allMarketIds,
+  applyTune,
+  checkResult,
+  defaultProfile,
+  fetchQuotes,
+  movementFlag,
+  packPlaces,
+  quotesFor,
+  refreshKind,
+  runJob,
+  screenshotKey,
+  validateDisplay,
+  validateTune,
+  view,
+  type DisplaySpec,
+} from './logic.ts';
+import { MemoryObjectStore, isPng, type ObjectStore } from './storage.ts';
 
 export interface FakeDeps {
   bus?: Bus;
   /** Where enqueued runs go. Default: kept in memory (`fakeQueue`). */
   enqueue?: (queue: string, job: WidgetRunJob) => void | Promise<void>;
+  /** markets, for first paint. Without it, new widgets have no quotes. */
+  markets?: Call;
+  /** Screenshots. Default: in memory. */
+  objects?: ObjectStore;
 }
-export async function fakeDepsFromEnv(): Promise<FakeDeps> {
-  return {};
+/** With `make fakes`, the board fake reads first-paint prices from the markets fake over HTTP. */
+export async function fakeDepsFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<FakeDeps> {
+  const { token, url } = calleeConfig('board', 'markets', env);
+  return token ? { markets: createClient({ baseUrl: url, token }) } : {};
 }
 
 /** Runs the fake enqueued, for tests to read (the real board uses BullMQ on QUEUES.widgetRuns). */
 export const fakeQueue: WidgetRunJob[] = [];
 
+type DisplayTile = Pick<WidgetDraft, 'type' | 'size' | 'title' | 'market_ids' | 'params'> & { brief?: string };
+
 /** In-memory board: boards, widgets, proposals, results and traces. Validates every spec against the catalog. */
 export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
   const bus = deps.bus ?? new MemoryBus();
   const enqueue = deps.enqueue ?? ((_q: string, j: WidgetRunJob) => void fakeQueue.push(j));
+  const objects = deps.objects ?? new MemoryObjectStore();
   const boards = new Map<string, { widgets: string[]; pending: string[] }>();
   const widgets = new Map<string, Widget>();
   const proposals = new Map<string, Proposal>();
   const traces = new Map<string, RunTraceStep[]>();
+  const refreshes = new Map<string, number[]>();
 
+  /** Folder children follow the places: a display whose place names a folder is in it. */
+  const withChildren = (w: Widget, ids: string[]): Widget => {
+    if (w.spec.kind !== 'folder') return w;
+    const children = ids
+      .map((id) => widgets.get(id)!)
+      .filter((c) => c && 'folder_id' in c.spec.place && c.spec.place.folder_id === w.spec.widget_id)
+      .sort((a, b) => ('index' in a.spec.place ? a.spec.place.index : 0) - ('index' in b.spec.place ? b.spec.place.index : 0))
+      .map((c) => c.spec.widget_id);
+    return { ...w, spec: { ...w.spec, children } };
+  };
   const board = (account_id: string): Board => {
     const b = boards.get(account_id);
     if (!b) throw new HttpError(404, 'not_found', 'no board for this account');
     return {
       account_id,
-      widgets: b.widgets.map((id) => widgets.get(id)!).filter(Boolean),
+      widgets: b.widgets.map((id) => widgets.get(id)!).filter(Boolean).map((w) => view(withChildren(w, b.widgets))),
       pending: b.pending.map((id) => proposals.get(id)!).filter((p) => p.status === 'pending'),
     };
   };
@@ -53,99 +90,95 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     if (!w || w.spec.account_id !== account_id) throw new HttpError(404, 'not_found', 'no such widget');
     return w;
   };
-  const defaultProfile = (widget_id: string, type: Parameters<typeof displayEntry>[0], brief = ''): WidgetProfile => {
-    const e = displayEntry(type);
-    return { widget_id, brief, source_ids: [...e.default_sources], added_domains: [], cadence: { ...e.default_cadence }, feedback: [], last_math_plan: null };
-  };
+  const shown = (w: Widget) => view(withChildren(w, boards.get(w.spec.account_id)?.widgets ?? []));
   const nextRow = (account_id: string) => {
-    const b = boards.get(account_id)!;
-    return b.widgets.length;
+    let max = -1;
+    for (const id of boards.get(account_id)!.widgets) {
+      const w = widgets.get(id)!;
+      if ('row' in w.spec.place) {
+        const h = w.spec.kind === 'display' ? SIZE_CELLS[w.spec.size][1] : 1;
+        max = Math.max(max, w.spec.place.row + h - 1);
+      }
+    }
+    return max + 1;
   };
-  async function enqueueRun(w: Widget, kind: RunKind, reason: WidgetRunJob['reason']) {
-    const window_start = Math.floor(Date.now() / 1000 / 60) * 60;
-    const job: WidgetRunJob = {
-      job_id: widgetRunJobId(w.spec.widget_id, kind, window_start),
-      widget_id: w.spec.widget_id,
-      account_id: w.spec.account_id,
-      kind,
-      window_start,
-      reason,
-    };
+  async function enqueueRun(spec: DisplaySpec, kind: RunKind, reason: WidgetRunJob['reason']) {
+    const job = runJob(spec, kind, reason);
     await enqueue(QUEUES.widgetRuns, job);
     return job.job_id;
   }
-  async function addDisplay(account_id: string, d: WidgetDraft | Extract<DefaultTile, { kind: 'display' }>, place: Widget['spec']['place']) {
-    const entry = displayEntry(d.type);
-    const size = d.size ?? entry.default_size;
-    if (!entry.sizes.includes(size)) throw new HttpError(400, 'bad_size', `${d.type} has no size ${size}`);
+  async function addDisplay(account_id: string, d: DisplayTile, place: Widget['spec']['place'], state: Widget['state'], quotes: Widget['quotes']) {
+    validateDisplay(d);
     const widget_id = newId('wid');
-    const spec = WidgetSpec.parse({ widget_id, account_id, kind: 'display', type: d.type, size, title: d.title, market_ids: d.market_ids, params: d.params, place });
-    const w: Widget = {
-      spec,
-      profile: defaultProfile(widget_id, d.type, 'brief' in d ? (d.brief ?? '') : ''),
-      state: 'new',
-      result: null,
-      previous: null,
-      updated_at: now(),
-    };
+    const spec = WidgetSpec.parse({
+      widget_id, account_id, kind: 'display', type: d.type, size: d.size ?? displayEntry(d.type).default_size,
+      title: d.title, market_ids: d.market_ids, params: d.params, place,
+    }) as DisplaySpec;
+    const w: Widget = { spec, profile: defaultProfile(widget_id, d.type, d.brief ?? ''), state, result: null, previous: null, updated_at: now() };
+    const q = quotesFor(spec, new Map((quotes ?? []).map((x) => [x.market_id, x])));
+    if (q.length) w.quotes = q;
     widgets.set(widget_id, w);
     boards.get(account_id)!.widgets.push(widget_id);
     await bus.emit('widget.updated', { account_id, at: now(), widget_id, change: 'added' });
     return w;
   }
+  const tile = (account_id: string, spec: Widget['spec']) => {
+    widgets.set(spec.widget_id, { spec, profile: null, state: 'normal', result: null, previous: null, updated_at: now() });
+    boards.get(account_id)!.widgets.push(spec.widget_id);
+  };
 
   return {
     getBoard: ({ params }) => board(params.account_id),
     createDefaults: async ({ params }) => {
       const account_id = params.account_id;
       if (boards.has(account_id)) throw new HttpError(409, 'exists', 'board already exists');
+      const tiles = WIDGET_CATALOG.default_board.tiles;
+      const displays = tiles.flatMap((t) => (t.kind === 'display' ? [t] : t.kind === 'folder' ? t.children : []));
+      const quotes = [...(await fetchQuotes(deps.markets, allMarketIds(displays))).values()];
       boards.set(account_id, { widgets: [], pending: [] });
-      let col = 0;
-      for (const tile of WIDGET_CATALOG.default_board.tiles) {
-        const place = { col: col++ % 8, row: Math.floor(col / 8) };
-        if (tile.kind === 'display') {
-          const w = await addDisplay(account_id, tile, place);
-          w.state = 'normal';
-          await enqueueRun(w, 'numbers', 'accept');
-        } else if (tile.kind === 'app') {
-          const widget_id = newId('wid');
-          widgets.set(widget_id, {
-            spec: { widget_id, account_id, kind: 'app', app: tile.app, title: tile.title, place },
-            profile: null, state: 'normal', result: null, previous: null, updated_at: now(),
-          });
-          boards.get(account_id)!.widgets.push(widget_id);
+      const places = packPlaces(tiles.map((t) => (t.kind === 'display' ? SIZE_CELLS[t.size] : [1, 1])));
+      for (const [i, t] of tiles.entries()) {
+        const place = places[i]!;
+        if (t.kind === 'display') {
+          const w = await addDisplay(account_id, t, place, 'normal', quotes);
+          await enqueueRun(w.spec as DisplaySpec, 'numbers', 'accept');
+        } else if (t.kind === 'app') {
+          tile(account_id, { widget_id: newId('wid'), account_id, kind: 'app', app: t.app, title: t.title, place });
         } else {
           const folder_id = newId('wid');
-          const children: string[] = [];
-          widgets.set(folder_id, {
-            spec: { widget_id: folder_id, account_id, kind: 'folder', title: tile.title, children, place },
-            profile: null, state: 'normal', result: null, previous: null, updated_at: now(),
-          });
-          boards.get(account_id)!.widgets.push(folder_id);
-          for (const [index, child] of tile.children.entries()) {
-            const w = await addDisplay(account_id, child, { folder_id, index });
-            w.state = 'normal';
-            children.push(w.spec.widget_id);
+          tile(account_id, { widget_id: folder_id, account_id, kind: 'folder', title: t.title, children: [], place });
+          for (const [index, child] of t.children.entries()) {
+            const w = await addDisplay(account_id, child, { folder_id, index }, 'normal', quotes);
+            await enqueueRun(w.spec as DisplaySpec, 'numbers', 'accept');
           }
         }
       }
       return board(account_id);
     },
-    setLayout: ({ params, body }) => {
+    setLayout: async ({ params, body }) => {
       const b = board(params.account_id);
       for (const { widget_id, place } of body.places) {
         const w = widget(widget_id, b.account_id);
+        if ('folder_id' in place) {
+          const f = widgets.get(place.folder_id);
+          if (!f || f.spec.account_id !== b.account_id || f.spec.kind !== 'folder' || w.spec.kind === 'folder')
+            throw new HttpError(400, 'bad_folder', "a tile can go only into a folder on the same board, and folders don't nest");
+        }
+      }
+      for (const { widget_id, place } of body.places) {
+        const w = widget(widget_id, b.account_id);
         w.spec = WidgetSpec.parse({ ...w.spec, place });
+        await bus.emit('widget.updated', { account_id: b.account_id, at: now(), widget_id, change: 'changed' });
       }
       return board(params.account_id);
     },
-    propose: ({ params, body }) => {
+    propose: async ({ params, body }) => {
       const b = boards.get(params.account_id);
       if (!b) throw new HttpError(404, 'not_found', 'no board for this account');
       for (const c of body.changes) {
-        if (c.op === 'add' && c.widget.size && !displayEntry(c.widget.type).sizes.includes(c.widget.size))
-          throw new HttpError(400, 'bad_size', `${c.widget.type} has no size ${c.widget.size}`);
-        if (c.op !== 'add') widget(c.widget_id, params.account_id);
+        if (c.op === 'add') validateDisplay(c.widget);
+        else if (c.op === 'tune') validateTune(c, widget(c.widget_id, params.account_id).spec);
+        else widget(c.widget_id, params.account_id);
       }
       const p: Proposal = { proposal_id: newId('prp'), account_id: params.account_id, status: 'pending', changes: body.changes, created_at: now() };
       proposals.set(p.proposal_id, p);
@@ -156,28 +189,29 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       const p = proposals.get(params.proposal_id);
       if (!p || p.account_id !== body.account_id) throw new HttpError(404, 'not_found', 'no such proposal');
       if (p.status !== 'pending') throw new HttpError(409, 'not_pending', `proposal is ${p.status}`);
+      for (const c of p.changes) if (c.op !== 'add' && !widgets.has(c.widget_id)) throw new HttpError(409, 'stale', 'a widget in this proposal is gone');
+      const adds = p.changes.flatMap((c) => (c.op === 'add' ? [c.widget] : []));
+      const quotes = [...(await fetchQuotes(deps.markets, allMarketIds(adds))).values()];
+      const places = packPlaces(adds.map((d) => SIZE_CELLS[d.size ?? displayEntry(d.type).default_size]), nextRow(p.account_id));
       const out: Widget[] = [];
+      let i = 0;
       for (const c of p.changes) {
         if (c.op === 'add') {
-          const w = await addDisplay(p.account_id, c.widget, { col: 0, row: 8 + nextRow(p.account_id) });
-          await enqueueRun(w, 'numbers', 'accept');
-          if (displayEntry(c.widget.type).research) await enqueueRun(w, 'research', 'accept');
-          out.push(w);
+          const w = await addDisplay(p.account_id, c.widget, places[i++]!, 'new', quotes);
+          await enqueueRun(w.spec as DisplaySpec, 'numbers', 'accept');
+          if (displayEntry(c.widget.type).research) await enqueueRun(w.spec as DisplaySpec, 'research', 'accept');
+          out.push(shown(w));
         } else if (c.op === 'tune') {
-          const w = widget(c.widget_id, p.account_id);
-          if (w.spec.kind === 'display') {
-            w.spec = WidgetSpec.parse({
-              ...w.spec,
-              size: c.size ?? w.spec.size,
-              params: { ...w.spec.params, ...(c.user_probability !== undefined && { user_probability: c.user_probability }), ...(c.threshold_pts !== undefined && { threshold_pts: c.threshold_pts }) },
-            });
-          }
+          const w = widgets.get(c.widget_id)!;
+          validateTune(c, w.spec);
+          if (w.spec.kind === 'display') w.spec = applyTune(c, w.spec);
           if (w.profile && c.brief !== undefined) w.profile.brief = c.brief;
-          out.push(w);
+          w.updated_at = now();
+          await bus.emit('widget.updated', { account_id: p.account_id, at: now(), widget_id: c.widget_id, change: 'changed' });
+          out.push(shown(w));
         } else {
-          const b = boards.get(p.account_id)!;
-          b.widgets = b.widgets.filter((id) => id !== c.widget_id);
-          widgets.delete(c.widget_id);
+          removeWidget(p.account_id, c.widget_id);
+          await bus.emit('widget.updated', { account_id: p.account_id, at: now(), widget_id: c.widget_id, change: 'removed' });
         }
       }
       p.status = 'accepted';
@@ -190,70 +224,97 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       p.status = 'rejected';
       return p;
     },
-    getWidget: ({ params, query }) => widget(params.widget_id, query.account_id),
-    resize: ({ params, body }) => {
+    getWidget: ({ params, query }) => shown(widget(params.widget_id, query.account_id)),
+    resize: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
       if (w.spec.kind !== 'display' || !displayEntry(w.spec.type).sizes.includes(body.size))
         throw new HttpError(400, 'bad_size', 'that size is not in the catalog for this widget');
       w.spec = { ...w.spec, size: body.size };
-      return w;
+      await bus.emit('widget.updated', { account_id: body.account_id, at: now(), widget_id: params.widget_id, change: 'changed' });
+      return shown(w);
     },
     clear: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
       if (w.spec.kind === 'display') w.profile = defaultProfile(w.spec.widget_id, w.spec.type);
       await bus.emit('widget.updated', { account_id: body.account_id, at: now(), widget_id: params.widget_id, change: 'cleared' });
-      return w;
+      return shown(w);
     },
-    remove: ({ params, query }) => {
+    remove: async ({ params, query }) => {
       widget(params.widget_id, query.account_id);
-      const b = boards.get(query.account_id)!;
-      b.widgets = b.widgets.filter((id) => id !== params.widget_id);
-      widgets.delete(params.widget_id);
+      removeWidget(query.account_id, params.widget_id);
+      await bus.emit('widget.updated', { account_id: query.account_id, at: now(), widget_id: params.widget_id, change: 'removed' });
       return { ok: true };
     },
     refresh: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
       if (w.spec.kind !== 'display') throw new HttpError(404, 'not_found', 'only displays refresh');
-      const kind = displayEntry(w.spec.type).research ? 'research' : 'numbers';
-      return { job_id: await enqueueRun(w, kind, 'refresh') };
+      const recent = (refreshes.get(w.spec.widget_id) ?? []).filter((t) => t > Date.now() - 3600_000);
+      if (recent.length >= REFRESH_PER_HOUR) throw new HttpError(429, 'too_many_refreshes', 'this widget was refreshed too often this hour');
+      refreshes.set(w.spec.widget_id, [...recent, Date.now()]);
+      return { job_id: await enqueueRun(w.spec, refreshKind(w.spec), 'refresh') };
     },
-    addSource: ({ params, body }) => {
+    addSource: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
       if (!w.profile) throw new HttpError(400, 'no_profile', 'apps and folders have no sources');
-      if (!w.profile.added_domains.includes(body.domain)) w.profile.added_domains.push(body.domain);
-      return w;
+      if (!w.profile.added_domains.includes(body.domain)) {
+        if (w.profile.added_domains.length >= 20) throw new HttpError(400, 'too_many_sources', 'at most 20 added domains');
+        w.profile.added_domains.push(body.domain);
+      }
+      await bus.emit('widget.updated', { account_id: body.account_id, at: now(), widget_id: params.widget_id, change: 'changed' });
+      return shown(w);
     },
     putResult: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
-      const v = body.verdict;
-      if (v.stage !== 'publish' || v.outcome !== 'pass' || v.verdict_id !== body.result.verdict_id)
-        throw new HttpError(422, 'no_passing_verdict', 'a result needs its passing publish verdict');
-      if (body.result.widget_id !== w.spec.widget_id) throw new HttpError(400, 'wrong_widget', 'result is for another widget');
+      checkResult(body, w.spec);
       if (w.result && w.result.run_id !== body.result.run_id) w.previous = w.result;
       w.result = body.result;
+      delete w.quotes;
       w.state = body.result.blocked.length ? 'blocked' : 'normal';
       w.updated_at = now();
       traces.set(w.spec.widget_id, body.trace);
       await bus.emit('result.updated', { account_id: body.account_id, at: now(), widget_id: w.spec.widget_id, result_id: body.result.result_id, phase: body.phase });
+      const flag = movementFlag(w.spec, body.result);
+      if (flag) await bus.emit('movement.flagged', { account_id: body.account_id, at: now(), widget_id: w.spec.widget_id, ...flag });
       return { result_id: body.result.result_id };
     },
     getTrace: ({ params, query }) => {
       widget(params.widget_id, query.account_id);
       return { steps: traces.get(params.widget_id) ?? [] };
     },
+    putScreenshot: async ({ params, body }) => {
+      widget(params.widget_id, body.account_id);
+      const bytes = Buffer.from(body.png_base64, 'base64');
+      if (!isPng(bytes)) throw new HttpError(400, 'not_png', 'a screenshot must be a PNG');
+      const key = screenshotKey(params.widget_id, params.run_id, params.candidate_id);
+      await objects.put(key, bytes, 'image/png');
+      return { screenshot_key: key };
+    },
+    getScreenshot: async ({ params, query }) => {
+      widget(params.widget_id, query.account_id);
+      const key = screenshotKey(params.widget_id, params.run_id, params.candidate_id);
+      const bytes = await objects.get(key);
+      if (!bytes) throw new HttpError(404, 'not_found', 'no such screenshot');
+      return { screenshot_key: key, content_type: 'image/png' as const, png_base64: bytes.toString('base64') };
+    },
     getReceipt: ({ params, query }) => {
-      const b = boards.get(query.account_id);
-      for (const id of b?.widgets ?? []) {
+      for (const id of boards.get(query.account_id)?.widgets ?? []) {
         const w = widgets.get(id);
         const r = w?.result?.receipts.find((x) => x.id === params.receipt_id) ?? w?.previous?.receipts.find((x) => x.id === params.receipt_id);
-        if (r) return r;
-      }
-      for (const w of widgets.values()) {
-        if (w.spec.account_id !== query.account_id) continue;
-        const r = w.result?.receipts.find((x) => x.id === params.receipt_id);
         if (r) return r;
       }
       throw new HttpError(404, 'not_found', 'no such receipt on this board');
     },
   };
+
+  /** Removing a folder puts its tiles back on the grid, below the rest. */
+  function removeWidget(account_id: string, widget_id: string) {
+    const b = boards.get(account_id)!;
+    const w = widgets.get(widget_id);
+    b.widgets = b.widgets.filter((id) => id !== widget_id);
+    widgets.delete(widget_id);
+    if (w?.spec.kind !== 'folder') return;
+    const kids = b.widgets.map((id) => widgets.get(id)!).filter((c) => 'folder_id' in c.spec.place && c.spec.place.folder_id === widget_id);
+    const places = packPlaces(kids.map((c) => (c.spec.kind === 'display' ? SIZE_CELLS[c.spec.size] : [1, 1])), nextRow(account_id));
+    kids.forEach((c, i) => (c.spec = WidgetSpec.parse({ ...c.spec, place: places[i] })));
+  }
 }

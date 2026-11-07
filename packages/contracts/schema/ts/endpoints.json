@@ -671,6 +671,35 @@
   },
   {
     "service": "board",
+    "name": "putScreenshot",
+    "method": "PUT",
+    "path": "/widgets/:widget_id/screenshots/:run_id/:candidate_id",
+    "callers": [
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "A source's screenshot from the browse sandbox, stored in Object Storage. The key goes in the run trace."
+  },
+  {
+    "service": "board",
+    "name": "getScreenshot",
+    "method": "GET",
+    "path": "/widgets/:widget_id/screenshots/:run_id/:candidate_id",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "A screenshot for the run trace, shown as an image labelled \"external page\"."
+  },
+  {
+    "service": "board",
     "name": "getReceipt",
     "method": "GET",
     "path": "/receipts/:receipt_id",
@@ -747,13 +776,14 @@
     "path": "/markets/:market_id",
     "callers": [
       "agent",
-      "runner"
+      "runner",
+      "board"
     ],
     "status": 200,
     "errors": [
       404
     ],
-    "summary": "One market, cached 10-30 s. quote_market reads this."
+    "summary": "One market, cached 10-30 s. quote_market reads this; board reads it for a new widget's first paint."
   },
   {
     "service": "markets",
