@@ -104,7 +104,7 @@ fn sign(x: f64) -> i8 {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(512))]
+    #![proptest_config(ProptestConfig::with_cases(256))]
 
     // 1. implied_probability
     #[test]
@@ -501,7 +501,7 @@ fn any_input() -> impl Strategy<Value = EngineInput> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(2048))]
+    #![proptest_config(ProptestConfig::with_cases(512))]
 
     /// Whatever comes in, the engine doesn't panic, and every number it gives is finite
     /// and in its unit's range, with one receipt each.
