@@ -2,7 +2,7 @@
  * Builds web/dist, the static bundle Caddy serves:
  *   dist/index.html                  no inline script, no inline style, no handler attributes
  *   dist/assets/app-<hash>.js        src/main.ts bundled (ES modules, minified)
- *   dist/assets/app-<hash>.css       the design kit's base + every theme + src/app.css
+ *   dist/assets/app-<hash>.css       the design kit's base + every theme + src/app.css + src/chat.css
  * System fonts only, and the page asks for nothing but its own two assets, /api and /live.
  *
  *   npx tsx web/build.ts
@@ -55,6 +55,7 @@ export async function buildWeb() {
     stripComments(readFileSync(BASE_CSS, 'utf8')),
     ...themes.map((t) => `/* theme ${t.id} */\n` + stripComments(t.css)),
     stripComments(readFileSync(join(SRC, 'app.css'), 'utf8')),
+    stripComments(readFileSync(join(SRC, 'chat.css'), 'utf8')),
   ].join('\n');
   const cssText = (await transform(cssSrc, { loader: 'css', minify: true, legalComments: 'none' })).code;
 

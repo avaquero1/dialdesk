@@ -1,0 +1,87 @@
+/* The chat (chat.ts): the desktop panel's close and reopen, the phone pill and its sheet, the messages, the shimmer
+   and the picks. Motion is transform and opacity only, and nothing moves inside the glass at rest. Tokens only. */
+
+/* ---- messages: the shape leads, the words rise in ---- */
+.chat-log .msg.is-new { animation: chat-rise 420ms var(--ease-pour) both; }
+@keyframes chat-rise { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+.msg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg .msg-row { white-space: normal; }
+.msg--error { background: var(--field); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--attention) 40%, transparent); }
+.tool-chip--refused { opacity: .7; }
+
+/* ---- the agent at work: a calm shimmer over two soft bars, never a typing spinner ---- */
+.msg--working { width: 168px; height: 52px; overflow: hidden; display: grid; align-content: center; gap: 8px; }
+.chat-bar { display: block; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--text) 12%, transparent); }
+.chat-bar--short { width: 62%; }
+.chat-shim {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 60%; pointer-events: none; opacity: .9;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-on-accent, #fff) 26%, transparent), transparent);
+  transform: translateX(-120%); animation: chat-shim 2.4s ease-in-out infinite;
+}
+@keyframes chat-shim { to { transform: translateX(220%); } }
+
+/* ---- the picks: tap one to answer (leagues, then teams) ---- */
+.chat-quick:not(.has-picks) { display: none; }
+.chat-quick { flex-wrap: wrap; max-height: 132px; overflow-x: hidden; overflow-y: auto; }
+.chat-quick .chat-pick { height: 38px; padding: 0 16px; border-radius: 19px; font-size: 13.5px; color: var(--text); }
+.chat-quick .chat-pick.is-new { animation: chat-rise 360ms var(--ease-pour) both; }
+
+/* ---- desktop: the panel closes to a small pill at the bottom right, and the board takes the room ---- */
+html[data-layout="desktop"] .chat-close { display: inline-grid; }
+html[data-layout="desktop"] .chat { transition: transform var(--t-pour) var(--ease-pour), opacity 240ms ease; }
+html[data-layout="desktop"].chat-hidden .chat {
+  transform: translateX(calc(100% + 24px)); opacity: 0; pointer-events: none; visibility: hidden;
+  transition: transform var(--t-drain) var(--ease-drain), opacity 200ms ease 120ms, visibility 0s linear var(--t-drain);
+}
+html[data-layout="desktop"].chat-hidden .board-wrap { right: 0; }
+.chat-fab {
+  position: fixed; right: 20px; bottom: 40px; z-index: 5; display: none; align-items: center; gap: 10px; height: 52px; padding: 0 20px 0 9px;
+  border-radius: 26px; font: 500 14px/1 var(--font-ui); color: var(--text); opacity: 0; transform: translateY(10px) scale(.96);
+  background: var(--glass-panel-bg); box-shadow: inset 0 1px 0 var(--glass-panel-top), inset 0 0 0 1px var(--glass-panel-rim), var(--glass-panel-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-panel-sat)); backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-panel-sat));
+  transition: opacity 260ms ease, transform var(--t-pour) var(--ease-pour);
+}
+.chat-fab .agent-bead { width: 34px; height: 34px; }
+html[data-layout="desktop"].chat-hidden[data-view="board"] .chat-fab { display: inline-flex; opacity: 1; transform: none; }
+@starting-style { html[data-layout="desktop"].chat-hidden .chat-fab { opacity: 0; transform: translateY(10px) scale(.96); } }
+
+/* ---- phone: the pill pours open into a sheet. The chat box keeps the sheet's height and lets taps through; two
+   glass layers draw it: the pill's (58 px) and the sheet's, which grows from the pill by scaleY while the pill fades ---- */
+.chat-glass { display: none; }
+html[data-layout="phone"] .chat {
+  height: var(--chat-h, 540px); border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  pointer-events: none; transition: none; overflow: visible;
+}
+html[data-layout="phone"] .chat::before, html[data-layout="phone"] .chat::after { display: none; }
+html[data-layout="phone"] .chat.is-open { height: var(--chat-h, 540px); border-radius: 0; pointer-events: auto; transition: none; }
+html[data-layout="phone"] .chat-form { pointer-events: auto; position: relative; z-index: 2; }
+html[data-layout="phone"] .chat-glass {
+  display: block; position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 0;
+  background: var(--glass-panel-sheen), var(--glass-panel-bg);
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-panel-sat)); backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-panel-sat));
+  box-shadow: inset 0 1px 0 var(--glass-panel-top), inset 0 0 0 1px var(--glass-panel-rim), var(--glass-panel-shadow);
+}
+html[data-layout="phone"] .chat-glass--pill { height: 58px; border-radius: 29px; transition: opacity 200ms ease 220ms; }
+html[data-layout="phone"] .chat-glass--sheet {
+  top: 0; border-radius: var(--r-panel); transform-origin: 50% 100%; transform: scaleY(var(--pill-s, .11)); opacity: 0;
+  transition: transform var(--t-drain) var(--ease-drain), opacity 180ms ease calc(var(--t-drain) - 180ms);
+}
+html[data-layout="phone"] .chat.is-open .chat-glass--pill { opacity: 0; transition: opacity 160ms ease; }
+html[data-layout="phone"] .chat.is-open .chat-glass--sheet { transform: none; opacity: 1; transition: transform var(--t-pour) var(--ease-pour), opacity 120ms ease; }
+html[data-layout="phone"] .chat-head, html[data-layout="phone"] .chat-log, html[data-layout="phone"] .chat-quick { transform: translateY(14px); }
+html[data-layout="phone"] .chat.is-open .chat-head, html[data-layout="phone"] .chat.is-open .chat-log, html[data-layout="phone"] .chat.is-open .chat-quick {
+  transform: none; transition: opacity 360ms ease 220ms, transform 420ms var(--ease-pour) 200ms;
+}
+html[data-layout="phone"] .chat:not(.is-open) .chat-head, html[data-layout="phone"] .chat:not(.is-open) .chat-log,
+html[data-layout="phone"] .chat:not(.is-open) .chat-quick { visibility: hidden; transition: opacity 140ms ease, transform 140ms ease, visibility 0s linear 140ms; }
+html[data-layout="phone"] .chat-quick .chat-pick { height: 44px; padding: 0 18px; border-radius: 22px; font-size: 15px; }
+html[data-layout="phone"] .msg { font-size: 16px; }
+html[data-layout="phone"] .chat-form input { font-size: 16px; }
+/* the pill sits clear of the last row's ⋯ buttons: the board scrolls a little past them */
+html[data-layout="phone"] .board-wrap { padding-bottom: 34px; }
+
+html[data-motion="reduced"] .chat-log .msg.is-new, html[data-motion="reduced"] .chat-quick .chat-pick.is-new { animation: chat-fade 200ms ease both; }
+html[data-motion="reduced"] .chat-shim { animation: none; display: none; }
+html[data-motion="reduced"] .chat, html[data-motion="reduced"] .chat *, html[data-motion="reduced"] .chat-fab { transition-property: opacity, visibility !important; }
+html[data-motion="reduced"][data-layout="phone"] .chat-glass--sheet { transform: none; }
+@keyframes chat-fade { from { opacity: 0; } to { opacity: 1; } }

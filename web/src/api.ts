@@ -3,7 +3,7 @@
  * Every state-changing call carries the page's Origin (the browser adds it) and edge checks it.
  * Any route may answer 429 (rate limits) or 413 (body cap): both become a notice, never a crash.
  */
-import type { Account, Board, Look, Widget } from '@app/contracts';
+import type { Account, Board, ChatReply, ChatTurn, Look, Widget } from '@app/contracts';
 
 export type { Account, Board, Look, Widget };
 
@@ -36,7 +36,8 @@ export function noticeFor(e: ApiError): string | null {
   return null;
 }
 
-async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown, o: { auth?: boolean; keepalive?: boolean } = {}): Promise<T> {
+/** `quiet`: the caller shows its own words for 429, 413 and offline (the chat does), so no notice. */
+async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown, o: { auth?: boolean; keepalive?: boolean; quiet?: boolean } = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -49,7 +50,7 @@ async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path
     });
   } catch {
     const e = new ApiError(0, 'offline', "can't reach the server");
-    hooks.onNotice?.(noticeFor(e)!, 'offline');
+    if (!o.quiet) hooks.onNotice?.(noticeFor(e)!, 'offline');
     throw e;
   }
   if (res.ok) return (res.status === 204 ? { ok: true } : await res.json()) as T;
@@ -64,8 +65,8 @@ async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path
   }
   const ra = Number(res.headers.get('retry-after'));
   const e = new ApiError(res.status, code, message, Number.isFinite(ra) && ra > 0 ? Math.ceil(ra) : null);
-  if (res.status === 429) hooks.onNotice?.(noticeFor(e)!, 'limit');
-  else if (res.status === 413) hooks.onNotice?.(noticeFor(e)!, 'size');
+  if (res.status === 429 && !o.quiet) hooks.onNotice?.(noticeFor(e)!, 'limit');
+  else if (res.status === 413 && !o.quiet) hooks.onNotice?.(noticeFor(e)!, 'size');
   else if (res.status === 401 && o.auth !== false) hooks.onSessionLost?.();
   throw e;
 }
@@ -87,4 +88,8 @@ export const api = {
   refresh: (id: string) => call<{ job_id: string }>('POST', `/api/widgets/${encodeURIComponent(id)}/refresh`, {}),
   clear: (id: string, o: { keepalive?: boolean } = {}) => call<Widget>('POST', `/api/widgets/${encodeURIComponent(id)}/clear`, {}, o),
   remove: (id: string, o: { keepalive?: boolean } = {}) => call<{ ok: true }>('DELETE', `/api/widgets/${encodeURIComponent(id)}`, undefined, o),
+  chat: (conversation_id: string | null, message: string) =>
+    call<ChatReply>('POST', '/api/chat', { conversation_id, widget_id: null, message }, { quiet: true }),
+  conversation: (id: string) =>
+    call<{ conversation_id: string; turns: ChatTurn[] }>('GET', `/api/chat/${encodeURIComponent(id)}`, undefined, { quiet: true }),
 };

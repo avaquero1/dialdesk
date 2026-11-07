@@ -140,7 +140,7 @@ async function start(a: Account) {
   bindBoard({ openMenu, openApp, openFolder, saveOrder, closeSurface });
   initSurfaces({ account: () => account, logout, closeChat, menuAction });
   initActions();
-  initChat();
+  initChat(a, { relayout: () => requestAnimationFrame(() => layoutAll()) });
   live = new Live({
     onEvent,
     onReconnect: () => refetchSoon(0),
