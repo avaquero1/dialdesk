@@ -20,14 +20,17 @@ The lists are in `src/words.ts` (`WORDLIST_VERSION` v1). Words that are only som
 in layer one.
 
 **Layer two: the decision model** (`guardExtract`, `guardPublish`, `guardChat`, `guardChatReply`). It runs layer one,
-and only when that passes asks models (role `guard`: nemotron-3.5-content-safety, then qwen3.8-flash-next;
+and only when that passes asks models (role `guard`: qwen3.8-flash-next, then mimo-v2.6-flash;
 `MODELS_ROLE_GUARD` overrides) two questions: "is this advice?" (publish, chat) and "does this text carry instructions
 aimed at the agent?" (extract, chat). It only adds reasons: it never lets through what layer one blocked.
 
 - The text goes inside a JSON `items` list, so page text can't break out of it. The system prompt holds no page text.
 - It reads our shape `{"advice": [ids], "instructions": [ids]}`, booleans, the models fake's `{"outcome": ...}`, a
-  content-safety answer (`"Response Safety": "unsafe"`) and a bare `safe`/`unsafe`. Ids it doesn't know become the
-  stage's default field (`reply`, `summary`, the first fact).
+  ```json fence around any of them. A content-safety "unsafe" (bare or `"Response Safety": "unsafe"`) blocks; its "safe" is
+  unchecked, not a pass. Ids it doesn't know become the stage's default field (`reply`, `summary`, the first fact).
+- Measured on Vultr (A1.1.1, `test/fixtures/real-answers.json`): nemotron-3.5-content-safety ignores the JSON instruction and
+  echoes the reply (`{"Assistant Response": "..."}`), and it called an injected order to an agent `"safe"`. It judges harm, not
+  our two questions, so it left the role.
 - **Fails closed.** A model error (402 kill switch, 429, 502) or an unreadable answer gives reason `unchecked` and
   outcome `block`. At the extract stage that's `block`, not `poison`: runner releases the sandbox and drops that
   source's facts, without the poison note (the page did nothing we know of).

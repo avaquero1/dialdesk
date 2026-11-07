@@ -24,8 +24,9 @@ export const ROLES: Record<ModelRole, RoleSpec> = {
   reader: { models: ['qwen3.8-flash-next', 'mimo-v2.6-flash'], tools: false, max_tokens: 1024, temperature: 0, reasoning_effort: 'minimal' },
   // Cheap, strict style: slot templates, never digits.
   summarizer: { models: ['qwen3.8-flash-next'], tools: false, max_tokens: 256, temperature: 0.2, reasoning_effort: 'minimal' },
-  // The guard's second layer (packages/guard decides how to ask).
-  guard: { models: ['nemotron-3.5-content-safety', 'qwen3.8-flash-next'], tools: false, max_tokens: 128, temperature: 0, reasoning_effort: 'minimal' },
+  // The guard's second layer (packages/guard decides how to ask). nemotron-3.5-content-safety was dropped after the first real
+  // calls (A1.1.1): it ignores the JSON instruction (echoes the reply back) and judges harm, not advice or instructions.
+  guard: { models: ['qwen3.8-flash-next', 'mimo-v2.6-flash'], tools: false, max_tokens: 256, temperature: 0, reasoning_effort: 'minimal' },
 };
 
 export function rolesFromEnv(env: Record<string, string | undefined>): Record<ModelRole, RoleSpec> {

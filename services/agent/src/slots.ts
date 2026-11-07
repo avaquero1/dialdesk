@@ -33,13 +33,13 @@ export class Slots {
     return name;
   }
 
-  /** quote_market: the YES price as an implied probability, and the 24 h move. Values stay here. */
+  /** quote_market: the YES price as an implied probability, and the one-day move. Values stay here. Meanings hold no digit (the model copies them). */
   quote(m: Market): Record<string, unknown> {
     const slots: Record<string, string> = {};
     slots[this.add({ text: pct(m.yes_price_cents / 100), source: m.market_id })] = 'implied probability of YES, from the last traded price';
     if (m.previous_price_cents !== null)
       slots[this.add({ text: move(m.yes_price_cents - m.previous_price_cents), source: m.market_id })] =
-        'the 24 h move, written with its direction (e.g. "up N points" or "unchanged")';
+        'the move since yesterday, written with its direction (e.g. "up N points" or "unchanged")';
     return { market_id: m.market_id, exchange: m.exchange, stale: m.stale, slots };
   }
 

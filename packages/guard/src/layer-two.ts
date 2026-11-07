@@ -1,6 +1,6 @@
 /**
- * Layer two: the decision model, through models with role `guard` (nemotron-3.5-content-safety first, then
- * qwen3.8-flash-next; `MODELS_ROLE_GUARD` overrides). It runs only on what layer one passed, and it can only add
+ * Layer two: the decision model, through models with role `guard` (qwen3.8-flash-next first, then
+ * mimo-v2.6-flash; `MODELS_ROLE_GUARD` overrides). It runs only on what layer one passed, and it can only add
  * reasons: it never lets through what layer one blocked. When the model errors or its answer can't be read, the guard
  * fails closed with reason `unchecked`.
  */
@@ -69,8 +69,10 @@ export function guardPrompt(stage: Stage, items: Item[]): CompleteBody['messages
 
 /**
  * Reads the model's answer into reasons. Accepts our shape (`{"advice": [ids], "instructions": [ids]}`, or booleans),
- * a `{"outcome": "pass"|"block"|"poison"}` answer (the models fake), a content-safety answer with `"... Safety": "safe"|"unsafe"`
- * fields, and a bare "safe"/"unsafe". Returns null when it can't tell.
+ * a `{"outcome": "pass"|"block"|"poison"}` answer (the models fake), and a ```json fence around any of them. A content-safety
+ * verdict ("unsafe", `"Response Safety": "unsafe"`) blocks, but its "safe" is no pass: it judges harm, not advice or orders
+ * to an agent (nemotron-3.5-content-safety called an injected order "safe" in the first real calls). Returns null when it
+ * can't tell, e.g. nemotron's echo `{"Assistant Response": "<the reply>"}`.
  */
 export function readAnswer(stage: Stage, content: string, items: Item[]): Reasons | null {
   const ids = new Set(items.map((i) => i.id));
@@ -81,11 +83,11 @@ export function readAnswer(stage: Stage, content: string, items: Item[]): Reason
 
   const plain = content.trim().toLowerCase();
   if (/^unsafe\b/.test(plain)) return [{ code: CODE[first], where: fallbackWhere }];
-  if (/^safe\b/.test(plain)) return [];
+  if (/^safe\b/.test(plain)) return null;
 
   let a: unknown;
   try {
-    a = JSON.parse(content);
+    a = JSON.parse(/^\s*```(?:json)?\s*\n([\s\S]*?)\n?```\s*$/.exec(content)?.[1] ?? content);
   } catch {
     return null;
   }
@@ -119,13 +121,13 @@ export function readAnswer(stage: Stage, content: string, items: Item[]): Reason
   }
 
   const safety = Object.entries(o).filter(([k, v]) => /safety/i.test(k) && typeof v === 'string');
-  if (safety.length) return safety.some(([, v]) => /unsafe/i.test(v as string)) ? [{ code: CODE[first], where: fallbackWhere }] : [];
+  if (safety.some(([, v]) => /unsafe/i.test(v as string))) return [{ code: CODE[first], where: fallbackWhere }];
   return null;
 }
 
 /** Ask the decision model about the items. Never throws: a failure is the reason `unchecked`. */
 export async function askModel(stage: Stage, items: Item[], opts: GuardOptions): Promise<{ reasons: Reasons; model: string | null }> {
-  const body: CompleteBody = { role: 'guard', account_id: opts.account_id, messages: guardPrompt(stage, items), json: true, max_tokens: 128 };
+  const body: CompleteBody = { role: 'guard', account_id: opts.account_id, messages: guardPrompt(stage, items), json: true, max_tokens: 256 };
   if (opts.scenario) body.scenario = opts.scenario;
   let done: Completion;
   try {
