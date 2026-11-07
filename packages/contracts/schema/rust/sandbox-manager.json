@@ -777,7 +777,7 @@
               "type": "integer"
             },
             "text": {
-              "description": "Visible text of the page, cut to the output limit.",
+              "description": "All of the page's text, cut to the output limit: visible and hidden text and HTML comments, not scripts or styles.",
               "type": "string"
             },
             "url": {
@@ -985,6 +985,53 @@
           ],
           "type": "object"
         },
+        "TrustLogEntry": {
+          "description": "One log row in the shape of the trust page's actions (TRUST_ACTIONS in packages/contracts/src/api/audit.ts):\n`sandbox.created`, `sandbox.killed` and `sandbox.destroyed` with subject_id = the sandbox id, and one\n`proxy.refused` per job with `sizes.requests` = how many requests the proxy refused. Ids and sizes only.",
+          "properties": {
+            "action": {
+              "description": "e.g. \"sandbox.killed\".",
+              "type": "string"
+            },
+            "at": {
+              "description": "RFC 3339.",
+              "type": "string"
+            },
+            "ids": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {},
+              "type": "object"
+            },
+            "outcome": {
+              "description": "\"ok\", \"refused\" or \"killed\".",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sizes": {
+              "additionalProperties": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "default": {},
+              "type": "object"
+            },
+            "subject_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "at"
+          ],
+          "type": "object"
+        },
         "Unit": {
           "description": "The unit of a computed number.",
           "oneOf": [
@@ -1076,6 +1123,14 @@
         },
         "state": {
           "$ref": "#/$defs/JobState"
+        },
+        "trust_log": {
+          "default": [],
+          "description": "The trust page's log rows for this job, in the order they happened. The caller adds account_id and\nappends each one to the log as service \"sandbox-manager\".",
+          "items": {
+            "$ref": "#/$defs/TrustLogEntry"
+          },
+          "type": "array"
         },
         "updated_at": {
           "description": "RFC 3339.",

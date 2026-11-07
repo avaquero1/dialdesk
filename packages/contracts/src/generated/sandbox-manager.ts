@@ -372,7 +372,7 @@ export interface PageOut {
   screenshot_png_b64?: string | null;
   status: number;
   /**
-   * Visible text of the page, cut to the output limit.
+   * All of the page's text, cut to the output limit: visible and hidden text and HTML comments, not scripts or styles.
    */
   text: string;
   url: string;
@@ -393,6 +393,35 @@ export interface ProxyLogEntry {
   port: number;
   reason: ProxyReason;
   sandbox_id: string;
+}
+/**
+ * One log row in the shape of the trust page's actions (TRUST_ACTIONS in packages/contracts/src/api/audit.ts):
+ * `sandbox.created`, `sandbox.killed` and `sandbox.destroyed` with subject_id = the sandbox id, and one
+ * `proxy.refused` per job with `sizes.requests` = how many requests the proxy refused. Ids and sizes only.
+ *
+ * This interface was referenced by `__Root`'s JSON-Schema
+ * via the `definition` "TrustLogEntry".
+ */
+export interface TrustLogEntry {
+  /**
+   * e.g. "sandbox.killed".
+   */
+  action: string;
+  /**
+   * RFC 3339.
+   */
+  at: string;
+  ids?: {
+    [k: string]: string;
+  };
+  /**
+   * "ok", "refused" or "killed".
+   */
+  outcome?: string | null;
+  sizes?: {
+    [k: string]: number;
+  };
+  subject_id?: string | null;
 }
 /**
  * This interface was referenced by `__Root`'s JSON-Schema
@@ -417,6 +446,11 @@ export interface JobStatus {
    */
   sandbox_id: string;
   state: JobState;
+  /**
+   * The trust page's log rows for this job, in the order they happened. The caller adds account_id and
+   * appends each one to the log as service "sandbox-manager".
+   */
+  trust_log?: TrustLogEntry[];
   /**
    * RFC 3339.
    */

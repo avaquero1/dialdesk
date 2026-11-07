@@ -86,13 +86,35 @@ pub struct JobStatus {
     pub proxy_log: Vec<ProxyLogEntry>,
     pub kill_reason: Option<String>,
     pub error: Option<String>,
+    /// The trust page's log rows for this job, in the order they happened. The caller adds account_id and
+    /// appends each one to the log as service "sandbox-manager".
+    #[serde(default)]
+    pub trust_log: Vec<TrustLogEntry>,
+}
+
+/// One log row in the shape of the trust page's actions (TRUST_ACTIONS in packages/contracts/src/api/audit.ts):
+/// `sandbox.created`, `sandbox.killed` and `sandbox.destroyed` with subject_id = the sandbox id, and one
+/// `proxy.refused` per job with `sizes.requests` = how many requests the proxy refused. Ids and sizes only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct TrustLogEntry {
+    /// e.g. "sandbox.killed".
+    pub action: String,
+    /// RFC 3339.
+    pub at: String,
+    pub subject_id: Option<String>,
+    /// "ok", "refused" or "killed".
+    pub outcome: Option<String>,
+    #[serde(default)]
+    pub ids: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    pub sizes: std::collections::BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct PageOut {
     pub url: String,
     pub status: u16,
-    /// Visible text of the page, cut to the output limit.
+    /// All of the page's text, cut to the output limit: visible and hidden text and HTML comments, not scripts or styles.
     pub text: String,
     pub screenshot_png_b64: Option<String>,
 }

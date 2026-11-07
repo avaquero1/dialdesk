@@ -280,6 +280,7 @@ async fn create_job(State(st): State<Shared>, body: Bytes) -> ApiResult {
             proxy_log: vec![],
             kill_reason: None,
             error: None,
+            trust_log: vec![],
         };
         jobs.insert(
             req.job_id.clone(),
