@@ -55,7 +55,7 @@ sandbox-manager probe [--allow a,b] [--wall S] -- whoami   # one attack probe in
 
 | Env | Default | What |
 |---|---|---|
-| `SANDBOX_BACKEND` | `docker` | `gvisor`, `docker` or `stub` |
+| `SANDBOX_BACKEND` | `docker` (`stub` with `SANDBOX_MANAGER_DEV=1`) | `gvisor`, `docker` or `stub` |
 | `SANDBOX_RUNTIME` | `runsc` / `runc` | Override the runtime (e.g. `runsc-kvm`) |
 | `SANDBOX_SLOTS` | 6 | Live sandboxes at most; past it `POST /jobs` answers 503 busy |
 | `SANDBOX_STARTING` | 2 | Sandboxes starting at once; the rest wait queued (the spike: 2 starting, 12 live on the VX1) |

@@ -65,10 +65,12 @@ fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
 }
 
-/// The backend named by SANDBOX_BACKEND (default "docker"), configured from the env.
-/// `dev` (SANDBOX_MANAGER_DEV=1) is required for the dev-only settings.
+/// The backend named by SANDBOX_BACKEND, configured from the env. Unset, it is "docker", or "stub" when
+/// `dev` (SANDBOX_MANAGER_DEV=1, also required for the dev-only settings): tests that start a bare
+/// `serve` get the stub, and a real deployment never runs it without saying so.
 pub async fn from_env(dev: bool) -> Result<Arc<dyn Backend>, String> {
-    let name = env("SANDBOX_BACKEND").unwrap_or_else(|| "docker".into());
+    let default = if dev { "stub" } else { "docker" };
+    let name = env("SANDBOX_BACKEND").unwrap_or_else(|| default.into());
     let runtime = match name.as_str() {
         "stub" => return Ok(Arc::new(StubBackend)),
         "docker" => env("SANDBOX_RUNTIME").unwrap_or_else(|| "runc".into()),

@@ -6,7 +6,7 @@
 //! Env: SANDBOX_MANAGER_ADDR (default 127.0.0.1:8200), SANDBOX_MANAGER_CALLERS
 //! (`runner:<sha256hex>[,other:<hex>]`, required), SANDBOX_SLOTS (live sandboxes, default
 //! 6), SANDBOX_STARTING (sandboxes starting at once, default 2),
-//! SANDBOX_BACKEND (docker, gvisor or stub; default docker), SANDBOX_MANAGER_DEV=1 (allows
+//! SANDBOX_BACKEND (docker, gvisor or stub; default docker, stub when dev), SANDBOX_MANAGER_DEV=1 (allows
 //! http:// URLs and the dev-only settings). The docker backend: see `docker::DockerConfig`.
 
 mod app;
