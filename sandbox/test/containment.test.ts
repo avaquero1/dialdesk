@@ -14,7 +14,7 @@ import { liveSandboxes, probe, startManager, topologyUp, type Manager, type Topo
 const TOKEN = 'containment-test-token-0123456789';
 // Planted on the host side: in the manager's env and in a file in its state folder. No sandbox may see it.
 const CANARY = `VHA-CANARY-${process.pid}-${Date.now()}`;
-const COMPUTE_IMAGE = 'vha-engine-compute:dev';
+const COMPUTE_IMAGE = process.env.SANDBOX_COMPUTE_IMAGE ?? 'vha-engine-compute:dev';
 const hasComputeImage = (() => {
   try {
     execFileSync('docker', ['image', 'inspect', COMPUTE_IMAGE], { stdio: 'ignore' });
@@ -82,7 +82,7 @@ beforeAll(async () => {
     ...hostEnv(),
     SANDBOX_MANAGER_CALLERS: `runner:${createHash('sha256').update(TOKEN).digest('hex')}`,
     SANDBOX_SLOTS: '2',
-    ...(hasComputeImage ? { SANDBOX_COMPUTE_IMAGE: COMPUTE_IMAGE } : {}),
+    SANDBOX_COMPUTE_IMAGE: COMPUTE_IMAGE,
   });
 }, 120_000);
 
@@ -187,7 +187,8 @@ describe('containment on the local docker backend', () => {
     expect((await api('GET', '/sandboxes')).json).toMatchObject({ backend: 'docker', slots_total: 2, slots_used: 0 });
   });
 
-  it.skipIf(!hasComputeImage)('compute runs the engine image with no network', async () => {
+  it('compute runs the engine image with no network', async () => {
+    expect(hasComputeImage, `${COMPUTE_IMAGE} is missing: make engine-image`).toBe(true);
     const job_id = `ct-math-${process.pid}`;
     const engine_input = { plan: { plan_version: 1, ops: [{ id: 'n1', op: 'implied_probability', args: { price_cents: 'kalshi_price' } }] }, numbers: { kalshi_price: 61 } };
     const r = await api('POST', '/jobs', { job_id, run_id: 'r', widget_id: 'w', kind: 'compute', compute: { engine_input } });

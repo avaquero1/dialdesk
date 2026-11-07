@@ -114,6 +114,7 @@ export function topologyUp(name = `vha-t${process.pid}`): Topology {
       SANDBOX_DEV_SPKI: spki,
       SANDBOX_BROWSE_IMAGE: BROWSE_IMAGE,
       SANDBOX_PROBE_IMAGE: PROBE_IMAGE,
+      SANDBOX_COMPUTE_IMAGE: process.env.SANDBOX_COMPUTE_IMAGE ?? 'vha-engine-compute:dev',
     };
     return t;
   } catch (e) {

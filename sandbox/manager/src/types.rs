@@ -176,11 +176,11 @@ impl Limits {
         disk_mb: 512,
         output_kb: 2048,
     };
-    // The engine is small and fast; the spike did not measure it.
+    // The engine's own checked flags (engine/README.md): 64 MB, 8 processes.
     pub const COMPUTE: Limits = Limits {
         cpu_millis: 1000,
-        memory_mb: 128,
-        pids: 32,
+        memory_mb: 64,
+        pids: 8,
         wall_s: 5,
         hold_s: 0,
         disk_mb: 16,

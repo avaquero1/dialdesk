@@ -17,7 +17,7 @@ Everything that runs on the sandbox machine.
 |---|---|---|
 | `gvisor` | The docker backend with `--runtime runsc` (systrap). Chromium's own sandbox on. | The sandbox machine (chosen by the VX1 spike, Nov 7) |
 | `docker` | The same backend on runc. Chromium's own sandbox off (Docker's seccomp blocks it). | Local development and tests |
-| `stub` | No Docker: no pages, compute in process. | Unit tests, `E2E_SANDBOX=stub` |
+| `stub` | No Docker: no pages, the engine in process. | Unit tests, `E2E_SANDBOX=stub` |
 
 Every sandbox: uid 10001, every capability dropped, no-new-privileges, a read-only root with small tmpfs mounts
 (`noexec`), memory with no swap, CPU, process and open-file caps, no env from the manager, no host folder (only an
@@ -63,7 +63,7 @@ sandbox-manager probe [--allow a,b] [--wall S] -- whoami   # one attack probe in
 | `SANDBOX_PROXY_URL` | (required) | The proxy as a sandbox sees it |
 | `SANDBOX_PROXY_CONTROL` | (required) | The proxy's control socket |
 | `SANDBOX_BROWSE_IMAGE` | `vha-browse:dev` | Pin by digest on the sandbox machine |
-| `SANDBOX_COMPUTE_IMAGE` | unset | The engine image; unset runs the engine in process |
+| `SANDBOX_COMPUTE_IMAGE` | `vha-engine-compute:dev` | The engine image (`make engine-image`); pin by digest on the sandbox machine |
 | `SANDBOX_CHROMIUM_SANDBOX` | `on` under gVisor, `off` on runc | `on`, `off` or `auto` |
 | `SANDBOX_INSTANCE` | `vha` | Container name prefix and `vha.instance` label |
 | `SANDBOX_STATE_DIR` | a temp folder | Holds the empty `resolv.conf` |

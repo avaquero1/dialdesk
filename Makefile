@@ -34,7 +34,7 @@ contracts:
 	npx vitest run --project contracts
 
 # Real Chromium sandboxes behind the real proxy (Docker needed). E2E_SANDBOX=stub runs it without Docker.
-e2e: rust images
+e2e: rust images engine-image
 	npx vitest run --project e2e
 
 # The sandbox images. Docker's cache makes this a no-op when sandbox/images is unchanged.
@@ -43,7 +43,7 @@ images:
 	docker build -q --target probe -t vha-probe:dev sandbox/images/browse
 
 # The containment tests on this PC's Docker (runc): caps, network, secrets, fresh sandboxes, kill and release.
-containment-local: rust images
+containment-local: rust images engine-image
 	npx vitest run --project containment
 
 dev-secrets:

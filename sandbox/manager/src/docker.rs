@@ -11,9 +11,9 @@
 //!   egress proxy (with the job's allowlist) before the container starts. Its only route
 //!   out is the proxy. The driver prints one JSON event per line; after `ready` the
 //!   container keeps running (the hold) until release or kill destroys it.
-//! - compute: `--network none`. The engine image reads an EngineInput on stdin and writes
-//!   an EngineResult on stdout. Until the engine piece ships its image
-//!   (SANDBOX_COMPUTE_IMAGE unset) the engine runs in process.
+//! - compute: `--network none`. The engine image (engine/Dockerfile, `make engine-image`)
+//!   reads an EngineInput on stdin and writes an EngineResult on stdout. The engine has no
+//!   time limit of its own: the manager's wall cap kills the sandbox.
 
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr};
@@ -41,7 +41,7 @@ pub struct DockerConfig {
     /// runc, runsc, runsc-kvm.
     pub runtime: String,
     pub browse_image: String,
-    pub compute_image: Option<String>,
+    pub compute_image: String,
     /// The Docker network browse sandboxes join. Its only way out is the proxy.
     pub network: String,
     /// The proxy as a sandbox sees it, e.g. http://172.30.79.2:8201.
@@ -94,7 +94,8 @@ impl DockerConfig {
             docker: env("SANDBOX_DOCKER").unwrap_or_else(|| "docker".into()),
             runtime,
             browse_image: env("SANDBOX_BROWSE_IMAGE").unwrap_or_else(|| "vha-browse:dev".into()),
-            compute_image: env("SANDBOX_COMPUTE_IMAGE"),
+            compute_image: env("SANDBOX_COMPUTE_IMAGE")
+                .unwrap_or_else(|| "vha-engine-compute:dev".into()),
             network: need("SANDBOX_NETWORK")?,
             proxy_url: need("SANDBOX_PROXY_URL")?,
             proxy_control: need("SANDBOX_PROXY_CONTROL")?.into(),
@@ -261,10 +262,12 @@ impl DockerBackend {
                 cfg.runtime
             ));
         }
-        for img in std::iter::once(&cfg.browse_image).chain(cfg.compute_image.iter()) {
+        for img in [&cfg.browse_image, &cfg.compute_image] {
             run(d, &["image", "inspect", "--format", "{{.Id}}", img])
                 .await
-                .map_err(|_| format!("image {img} is missing (make images builds it)"))?;
+                .map_err(|_| {
+                    format!("image {img} is missing (make images and make engine-image build them)")
+                })?;
         }
         let net = run(
             d,
@@ -318,11 +321,8 @@ impl DockerBackend {
         };
         let removed = b.remove_leftovers().await;
         tracing::info!(runtime = %b.cfg.runtime, network = %b.cfg.network, subnet = %ipam.subnet,
-            browse_image = %b.cfg.browse_image, compute_image = ?b.cfg.compute_image,
+            browse_image = %b.cfg.browse_image, compute_image = %b.cfg.compute_image,
             chromium_sandbox = %b.cfg.chromium_sandbox, removed, "docker backend ready");
-        if b.cfg.compute_image.is_none() {
-            tracing::warn!("SANDBOX_COMPUTE_IMAGE is unset: compute runs the engine in process");
-        }
         Ok(b)
     }
 
@@ -660,8 +660,8 @@ impl Backend for DockerBackend {
     fn create<'a>(&'a self, req: &'a JobRequest, limits: &'a Limits) -> BoxFut<'a, SandboxHandle> {
         Box::pin(async move {
             let sandbox_id = new_sandbox_id();
-            let ip = match (&req.browse, &self.cfg.compute_image) {
-                (Some(b), _) => {
+            let ip = match &req.browse {
+                Some(b) => {
                     let cmd = self.driver_args(b, limits);
                     let image = self.cfg.browse_image.clone();
                     let ip = self
@@ -669,16 +669,15 @@ impl Backend for DockerBackend {
                         .await?;
                     Some(IpAddr::V4(ip))
                 }
-                (None, Some(image)) => {
+                None => {
                     let mut args = vec!["create".to_string(), "-i".into()];
                     args.extend(self.hardening(&sandbox_id, "compute", limits));
-                    args.extend(["--network".into(), "none".into(), image.clone()]);
+                    let image = self.cfg.compute_image.clone();
+                    args.extend(["--network".into(), "none".into(), image]);
                     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
                     run(&self.cfg.docker, &refs).await?;
                     None
                 }
-                // The engine runs in process until its image lands.
-                (None, None) => None,
             };
             self.live().insert(
                 sandbox_id.clone(),
@@ -800,9 +799,6 @@ impl Backend for DockerBackend {
         spec: &'a ComputeSpec,
     ) -> BoxFut<'a, engine::EngineResult> {
         Box::pin(async move {
-            if self.cfg.compute_image.is_none() {
-                return Ok(engine::run(&spec.engine_input));
-            }
             let (name, limits) = {
                 let live = self.live();
                 let l = live
@@ -862,7 +858,7 @@ mod tests {
             docker: "docker".into(),
             runtime: "runc".into(),
             browse_image: "vha-browse:dev".into(),
-            compute_image: Some("vha-engine:dev".into()),
+            compute_image: "vha-engine-compute:dev".into(),
             network: "vha-sbx-test".into(),
             proxy_url: "http://172.30.79.2:8201".into(),
             proxy_control: "/run/egress.sock".into(),

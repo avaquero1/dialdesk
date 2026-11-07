@@ -216,7 +216,7 @@ async fn compute_returns_numbers() {
     });
     let (s, v) = call(&app, "POST", "/jobs", Some(TOKEN), Some(job)).await;
     assert_eq!(s, StatusCode::ACCEPTED);
-    assert_eq!(v["limits"]["memory_mb"], 128);
+    assert_eq!(v["limits"]["memory_mb"], 64);
     let done = wait_for(&app, "c1", "done").await;
     let r = &done["compute_result"];
     assert_eq!(r["ok"], true);
