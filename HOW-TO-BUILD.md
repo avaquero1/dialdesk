@@ -69,7 +69,7 @@ generated TypeScript is stale.
 | connections | `services/connections/src/fake.ts` | A key id containing `write` is refused as write scope |
 | models | `services/models/src/fake.ts` | Canned answers by role × scenario (`clean`, `poisoned`, `advice`, `error`) |
 | audit | `services/audit/src/fake.ts` | An in-memory hash chain; `createFakeAudit().append(entry)` |
-| sandbox-manager | `sandbox/manager` (Rust) | The real binary on the `docker` stub backend: lifecycle, slots, hold, kill, compute in process |
+| sandbox-manager | `sandbox/manager` (Rust) | Not a fake: the real binary on Docker with real Chromium sandboxes behind the real proxy (`sandbox/dev/topology.ts`). `SANDBOX_BACKEND=stub` for no Docker |
 
 Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
 
@@ -79,7 +79,8 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
   case; no route outside the contract; wrong callers get 403, no token 401.
 - `make e2e`: the end-to-end flow on fakes (`e2e/flow.test.ts`): sign up, the chat builds a widget, a run fills it
   with numbers and receipts, a poisoned page gets its sandbox killed. Pending steps are `it.todo`: turn yours into a
-  real step when your piece lands. It needs `target/debug/sandbox-manager` (`make rust` builds it).
+  real step when your piece lands. It needs Docker, the sandbox images (`make images`) and the Rust binaries (`make rust`);
+  `E2E_SANDBOX=stub make e2e` runs it without Docker.
 - `make valkey-test`: the bus on a real Valkey 8.1 in its own Compose project (`vha-valkey-test`, port 56393): pub/sub, the log
   stream's consumer group, BullMQ retries, and every service's ACL allow and deny. Not part of `make check` (it needs Docker
   and `make dev-secrets`). Run it when you touch `bus.ts`, `valkey.ts` or `queues.ts`. The ACL file comes from `valkeyAclRule()`: after a

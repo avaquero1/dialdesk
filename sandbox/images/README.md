@@ -1,5 +1,10 @@
 # images
 
-The sandbox images are built from this repo in Phase 1: a browse image (Chromium and a small driver that loads pages
-through the egress proxy and returns their text and screenshots) and a compute image (the `engine` binary alone). The
-manager runs them pinned by digest, never by tag, so every job starts from exactly the image that was reviewed.
+- `browse/`: the browse sandbox. Debian's Chromium (the real binary, not Debian's wrapper, which exports Google API
+  keys into the environment; no setuid helper) and `app/driver.mjs`, which opens the job's URLs through the egress
+  proxy, returns their text (hidden text and comments too, so the guard sees planted orders) and screenshots, and
+  holds the browser until release or kill. Target `probe` adds `app/probes.mjs` for the containment tests only.
+- The compute image is the engine piece's (`engine/`): the `engine` binary alone.
+
+`make images` builds both browse targets. The base is pinned by digest; on the sandbox machine the manager runs each
+image by digest, so every job starts from the image that was tested.

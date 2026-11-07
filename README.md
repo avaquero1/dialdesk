@@ -21,7 +21,7 @@ its own Vultr machine, behind an egress proxy, and is thrown away after the job.
 | `packages/testkit` | Fixture readers, the contract-test harness, sample results |
 | `packages/design-kit` | The board and the glass themes (after the mockup review) |
 | `engine/` | The Rust math engine: a stdin/stdout CLI with receipts. `engine --schema` |
-| `sandbox/` | Rust: `sandbox-manager` (the `Backend` trait; `docker` backend stub) and `egress-proxy` |
+| `sandbox/` | Rust: `sandbox-manager` (docker/gVisor backend) and `egress-proxy`; the browse image; the containment tests |
 | `fixtures/` | A static site with clean and poisoned pages; made-up Kalshi and Polymarket JSON |
 | `deploy/` | Dev Compose (Postgres, Valkey 8.1, fixtures), `db-init.sql`, Caddyfile and nftables stubs |
 | `tests/`, `e2e/` | The contract gate; the end-to-end test on fakes |
@@ -52,7 +52,8 @@ make infra-down         # removes the containers and volumes
 ```
 
 One service: `npm run dev -w services/board` (real handlers, watch mode) or `npm run fake -w services/board`.
-sandbox-manager: `SANDBOX_MANAGER_CALLERS=runner:<sha256 of RUNNER_TOKEN_SANDBOX_MANAGER> cargo run -p sandbox-manager -- serve`.
+sandbox-manager: `SANDBOX_BACKEND=stub SANDBOX_MANAGER_CALLERS=runner:<sha256 of RUNNER_TOKEN_SANDBOX_MANAGER> cargo run -p sandbox-manager -- serve`
+(no Docker); the real docker backend needs the sandbox network and the proxy (see `sandbox/README.md`).
 
 Ports: edge 8080, accounts 8101, board 8102, agent 8103, runner 8104, markets 8105, connections 8106, models 8107,
 audit 8108, sandbox-manager 8200, egress-proxy 8201, fixtures 8300.
