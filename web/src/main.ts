@@ -3,6 +3,7 @@
  * board (first paint from the quotes board copied from markets), and /live for what changes.
  */
 import type { Account, EventName, Look } from '@app/contracts';
+import { initActions, menuAction } from './actions.ts';
 import { $, finishAnimations, raf2, root, wait } from './dom.ts';
 import { ApiError, api, setApiHooks } from './api.ts';
 import { showAuth } from './auth.ts';
@@ -137,7 +138,8 @@ async function start(a: Account) {
   const b = await api.board();
   mount(b.widgets);
   bindBoard({ openMenu, openApp, openFolder, saveOrder, closeSurface });
-  initSurfaces({ account: () => account, logout, closeChat });
+  initSurfaces({ account: () => account, logout, closeChat, menuAction });
+  initActions();
   initChat();
   live = new Live({
     onEvent,

@@ -2,7 +2,7 @@
  * Surfaces: the ⋯ menu, the app sheets, the open folder and the Look sheet. Each pours from where it started (the
  * button or the tile) to its final box and drains back. Content is laid out at the final size; only the box moves.
  *
- * Not built yet (the next step): the menu's actions, the chat, the trust page, the run trace, Accounts and Catalog.
+ * Not built yet: the menu's agent and How we got this rows, the chat, the trust page, the run trace, Accounts and Catalog.
  * They show as greyed items or a "next build" note, never as fake results.
  */
 import type { Account, Widget, WidgetResult } from '@app/contracts';
@@ -11,6 +11,7 @@ import { EL, S, buildLens } from './board.ts';
 import { IC, type IconName } from './icons.ts';
 import { L, THEMES, mqDark, resolveMode, setLook, themeHue } from './look.ts';
 import { cardHtml, fmtNum, fmtTime } from './widgets.ts';
+import { foldersFor, menuRows, sizesFor, type MenuAction } from './menu.ts';
 
 interface Box {
   x: number;
@@ -31,6 +32,8 @@ export interface SurfaceHooks {
   account: () => Account | null;
   logout: () => void;
   closeChat: () => void;
+  /** A row of the ⋯ menu: refresh, size (arg: the size), move (arg: the folder id), clear (already asked), remove. */
+  menuAction: (id: string, act: MenuAction, arg?: string) => void;
 }
 let hooks: SurfaceHooks;
 
@@ -168,25 +171,50 @@ const tileFrom = (id: string) => {
   return t ? boxOf(t.getBoundingClientRect(), S.tile * 0.27) : boxOf({ left: innerWidth / 2 - 30, top: innerHeight / 2 - 30, width: 60, height: 60 }, 16);
 };
 
-// ---------- the ⋯ menu (opens on every tile; its actions arrive in the next step) ----------
+// ---------- the ⋯ menu: the same rows on every tile; what doesn't apply is greyed, never hidden ----------
+
+const ACT_ICON: Record<MenuAction, IconName> = { agent: 'chat', refresh: 'refresh', size: 'size', how: 'doc', move: 'folder', clear: 'drop', remove: 'trash' };
+const MENU_NOTE = 'Change it with the agent and How we got this come in the next build.';
 
 function menuHTML(w: Widget) {
   let i = 0;
-  const row = (ic: IconName, label: string) =>
-    `<button class="mi${rz(i++)} type="button" aria-disabled="true">${IC[ic]}<span class="grow">${esc(label)}</span></button>`;
-  const size = w.spec.kind === 'display' ? w.spec.size : null;
-  const sizes = (['S', 'M', 'L', 'XL'] as const).map((z) => `<button type="button" aria-pressed="${size === z}" aria-disabled="true">${z}</button>`).join('');
+  const rows = menuRows(w, S.widgets.values());
+  const off = (on: boolean) => (on ? '' : ' aria-disabled="true"');
+  const html = rows.map((r) => {
+    if (r.action === 'size') {
+      const sizes = sizesFor(w)
+        .map((z) => `<button type="button" data-size="${z.size}" aria-pressed="${z.cur}"${z.cur ? ' class="is-cur"' : ''}${off(z.on || z.cur)}>${z.size}</button>`)
+        .join('');
+      return `<div class="mi mi--size${rz(i++)} data-act="size"${off(r.on)}>${IC.size}<span class="grow">${esc(r.label)}</span><span class="seg" role="group" aria-label="Size">${sizes}</span></div>`;
+    }
+    const sep = r.action === 'clear' ? '<hr>' : '';
+    const caret = r.action === 'move' ? `<span class="caret">${IC.caret}</span>` : '';
+    return `${sep}<button class="mi${rz(i++)} type="button" data-act="${r.action}"${off(r.on)}>${IC[ACT_ICON[r.action]]}<span class="grow">${esc(r.label)}</span>${caret}</button>`;
+  });
+  const folders = foldersFor(w, S.widgets.values())
+    .map((f) => `<button class="mi" type="button" data-folder="${esc(f.spec.widget_id)}">${IC.folder}<span class="grow">${esc(f.spec.title)}</span></button>`)
+    .join('');
   return (
-    row('chat', 'Tune with chat') +
-    row('refresh', 'Refresh now') +
-    `<div class="mi mi--size${rz(i++)} aria-disabled="true">${IC.size}<span class="grow">Size</span><span class="seg" role="group" aria-label="Size">${sizes}</span></div>` +
-    row('doc', 'Sources and receipts') +
-    row('folder', 'Move to folder…') +
-    '<hr>' +
-    row('drop', 'Clear all') +
-    row('trash', 'Remove from board') +
-    `<p class="mi-note${rz(i++)}>These actions arrive in the next build. Drag a tile to move it.</p>`
+    `<div class="m-main">${html.join('')}<p class="mi-note${rz(i++)} id="mi-note">${esc(MENU_NOTE)}</p></div>` +
+    `<div class="m-pick" aria-hidden="true"><button class="mi" type="button" data-back>${IC.caret}<span class="grow">Back</span></button><hr>${folders}</div>`
   );
+}
+
+/** Clear all asks once, inside the menu: the row turns into "Yes, clear all" and the note says what it does. */
+function askClear(s: HTMLElement, w: Widget, on: boolean) {
+  const row = s.querySelector<HTMLElement>('[data-act="clear"]');
+  const note = s.querySelector<HTMLElement>('#mi-note');
+  if (!row || !note) return;
+  row.classList.toggle('is-asking', on);
+  row.querySelector('.grow')!.textContent = on ? 'Yes, clear all' : 'Clear all';
+  note.textContent = on ? `Puts ${w.spec.title} back to its defaults: sources, refresh and settings. Undo stays a few seconds.` : MENU_NOTE;
+}
+
+function pickFolder(s: HTMLElement, on: boolean) {
+  s.classList.toggle('is-pick', on);
+  s.querySelector('.m-pick')!.setAttribute('aria-hidden', String(!on));
+  s.querySelector('.m-main')!.setAttribute('aria-hidden', String(on));
+  s.querySelector<HTMLElement>(on ? '.m-pick .mi' : '[data-act="move"]')?.focus({ preventScroll: true });
 }
 
 export function openMenu(id: string) {
@@ -199,6 +227,7 @@ export function openMenu(id: string) {
     const bb = EL.get(id)?.querySelector('.w-menu-btn')?.getBoundingClientRect() ?? b;
     return boxOf(bb, bb.width / 2);
   };
+  let asking = false;
   openSurface({
     cls: 'menu',
     alignR: true,
@@ -208,6 +237,28 @@ export function openMenu(id: string) {
     from: boxOf(b, b.width / 2),
     fromFn: cur,
     place: (h) => ({ x: clamp(b.right - MW, 12, innerWidth - MW - 12), y: clamp(b.top - 4, 12, innerHeight - h - 12), w: MW, h, r: 22 }),
+    after: (s) => {
+      s.setAttribute('role', 'menu');
+      s.setAttribute('aria-label', `Menu for ${w.spec.title}`);
+      s.addEventListener('click', (e) => {
+        const t = e.target as Element;
+        const folder = t.closest<HTMLElement>('[data-folder]');
+        if (folder) return void hooks.menuAction(id, 'move', folder.dataset.folder);
+        if (t.closest('[data-back]')) return pickFolder(s, false);
+        const size = t.closest<HTMLElement>('[data-size]');
+        const el = size ?? t.closest<HTMLElement>('[data-act]');
+        if (!el || el.getAttribute('aria-disabled') === 'true' || el.closest('[aria-disabled="true"]')) return;
+        const act = (size ? 'size' : el.dataset.act) as MenuAction;
+        if (act !== 'clear' && asking) askClear(s, w, (asking = false));
+        if (size) {
+          if (size.getAttribute('aria-pressed') !== 'true') hooks.menuAction(id, 'size', size.dataset.size);
+        } else if (act === 'move') pickFolder(s, true);
+        else if (act === 'clear') {
+          if (asking) hooks.menuAction(id, 'clear');
+          else askClear(s, w, (asking = true));
+        } else hooks.menuAction(id, act);
+      });
+    },
   });
 }
 

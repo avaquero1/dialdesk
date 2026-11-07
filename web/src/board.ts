@@ -29,6 +29,10 @@ export const S = {
   rows: 0,
   brect: null as DOMRect | null,
   dt: 0,
+  /** Tiles whose removal waits for its Undo offer to end: off the board here, still on the server. */
+  hidden: new Set<string>(),
+  /** The last board from the server, so a change here (hide, undo) can redraw without a fetch. */
+  last: [] as readonly Widget[],
 };
 /** The tile elements by widget id (grid tiles only; folder children live inside their folder). */
 export const EL = new Map<string, HTMLElement>();
@@ -266,10 +270,32 @@ export function mount(widgets: readonly Widget[]) {
 }
 
 function setData(widgets: readonly Widget[]) {
+  S.last = widgets;
   S.widgets = new Map(widgets.map((w) => [w.spec.widget_id, w]));
   const { order, kids } = orderFromBoard(widgets);
-  S.order = order;
+  S.order = order.filter((id) => !S.hidden.has(id));
   S.kids = kids;
+}
+
+/** Take a tile off the board here (it drains, the others flow), or put it back (it pours in where it was). */
+export function hideTile(id: string, hide: boolean) {
+  if (hide) S.hidden.add(id);
+  else S.hidden.delete(id);
+  reconcile(S.last);
+}
+
+/** One widget changed on the server (a resize answers with it): redraw with it. */
+export function upsert(w: Widget) {
+  reconcile(S.last.map((o) => (o.spec.widget_id === w.spec.widget_id ? w : o)));
+}
+
+/** Save the grid as it now packs (after a size change), so a reload rebuilds this board. */
+export function saveLayout() {
+  const order = canonical(S.order, dims8);
+  const moved = order.join() !== S.order.join();
+  S.order = order;
+  if (moved) place({ stagger: true });
+  hooks.saveOrder(order);
 }
 
 /**
@@ -484,6 +510,8 @@ function endDrag() {
 }
 
 export const desktopPlaces = (order: string[]) => placesFor(order, dims8);
+/** The grid's places without one tile (it moves into a folder), in the order that reads back as itself. */
+export const placesWithout = (id: string) => placesFor(canonical(S.order.filter((o) => o !== id), dims8), dims8);
 
 // ---------- events ----------
 

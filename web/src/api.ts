@@ -36,13 +36,14 @@ export function noticeFor(e: ApiError): string | null {
   return null;
 }
 
-async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown, o: { auth?: boolean } = {}): Promise<T> {
+async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown, o: { auth?: boolean; keepalive?: boolean } = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
       method,
       credentials: 'same-origin',
       cache: 'no-store',
+      keepalive: o.keepalive,
       headers: body === undefined ? { accept: 'application/json' } : { accept: 'application/json', 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -81,4 +82,9 @@ export const api = {
   board: () => call<Board>('GET', '/api/board'),
   setLayout: (places: Places) => call<Board>('PUT', '/api/board/layout', { places }),
   setLook: (look: Look) => call<Look>('PUT', '/api/look', look),
+  // The ⋯ menu. keepalive: an Undo offer still waiting when the page goes away is sent anyway.
+  resize: (id: string, size: 'S' | 'M' | 'L' | 'XL') => call<Widget>('PATCH', `/api/widgets/${encodeURIComponent(id)}/size`, { size }),
+  refresh: (id: string) => call<{ job_id: string }>('POST', `/api/widgets/${encodeURIComponent(id)}/refresh`, {}),
+  clear: (id: string, o: { keepalive?: boolean } = {}) => call<Widget>('POST', `/api/widgets/${encodeURIComponent(id)}/clear`, {}, o),
+  remove: (id: string, o: { keepalive?: boolean } = {}) => call<{ ok: true }>('DELETE', `/api/widgets/${encodeURIComponent(id)}`, undefined, o),
 };
