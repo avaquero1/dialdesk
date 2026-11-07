@@ -20,7 +20,7 @@ export const DEMO_RUN: RunState = {
   finished_at: '2026-11-07T15:00:02.000Z',
 };
 
-/** In-memory run_state. The fake consumes no queue; e2e/run-on-fakes.ts plays runner's steps on the other fakes. */
+/** In-memory run_state reads. The fake consumes no queue: to run steps on fakes, call handleRun (run.ts) as e2e/flow.test.ts does. */
 export function fake(_deps: FakeDeps = {}, runs = new Map([[DEMO_RUN.run_id, DEMO_RUN]])): Handlers<typeof RUNNER> {
   return {
     getRun: ({ params }) => {

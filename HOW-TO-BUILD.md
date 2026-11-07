@@ -64,7 +64,7 @@ generated TypeScript is stale.
 | accounts | `services/accounts/src/fake.ts` | In-memory accounts and sessions (not signed JWTs) |
 | board | `services/board/src/fake.ts` | Boards, prescribed defaults with first-paint prices (pass `markets`), proposals, results, screenshots; enqueued runs in `fakeQueue` (real: widget-runs on BullMQ). Same rules as the real one (`logic.ts`) |
 | agent | `services/agent/src/fake.ts` | The scripted chat from the UI plan; every reply guarded; `advice-test` shows the blocked line |
-| runner | `services/runner/src/fake.ts` | `run_state` reads; the run itself is played by `e2e/run-on-fakes.ts` |
+| runner | `services/runner/src/fake.ts` | `run_state` reads only. The runs themselves: `handleRun` (`services/runner/src/run.ts`) on the other fakes, as `e2e/flow.test.ts` wires it |
 | markets | `services/markets/src/fake.ts` | Backed by `fixtures/markets` and `fixtures/site/MANIFEST.json` |
 | connections | `services/connections/src/fake.ts` | A key id containing `write` is refused as write scope |
 | models | `services/models/src/fake.ts` | Canned answers by role × scenario (`clean`, `poisoned`, `advice`, `error`) |
