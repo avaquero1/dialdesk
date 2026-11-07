@@ -2,7 +2,7 @@
  * The real board on Postgres (schema `board`, role svc_board). Same rules as the fake (logic.ts); every query is
  * scoped by account_id. Events and runs go out after the transaction commits.
  *
- * Bus and queue: MemoryBus and an in-memory queue until the Valkey helpers land in service-kit (the bus piece).
+ * Bus and queue: events and the log stream on Valkey (busFromConfig), runs on widget-runs (BullMQ, createQueue).
  */
 import { resolve } from 'node:path';
 import {
@@ -26,7 +26,7 @@ import {
   type WidgetResult,
   type WidgetRunJob,
 } from '@app/contracts';
-import { HttpError, MemoryBus, clientFromEnv, createLogger, logEntry, now, type Bus, type Call, type Handlers } from '@app/service-kit';
+import { HttpError, busFromConfig, clientFromEnv, createLogger, createQueue, logEntry, now, type Bus, type Call, type Handlers } from '@app/service-kit';
 import postgres from 'postgres';
 import {
   REFRESH_PER_HOUR,
@@ -63,19 +63,20 @@ export interface RealDeps {
   objects: ObjectStore;
 }
 
-/** From env: BOARD_DATABASE_URL, BOARD_TOKEN_MARKETS / BOARD_URL_MARKETS, BOARD_SCREENSHOT_DIR (dev). */
+/** From env: BOARD_DATABASE_URL, BOARD_VALKEY_URL, BOARD_TOKEN_MARKETS / BOARD_URL_MARKETS, BOARD_SCREENSHOT_DIR (dev). */
 export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeof BOARD>> {
   const url = cfg.DATABASE_URL;
   if (typeof url !== 'string' || !url) throw new Error('board: BOARD_DATABASE_URL is required in real mode');
+  const valkey = typeof cfg.VALKEY_URL === 'string' ? cfg.VALKEY_URL : undefined;
+  const bus = busFromConfig('board', { VALKEY_URL: valkey });
+  const runs = createQueue(QUEUES.widgetRuns, valkey!, 'board');
   const log = createLogger('board');
-  const queued: WidgetRunJob[] = [];
-  log.warn('widget-runs: in-memory queue until the Valkey helpers land in service-kit');
   const dir = typeof cfg.SCREENSHOT_DIR === 'string' && cfg.SCREENSHOT_DIR ? cfg.SCREENSHOT_DIR : resolve('.data/board/screenshots');
   log.info({ objects: 'local' }, 'screenshots in a local folder until Object Storage exists');
   return createReal({
     sql: connect(url),
-    bus: new MemoryBus(),
-    enqueue: async (_q, job) => void queued.push(job),
+    bus,
+    enqueue: async (_q, job) => void (await runs.enqueue(job)),
     markets: await clientFromEnv('board', 'markets'),
     objects: new LocalDirObjectStore(dir),
   });

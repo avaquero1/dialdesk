@@ -62,7 +62,7 @@ generated TypeScript is stale.
 |---|---|---|
 | edge | `services/edge/src/fake.ts` | Routes to the other services through typed clients; fake sessions `fake.<ses>.<acc>` |
 | accounts | `services/accounts/src/fake.ts` | In-memory accounts and sessions (not signed JWTs) |
-| board | `services/board/src/fake.ts` | Boards, prescribed defaults with first-paint prices (pass `markets`), proposals, results, screenshots; enqueued runs in `fakeQueue`. Same rules as the real one (`logic.ts`) |
+| board | `services/board/src/fake.ts` | Boards, prescribed defaults with first-paint prices (pass `markets`), proposals, results, screenshots; enqueued runs in `fakeQueue` (real: widget-runs on BullMQ). Same rules as the real one (`logic.ts`) |
 | agent | `services/agent/src/fake.ts` | The scripted chat from the UI plan; every reply guarded; `advice-test` shows the blocked line |
 | runner | `services/runner/src/fake.ts` | `run_state` reads; the run itself is played by `e2e/run-on-fakes.ts` |
 | markets | `services/markets/src/fake.ts` | Backed by `fixtures/markets` and `fixtures/site/MANIFEST.json` |
