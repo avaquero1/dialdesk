@@ -115,7 +115,7 @@ export async function runTool(name: string, args: unknown, st: TurnState, deps: 
   let chip: Omit<ToolChip, 'status' | 'proposal_id'> | null = null;
   let change: ProposalChange[] | null = null;
   if (!known) out = refuse(`no tool named ${cut(name, 40)}`);
-  else if (st.calls > MAX_TOOL_CALLS) out = refuse(`at most ${MAX_TOOL_CALLS} tool calls a turn`);
+  else if (st.calls > MAX_TOOL_CALLS) out = refuse('too many tool calls this turn; answer the user now');
   else {
     const tool = name as AgentToolName;
     const parsed = AGENT_TOOLS[tool].safeParse(args ?? {});

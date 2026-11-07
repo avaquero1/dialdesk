@@ -1,6 +1,7 @@
 /**
- * End to end on fakes, from day one: sign up, the chat builds one widget, a run fills it with numbers and receipts,
- * and a poisoned page gets its sandbox killed. Everything goes through edge's browser API. The runs go the way they
+ * End to end on fakes, from day one: sign up, the chat builds the board, a run fills a widget with numbers and receipts,
+ * and a poisoned page gets its sandbox killed. The chat is the real agent service on the models fake (A1.3.1): the fake
+ * plays multi-step turns, so the agent's own loop, tools, slots, guard and proposals run, and no model call is spent. Everything goes through edge's browser API. The runs go the way they
  * do in production: board enqueues them on widget-runs and runner consumes them (here the queue is an in-process
  * list instead of BullMQ). sandbox-manager is the real Rust binary on the docker backend: real Chromium sandboxes behind
  * the real egress proxy, on the dev topology (sandbox/dev/topology.ts; `make images` and `make engine-image` first).
@@ -13,10 +14,11 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { liveSandboxes, startManager, topologyUp, type Manager, type Topology } from '../sandbox/dev/topology.ts';
 import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, EDGE, MARKETS, MODELS, POISONED_NOTE, type Board, type ChatReply, type WidgetRunJob } from '@app/contracts';
-import { MemoryBus, createClient, hashToken, sandboxClient, type SandboxClient } from '@app/service-kit';
-import { fakeApp, fixtures, pageText, TEST_TOKENS } from '@app/testkit';
+import { MemoryBus, buildApp, createClient, createLogger, hashToken, sandboxClient, type SandboxClient } from '@app/service-kit';
+import { fakeApp, fixtures, pageText, testCallers, TEST_TOKENS } from '@app/testkit';
 import { fake as accounts } from '../services/accounts/src/fake.ts';
-import { fake as agent } from '../services/agent/src/fake.ts';
+import { createReal as agentReal } from '../services/agent/src/real.ts';
+import { MemoryConversationStore } from '../services/agent/src/store.ts';
 import { createFakeAudit } from '../services/audit/src/fake.ts';
 import { fake as board } from '../services/board/src/fake.ts';
 import { fake as connections } from '../services/connections/src/fake.ts';
@@ -59,7 +61,16 @@ const apps = {
 };
 const as = (caller: keyof typeof TEST_TOKENS, app: { fetch: (r: Request) => Response | Promise<Response> }) =>
   createClient({ baseUrl: 'http://svc.internal', token: TEST_TOKENS[caller], fetch: (r) => app.fetch(r) });
-const agentApp = fakeApp('agent', AGENT, agent({ board: as('agent', apps.board) }));
+// The real agent: its chat loop on models' fake chat role, its board proposals on the board fake.
+const agentBus = new MemoryBus();
+const agentApp = buildApp({
+  service: 'agent',
+  mode: 'real',
+  api: AGENT,
+  handlers: agentReal({ models: as('agent', apps.models), board: as('agent', apps.board), markets: as('agent', apps.markets), store: new MemoryConversationStore(), bus: agentBus }),
+  callers: testCallers(),
+  log: createLogger('agent', 'silent'),
+});
 const t = TEST_TOKENS.edge;
 const fe = createFakeEdge(
   inProcess({ ...apps, agent: agentApp }, { accounts: t, board: t, agent: t, connections: t, audit: t, models: t }),
@@ -156,14 +167,36 @@ describe('e2e on fakes', () => {
     }
   });
 
-  it('2. the chat builds one widget, and it is real only after the click', async () => {
-    const r: ChatReply = await browser(EDGE.chat, { body: { conversation_id: null, widget_id: null, message: 'Chiefs, Bills, and the NBA tonight.' } });
-    const chip = r.turn.chips[0]!;
-    expect(chip.tool).toBe('propose_widget');
-    expect((await browser(EDGE.board, {})).pending).toHaveLength(1);
-    const acc = await browser(EDGE.accept, { params: { proposal_id: chip.proposal_id! }, body: {} });
-    s.widget_id = acc.widgets[0]!.spec.widget_id;
-    expect(acc.widgets[0]!.spec).toMatchObject({ kind: 'display', type: 'news' });
+  it('2. the chat builds the board: it asks for teams, the user names one, proposals arrive as chips, the taps add them', async () => {
+    // The first visit (design.md section 7): which teams or markets, with leagues to tap, then that league's teams.
+    const hi: ChatReply = await browser(EDGE.chat, { body: { conversation_id: null, widget_id: null, message: 'Hi' } });
+    expect(hi.turn.text).toBe('Hi. Which teams or markets do you follow?');
+    expect(hi.turn.picks).toEqual(expect.arrayContaining(['NFL', 'NBA']));
+    const cnv = hi.conversation_id;
+    const nfl: ChatReply = await browser(EDGE.chat, { body: { conversation_id: cnv, widget_id: null, message: 'NFL' } });
+    expect(nfl.turn.picks).toEqual(expect.arrayContaining(['Bills', 'Chiefs']));
+    // The user taps a team: the agent proposes two widgets, each its own chip; the board waits for the taps.
+    const r: ChatReply = await browser(EDGE.chat, { body: { conversation_id: cnv, widget_id: null, message: 'Bills' } });
+    expect(r.turn.chips.map((c) => [c.tool, c.status])).toEqual([
+      ['propose_widget', 'proposed'],
+      ['propose_widget', 'proposed'],
+    ]);
+    expect(r.turn.text).toMatch(/Tap to add them\.$/);
+    const before = await browser(EDGE.board, {});
+    expect(before.pending.map((p) => p.proposal_id).sort()).toEqual(r.turn.chips.map((c) => c.proposal_id).sort());
+    const added = [];
+    for (const chip of r.turn.chips) added.push(...(await browser(EDGE.accept, { params: { proposal_id: chip.proposal_id! }, body: {} })).widgets);
+    expect(added.map((w) => w.spec.kind === 'display' && w.spec.type)).toEqual(['news', 'movement']);
+    const news = added[0]!;
+    expect(news.spec).toMatchObject({ kind: 'display', type: 'news', params: { team: 'Bills', event_keys: ['nfl-2026w10-kc-buf'] } });
+    s.widget_id = news.spec.widget_id;
+    const after = await browser(EDGE.board, {});
+    expect(after.pending).toEqual([]);
+    expect(after.widgets.length).toBe(before.widgets.length + 2);
+    // The agent logged each turn: ids, hashes and sizes only.
+    const turns = agentBus.entries.filter((e) => e.action === 'chat.turn');
+    expect(turns.map((e) => e.outcome)).toEqual(['ok', 'ok', 'ok']);
+    expect(JSON.stringify(turns)).not.toMatch(/Bills/);
   });
 
   it('2b. the chat never gives advice: bait is answered with math, advice is blocked', async () => {
@@ -300,5 +333,5 @@ describe('e2e on fakes', () => {
   });
   it.todo('the same runs on BullMQ on Valkey (runner worker + board queue; make valkey-test territory, Phase 2-3)');
   it.todo('run.step and run.poisoned reach the browser over /live (edge + runner, Phase 2)');
-  it.todo('the same flow against the real services instead of the fakes (Phase 2-3)');
+  it.todo('the same flow against the other real services instead of their fakes (agent is real since A1.3.1; Phase 2-3)');
 });

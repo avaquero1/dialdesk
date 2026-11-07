@@ -1,9 +1,10 @@
 /** The agent's small rules in code: numbers, titles and look labels. */
 import { describe, expect, it } from 'vitest';
-import type { WidgetDraft } from '@app/contracts';
-import { cleanTitle, dataBlock, RULES } from '../src/prompt.ts';
+import type { Market, WidgetDraft } from '@app/contracts';
+import { picksFor, teamsByLeague } from '../src/picks.ts';
+import { cleanTitle, countInWords, dataBlock, RULES } from '../src/prompt.ts';
 import { Slots, digitsIn, formatValue, forHistory, strayDigits } from '../src/slots.ts';
-import { checkDraft, isUsersNumber } from '../src/tools.ts';
+import { checkDraft, isUsersNumber, type BoardWidget } from '../src/tools.ts';
 
 describe('agent: numbers', () => {
   it('formats engine values by unit', () => {
@@ -57,7 +58,58 @@ describe('agent: the model reads no digit it could copy (A1.1.1)', () => {
     const types = dataBlock({ board: [], pending: 0, markets: [], tune: null }).split('Themes:')[0]!;
     const m = { market_id: 'kalshi:X', exchange: 'kalshi', title: 'x', yes_price_cents: 60, previous_price_cents: 55, stale: false };
     const meanings = Object.values(new Slots().quote(m as never).slots as Record<string, string>).join(' ');
-    // The rules' own list numbers ("3. Never type…") are the only digits left.
-    for (const text of [RULES.replace(/^[0-9]\. /gm, ''), types, meanings]) expect(text.replace(/\{n[0-9]{1,2}\}/g, '')).not.toMatch(/\p{Nd}/u);
+    for (const text of [RULES, types, meanings]) expect(text.replace(/\{n[0-9]{1,2}\}/g, '')).not.toMatch(/\p{Nd}/u);
+  });
+
+  // A1.3.1: the DATA block's counts ("7 tiles") were digits too. Ids and exchange names keep theirs: the model copies ids
+  // into tool calls, and a name's digits ("49ers") are allowed in a reply.
+  it('the whole system prompt holds no digit outside ids, slots and names', () => {
+    const tile = (i: number): BoardWidget => ({
+      widget_id: `wid_abc${i}defgh`,
+      kind: 'display',
+      type: 'probability',
+      size: 'M',
+      title: '49ers at Seahawks',
+      market_ids: ['kalshi:KXNFLGAME-26NOV08SFSEA-SF'],
+      receipts: [{ receipt_id: 'r-0a1b2c3d', op: 'implied_probability' }],
+    });
+    const board = Array.from({ length: 7 }, (_, i) => tile(i));
+    const markets = [{ market_id: 'polymarket:nfl-sf-sea-2026-11-08', title: '49ers vs. Seahawks', event_key: 'nfl-2026w10-sf-sea' }];
+    const data = dataBlock({ board, pending: 2, markets, tune: { widget: board[0]!, brief: 'injuries only' } });
+    expect(data).toContain('The board (seven tiles, two proposals waiting for the user)');
+    const ids = /\b(?:wid_|r-|kalshi:|polymarket:|nfl-)[\w-]+|49ers/g;
+    expect(`${RULES}\n\n${data}`.replace(ids, '').replace(/\{n[0-9]{1,2}\}/g, '')).not.toMatch(/\p{Nd}/u);
+  });
+
+  it('tool results hold no digit outside ids: no value, no formula', () => {
+    const r = new Slots().receipt({ id: 'r-0a1b2c3d', op: 'implied_probability', unit: 'probability', value: 0.61, formula: 'p = price_cents / 100' } as never);
+    expect(JSON.stringify(r).replace(/r-0a1b2c3d|\{n[0-9]{1,2}\}|"n[0-9]{1,2}"/g, '')).not.toMatch(/\p{Nd}/u);
+  });
+
+  it('writes counts in words', () => {
+    expect([0, 1, 7, 19, 20, 21, 99, 140].map(countInWords)).toEqual(['zero', 'one', 'seven', 'nineteen', 'twenty', 'twenty-one', 'ninety-nine', 'more than ninety-nine']);
+  });
+});
+
+describe('agent: the first visit picks (design.md section 7)', () => {
+  const mk = (title: string, league: string) => ({ title, league }) as Market;
+  const markets = [mk('Chiefs at Bills: Chiefs win', 'nfl'), mk('Chiefs vs. Bills', 'nfl'), mk('49ers at Seahawks Winner?', 'nfl'), mk('Lakers at Celtics Winner?', 'nba')];
+  const base = { userTexts: [], markets, tune: false, chips: 0 };
+
+  it('reads teams by league from exchange titles', () => {
+    expect(Object.fromEntries(teamsByLeague(markets))).toEqual({ nfl: ['49ers', 'Bills', 'Chiefs', 'Seahawks'], nba: ['Celtics', 'Lakers'] });
+  });
+
+  it('leagues first, then the teams of the league tapped, then nothing once a team is named', () => {
+    expect(picksFor({ ...base, message: 'Hi' })).toEqual(['NFL', 'NBA']);
+    expect(picksFor({ ...base, message: 'NFL' })).toEqual(['49ers', 'Bills', 'Chiefs', 'Seahawks']);
+    expect(picksFor({ ...base, message: 'nba please' })).toEqual(['Celtics', 'Lakers']);
+    expect(picksFor({ ...base, message: 'Bills' })).toBeUndefined();
+    expect(picksFor({ ...base, message: 'hello again', userTexts: ['Bills'] })).toBeUndefined();
+  });
+
+  it('none in a Tune chat, none when the turn proposed something', () => {
+    expect(picksFor({ ...base, message: 'Hi', tune: true })).toBeUndefined();
+    expect(picksFor({ ...base, message: 'Hi', chips: 1 })).toBeUndefined();
   });
 });

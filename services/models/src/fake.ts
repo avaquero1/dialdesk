@@ -1,5 +1,6 @@
 import { MODELS, type CompleteBody, type Completion, type ModelRole, type FakeScenario } from '@app/contracts';
 import { HttpError, now, type Handlers } from '@app/service-kit';
+import { chatStep } from './chat-script.ts';
 
 export type FakeDeps = Record<string, never>;
 export async function fakeDepsFromEnv(): Promise<FakeDeps> {
@@ -8,6 +9,7 @@ export async function fakeDepsFromEnv(): Promise<FakeDeps> {
 
 /**
  * Canned answers keyed by role and scenario. Tests cost nothing.
+ * - chat/clean plays multi-step turns from the last user message and this turn's tool results (chat-script.ts).
  * - reader/poisoned returns a fact that carries orders aimed at the agent (the guard must poison it).
  * - chat/advice and summarizer/advice answer with advice wording (the guard must block it).
  * - any role with scenario `error` answers 502.
@@ -15,33 +17,7 @@ export async function fakeDepsFromEnv(): Promise<FakeDeps> {
  */
 const ANSWERS: Record<ModelRole, Partial<Record<FakeScenario, (b: CompleteBody) => Pick<Completion, 'content' | 'tool_calls'>>>> = {
   chat: {
-    clean: (b) => {
-      const last = b.messages.at(-1)?.content.toLowerCase() ?? '';
-      if (/warmer/.test(last)) return { content: 'Done.', tool_calls: [{ name: 'set_look', arguments: { hue: 32 } }] };
-      if (/should i|buy|sell/.test(last))
-        return { content: 'I do math, not calls. The market says {n1}, up {n2} since yesterday. Want a widget for this market?', tool_calls: [] };
-      if (/chiefs|bills/.test(last))
-        return {
-          content: 'Here is a widget for that market.',
-          tool_calls: [
-            {
-              name: 'propose_widget',
-              arguments: {
-                widgets: [
-                  {
-                    kind: 'display',
-                    type: 'news',
-                    title: 'Chiefs at Bills news',
-                    market_ids: ['kalshi:KXNFLGAME-26NOV08KCBUF-KC', 'polymarket:nfl-kc-buf-2026-11-08'],
-                    params: { team: 'Bills', event_keys: ['nfl-2026w10-kc-buf'] },
-                  },
-                ],
-              },
-            },
-          ],
-        };
-      return { content: "Hi. Tell me your teams and markets, and I'll build your board.", tool_calls: [] };
-    },
+    clean: chatStep,
     advice: () => ({ content: 'You should buy YES on the Chiefs. It is a sure thing.', tool_calls: [] }),
   },
   planner: {

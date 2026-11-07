@@ -21,6 +21,7 @@ import {
 } from '@app/contracts';
 import { checkChat, guardChatReply } from '@app/guard';
 import { CallError, HttpError, MemoryBus, busFromConfig, clientFromEnv, createLogger, logEntry, now, type Bus, type Call, type Handlers, type Logger } from '@app/service-kit';
+import { picksFor } from './picks.ts';
 import { RULES, boardForModel, dataBlock, marketsForModel } from './prompt.ts';
 import { Slots, digitsIn, forHistory, strayDigits } from './slots.ts';
 import { MemoryConversationStore, PgConversationStore, connect, type ConversationStore, type StoredTurn } from './store.ts';
@@ -89,7 +90,7 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
       () => [],
     );
     const markets = marketsForModel(all, message);
-    return { board, data: dataBlock({ board, pending: b.pending.length, markets, tune }), names: [...board.map((w) => w.title), ...markets.map((m) => m.title)] };
+    return { board, all, data: dataBlock({ board, pending: b.pending.length, markets, tune }), names: [...board.map((w) => w.title), ...markets.map((m) => m.title)] };
   }
 
   async function complete(body: CompleteBody): Promise<Completion | 'cap' | 'down'> {
@@ -105,7 +106,8 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
 
   /** The loop: model, tools, model… until it answers in words or MAX_STEPS. Returns the model's template. */
   async function loop(st: TurnState, messages: CompleteBody['messages']): Promise<{ template: string; fixed: boolean; steps: number }> {
-    const tools = agentToolDefs();
+    // The JSON Schema's own "$schema" URL carries digits and tells the model nothing.
+    const tools = agentToolDefs().map(({ parameters: { $schema: _s, ...parameters }, ...t }) => ({ ...t, parameters }));
     for (let step = 1; step <= MAX_STEPS; step++) {
       const r = await complete({ role: 'chat', account_id: st.account_id, messages, tools, max_tokens: 600 });
       if (r === 'cap') return { template: CAP_LINE, fixed: true, steps: step };
@@ -196,11 +198,14 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
       const pass = verdict.outcome === 'pass';
       if (pass) await propose(st);
 
+      // The first visit: leagues, then teams, to tap. Written by code from the listing, never by the model.
+      const picks = pass ? picksFor({ message, userTexts: st.userTexts.slice(0, -1), markets: ctx.all, tune: !!widget_id, chips: st.chips.length }) : undefined;
       const turn: ChatTurn = {
         turn_id: newId('trn'),
         role: 'agent',
         text: (pass ? filled.text : BLOCKED_CHAT_LINE).slice(0, 4000),
         chips: pass ? st.chips : [],
+        ...(picks && { picks }),
         verdict_id: verdict.verdict_id,
         at: now(),
       };

@@ -43,10 +43,10 @@ export class Slots {
     return { market_id: m.market_id, exchange: m.exchange, stale: m.stale, slots };
   }
 
-  /** read_receipt: the engine's value in its unit. The model gets the op and formula (code-written), not the value. */
+  /** read_receipt: the engine's value in its unit. The model gets the op and unit, not the value, nor the formula (it holds digits the model could copy). */
   receipt(r: EngineReceipt): Record<string, unknown> {
     const name = this.add({ text: formatValue(r.op, r.unit, r.value), source: r.id });
-    return { receipt_id: r.id, op: r.op, unit: r.unit, formula: r.formula.slice(0, 120), slots: { [name]: `the ${r.op} value` } };
+    return { receipt_id: r.id, op: r.op, unit: r.unit, slots: { [name]: `the ${r.op} value` } };
   }
 
   has(name: string) {
