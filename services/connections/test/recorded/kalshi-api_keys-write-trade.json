@@ -1,0 +1,5 @@
+{
+  "api_keys": [
+    { "api_key_id": "a1b2c3d4-0000-4000-8000-00000000wtrd", "name": "trading only", "key_type": "ed25519", "scopes": ["read", "write::trade"], "subaccount": 0, "fcm_subtrader_id": null }
+  ]
+}

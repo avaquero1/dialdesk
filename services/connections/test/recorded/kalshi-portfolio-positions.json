@@ -1,0 +1,10 @@
+{
+  "market_positions": [
+    { "ticker": "KXNFLGAME-26NOV08KCBUF-KC", "exchange_index": 0, "total_traded_dollars": "22.0000", "position_fp": "40.00", "market_exposure_dollars": "22.0000", "realized_pnl_dollars": "0.0000", "fees_paid_dollars": "0.8000", "last_updated_ts": "2026-11-06T23:12:00Z", "netting_enabled": false },
+    { "ticker": "KXNFLGAME-26NOV08GBCHI-GB", "exchange_index": 0, "total_traded_dollars": "11.0000", "position_fp": "-25.00", "market_exposure_dollars": "11.0000", "realized_pnl_dollars": "0.0000", "fees_paid_dollars": "0.5000", "last_updated_ts": "2026-11-06T23:12:00Z", "netting_enabled": false },
+    { "ticker": "KXNBAGAME-26NOV07DENPHX-DEN", "exchange_index": 0, "total_traded_dollars": "17.1000", "position_fp": "30.00", "market_exposure_dollars": "17.1000", "realized_pnl_dollars": "0.0000", "fees_paid_dollars": "0.6000", "last_updated_ts": "2026-11-06T23:12:00Z", "netting_enabled": false },
+    { "ticker": "KXNBAGAME-26NOV06LALBOS-LAL", "exchange_index": 0, "total_traded_dollars": "9.0000", "position_fp": "0.00", "market_exposure_dollars": "0.0000", "realized_pnl_dollars": "1.2000", "fees_paid_dollars": "0.3000", "last_updated_ts": "2026-11-06T04:00:00Z", "netting_enabled": false }
+  ],
+  "event_positions": [],
+  "cursor": ""
+}

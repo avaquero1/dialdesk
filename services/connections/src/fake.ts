@@ -1,6 +1,10 @@
 import { CONNECTIONS, newId, type Connection, type Numbers } from '@app/contracts';
 import { HttpError, now, type Handlers } from '@app/service-kit';
 import { fixtures } from '@app/testkit';
+import { sealKeyPair } from './seal.ts';
+
+/** Public on purpose: the fake holds no secret. */
+const FAKE_SEED = new Uint8Array(32).fill(0x42);
 
 export type FakeDeps = Record<string, never>;
 export async function fakeDepsFromEnv(): Promise<FakeDeps> {
@@ -8,7 +12,8 @@ export async function fakeDepsFromEnv(): Promise<FakeDeps> {
 }
 
 /**
- * In-memory connections. It opens no sealed key and calls no exchange. The read-scope check is simulated:
+ * In-memory connections. It opens no sealed key and calls no exchange. Its public key is a real X25519 key (from a
+ * fixed, public seed), so the browser's seal() works against it. The read-scope check is simulated:
  * a Kalshi key id containing "write" is treated as a key with write scope and refused (403), like the real check
  * against fixtures/markets/kalshi/api_keys-write.json.
  */
@@ -20,7 +25,7 @@ export function fake(_deps: FakeDeps = {}): Handlers<typeof CONNECTIONS> {
     return c;
   };
   return {
-    publicKey: () => ({ alg: 'x25519-sealed-box', public_key: 'ZmFrZS1wdWJsaWMta2V5LWZvci10ZXN0cy1vbmx5' }),
+    publicKey: async () => ({ alg: 'x25519-sealed-box', public_key: (await sealKeyPair(FAKE_SEED)).publicKeyB64 }),
     connect: ({ body }) => {
       if (body.exchange === 'kalshi' && body.key_id.includes('write'))
         throw new HttpError(403, 'write_scope', 'This key can trade. Make a read-only key and paste that one.');

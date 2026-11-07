@@ -1,0 +1,7 @@
+{
+  "api_keys": [
+    { "api_key_id": "a1b2c3d4-0000-4000-8000-00000000read", "name": "positions widget (read only)", "key_type": "ed25519", "scopes": ["read"], "subaccount": null, "fcm_subtrader_id": null },
+    { "api_key_id": "a1b2c3d4-0000-4000-8000-0000000trade", "name": "my bot", "key_type": "rsa", "scopes": ["read", "write"], "subaccount": null, "fcm_subtrader_id": null }
+  ],
+  "api_key_region_expiration_ts": null
+}

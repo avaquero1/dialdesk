@@ -1,0 +1,5 @@
+{
+  "api_keys": [
+    { "api_key_id": "a1b2c3d4-0000-4000-8000-000000000rsa", "name": "older RSA key, read only", "key_type": "rsa", "scopes": ["read"], "subaccount": null, "fcm_subtrader_id": null }
+  ]
+}

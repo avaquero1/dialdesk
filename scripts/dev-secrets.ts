@@ -1,8 +1,9 @@
 /**
- * Writes the local dev secrets: `.env` (every service's tokens, caller hashes, database and Valkey users) and
- * `deploy/.dev/valkey-users.acl`, and the session signing key `deploy/.dev/session-ed25519.pem` (accounts reads it;
- * edge gets only the public key), and audit's head signing key `deploy/.dev/audit-signing-key.pem`. All are gitignored. Run once: `make dev-secrets` (it refuses to overwrite
- * unless you pass --force). `--example` prints `.env.example` instead (names only, no values).
+ * Writes the local dev secrets: `.env` (every service's tokens, caller hashes, database and Valkey users),
+ * `deploy/.dev/valkey-users.acl`, the session signing key `deploy/.dev/session-ed25519.pem` (accounts reads it;
+ * edge gets only the public key), audit's head signing key `deploy/.dev/audit-signing-key.pem` and connections'
+ * master key `deploy/.dev/connections-master.key`. All are gitignored. Run once: `make dev-secrets` (it refuses to
+ * overwrite unless you pass --force). `--example` prints `.env.example` instead (names only, no values).
  */
 import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -83,6 +84,12 @@ const auditKeyPath = join(root, 'deploy/.dev/audit-signing-key.pem');
 put(envKey('audit', 'SIGNING_KEY_FILE'), example ? '' : auditKeyPath);
 put(envKey('audit', 'HEADS_DIR'), example ? '' : join(root, 'deploy/.dev/audit-heads'));
 
+lines.push('', '# --- connections: the master key (32 bytes, base64) in its own file, mounted only by connections. Dev: deploy/.dev/.');
+lines.push('# KALSHI_ENVS: blank = demo only (the public-demo default); "demo,prod" lets a real read-only key connect.');
+const masterPath = join(root, 'deploy/.dev/connections-master.key');
+put(envKey('connections', 'MASTER_KEY_FILE'), example ? '' : masterPath);
+for (const k of ['KALSHI_ENVS', 'REFRESH_EVERY_S']) put(envKey('connections', k), '');
+
 lines.push('', '# --- run a service as its in-memory fake: <SVC>_FAKE=1 (npm run fake -w services/<svc> sets it)');
 lines.push(`# ports: ${Object.entries(PORTS).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 lines.push('# board keeps screenshots in BOARD_SCREENSHOT_DIR until Object Storage exists (default .data/board/screenshots)');
@@ -107,5 +114,8 @@ if (example) {
   if (!existsSync(auditKeyPath)) {
     writeFileSync(auditKeyPath, generateKeyPairSync('ed25519').privateKey.export({ format: 'pem', type: 'pkcs8' }) as string, { mode: 0o600 });
   }
-  console.log('wrote .env, deploy/.dev/valkey-users.acl, deploy/.dev/session-ed25519.pem and deploy/.dev/audit-signing-key.pem');
+  // Kept across --force: a new master key would make every stored dev key unreadable. Delete the file to rotate it.
+  if (!existsSync(masterPath)) writeFileSync(masterPath, randomBytes(32).toString('base64') + '\n', { mode: 0o600 });
+  chmodSync(masterPath, 0o600);
+  console.log('wrote .env and deploy/.dev/: valkey-users.acl, session-ed25519.pem, audit-signing-key.pem, connections-master.key');
 }
