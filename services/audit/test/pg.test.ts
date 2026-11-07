@@ -6,12 +6,12 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AUDIT, LOG_STREAM, TRUST_ACTIONS as A } from '@app/contracts';
-import { LogStreamReader, ValkeyBus, createLogger, logEntry, migrate, valkeyClient } from '@app/service-kit';
+import { LogStreamReader, ValkeyBus, createLogger, logEntry, migrate, pendingMigrations, valkeyClient } from '@app/service-kit';
 import { rowHash, type ChainRow } from '../src/chain.ts';
+import { AUDIT_OWNER, MIGRATIONS_DIR } from '../src/migrations.ts';
 import { auditHandlers, openAudit, type AuditDeps } from '../src/real.ts';
 import { generatePem } from '../src/signer.ts';
 
@@ -74,13 +74,12 @@ describe.skipIf(!on)('audit on Postgres and Valkey', () => {
   beforeAll(async () => {
     const keyFile = join(scratch, 'signing-key.pem');
     writeFileSync(keyFile, generatePem(), { mode: 0o600 });
-    const applied = await migrate({
-      databaseUrl: e.AUDIT_DATABASE_URL!,
-      schema: 'audit',
-      dir: fileURLToPath(new URL('../migrations', import.meta.url)),
-      log: createLogger('audit', 'silent'),
-    });
-    expect(applied).toContain('0002_chain.sql');
+    // As the deploy does it: an admin login that sets role audit_owner (svc_audit can't create tables).
+    const asService = { databaseUrl: e.AUDIT_DATABASE_URL!, schema: 'audit', dir: MIGRATIONS_DIR };
+    expect(await pendingMigrations(asService)).toContain('0003_svc_audit_rights.sql');
+    const applied = await migrate({ ...asService, databaseUrl: adminUrl, role: AUDIT_OWNER, log: createLogger('audit', 'silent') });
+    expect(applied).toEqual(['0001_init.sql', '0002_chain.sql', '0003_svc_audit_rights.sql']);
+    expect(await pendingMigrations(asService)).toEqual([]);
     d = await openAudit({
       DATABASE_URL: e.AUDIT_DATABASE_URL!,
       VALKEY_URL: e.AUDIT_VALKEY_URL!,
@@ -184,9 +183,9 @@ describe.skipIf(!on)('audit on Postgres and Valkey', () => {
   it('refuses UPDATE, DELETE and TRUNCATE to svc_audit, and the trigger refuses them to anyone', async () => {
     const sql = d.store.sql;
     for (const table of ['chain', 'heads', 'head_pushes']) {
-      await expect(sql.unsafe(`update ${table} set seq = seq where seq = 0`)).rejects.toThrow(/permission denied/);
-      await expect(sql.unsafe(`delete from ${table} where seq = 0`)).rejects.toThrow(/permission denied/);
-      await expect(sql.unsafe(`truncate ${table}`)).rejects.toThrow(/permission denied/);
+      await expect(sql.unsafe(`update ${table} set seq = seq where seq = 0`)).rejects.toThrow(`permission denied for table ${table}`);
+      await expect(sql.unsafe(`delete from ${table} where seq = 0`)).rejects.toThrow(`permission denied for table ${table}`);
+      await expect(sql.unsafe(`truncate ${table}`)).rejects.toThrow(`permission denied for table ${table}`);
     }
     // Even the superuser, unless it turns the triggers off.
     await expect(admin`update audit.chain set entry = entry where seq = 0`).rejects.toThrow(/append-only/);
@@ -278,6 +277,58 @@ describe.skipIf(!on)('audit on Postgres and Valkey', () => {
     expect((await call.trust('acc_sitetest001')).site).toEqual(site);
     // The site's rows don't leak into one account's own numbers.
     expect((await call.trust('acc_sitetest001')).sandboxes_created).toBe(0);
+    expect((await call.verify()).ok).toBe(true);
+  });
+
+  it("refuses svc_audit UPDATE, DELETE, TRUNCATE and ALTER by privileges, not only by the trigger: audit_owner owns the log", async () => {
+    const sql = d.store.sql;
+    const owners = await admin<{ name: string; owner: string }[]>`
+      select tablename as name, tableowner as owner from pg_tables where schemaname = 'audit'
+      union all select 'schema audit', pg_get_userbyid(nspowner) from pg_namespace where nspname = 'audit' order by 1`;
+    expect(owners).toEqual(['_migrations', 'chain', 'head_pushes', 'heads', 'schema audit'].map((name) => ({ name, owner: AUDIT_OWNER })));
+    const [role] = await admin<{ rolcanlogin: boolean }[]>`select rolcanlogin from pg_roles where rolname = ${AUDIT_OWNER}`;
+    expect(role!.rolcanlogin).toBe(false);
+
+    const rights = async (table: string) => {
+      const [r] = await admin<Record<string, boolean>[]>`select
+        has_table_privilege('svc_audit', ${'audit.' + table}, 'SELECT') as select,
+        has_table_privilege('svc_audit', ${'audit.' + table}, 'INSERT') as insert,
+        has_table_privilege('svc_audit', ${'audit.' + table}, 'UPDATE') as update,
+        has_table_privilege('svc_audit', ${'audit.' + table}, 'DELETE') as delete,
+        has_table_privilege('svc_audit', ${'audit.' + table}, 'TRUNCATE') as truncate,
+        has_table_privilege('svc_audit', ${'audit.' + table}, 'REFERENCES') as references,
+        has_table_privilege('svc_audit', ${'audit.' + table}, 'TRIGGER') as trigger`;
+      return r;
+    };
+    const only = (...yes: string[]) => Object.fromEntries(['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger'].map((k) => [k, yes.includes(k)]));
+    for (const table of ['chain', 'heads', 'head_pushes']) expect(await rights(table)).toEqual(only('select', 'insert'));
+    expect(await rights('_migrations')).toEqual(only('select'));
+    const [schema] = await admin<{ usage: boolean; create: boolean }[]>`select
+      has_schema_privilege('svc_audit', 'audit', 'USAGE') as usage, has_schema_privilege('svc_audit', 'audit', 'CREATE') as create`;
+    expect(schema).toEqual({ usage: true, create: false });
+
+    // Each one fails on privileges ("permission denied", "must be owner"), before the trigger's "append-only" could.
+    for (const table of ['chain', 'heads', 'head_pushes']) {
+      for (const stmt of [`update ${table} set seq = seq`, `delete from ${table}`, `truncate ${table}`]) {
+        await expect(sql.unsafe(stmt)).rejects.toThrow(`permission denied for table ${table}`);
+      }
+      for (const stmt of [
+        `alter table ${table} disable trigger all`,
+        `alter table ${table} add column note text`,
+        `alter table ${table} owner to svc_audit`,
+        `drop trigger ${table}_append_only on ${table}`,
+        `drop table ${table}`,
+      ]) {
+        await expect(sql.unsafe(stmt)).rejects.toThrow(new RegExp(`^must be owner of (table|relation) ${table}$`));
+      }
+    }
+    await expect(sql.unsafe(`insert into _migrations (name) values ('9999_skip.sql')`)).rejects.toThrow('permission denied for table _migrations');
+    await expect(sql.unsafe('create table audit.shadow (x int)')).rejects.toThrow('permission denied for schema audit');
+    await expect(sql.unsafe(`set role ${AUDIT_OWNER}`)).rejects.toThrow(`permission denied to set role "${AUDIT_OWNER}"`);
+    await expect(sql.unsafe('drop function reject_change() cascade')).rejects.toThrow('must be owner of function reject_change');
+    // It can't hand itself the rights either: a GRANT from a non-owner gives nothing.
+    await sql.unsafe('grant update, delete, truncate on chain to svc_audit').catch(() => {});
+    expect(await rights('chain')).toEqual(only('select', 'insert'));
     expect((await call.verify()).ok).toBe(true);
   });
 });

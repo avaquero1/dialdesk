@@ -4,7 +4,7 @@ import { buildApp, type Handlers, type SessionCheck } from './app.ts';
 import { parseCallers } from './auth.ts';
 import { loadConfig } from './config.ts';
 import { createLogger } from './log.ts';
-import { migrate } from './migrate.ts';
+import { migrate, pendingMigrations } from './migrate.ts';
 
 export interface ServiceDef<T extends Record<string, Endpoint>> {
   service: ServiceName;
@@ -15,6 +15,12 @@ export interface ServiceDef<T extends Record<string, Endpoint>> {
   real: (cfg: Record<string, unknown>) => Handlers<T> | Promise<Handlers<T>>;
   /** services/<name>/migrations, for services that store data. */
   migrationsDir?: string;
+  /**
+   * The NOLOGIN role that owns the service's tables, when it isn't the service's own login (audit: audit_owner).
+   * The service then never migrates itself: the deploy applies them as this role (`migrate({ role })` from an admin
+   * login), and at start the service only checks that none is pending, and refuses to start if one is.
+   */
+  migrationsOwner?: string;
   sessionCheck?: SessionCheck;
 }
 
@@ -24,8 +30,13 @@ export async function runService<T extends Record<string, Endpoint>>(def: Servic
   const log = createLogger(def.service);
   const mode = cfg.FAKE ? 'fake' : 'real';
   if (mode === 'real' && def.migrationsDir) {
-    if (cfg.DATABASE_URL) await migrate({ databaseUrl: cfg.DATABASE_URL, schema: def.service, dir: def.migrationsDir, log });
-    else log.warn('no DATABASE_URL: migrations skipped');
+    if (!cfg.DATABASE_URL) log.warn('no DATABASE_URL: migrations skipped');
+    else if (def.migrationsOwner) {
+      const pending = await pendingMigrations({ databaseUrl: cfg.DATABASE_URL, schema: def.service, dir: def.migrationsDir });
+      if (pending.length > 0) {
+        throw new Error(`${def.service}: migrations not applied (${pending.join(', ')}): apply them as ${def.migrationsOwner} first (npm run migrate -w services/${def.service})`);
+      }
+    } else await migrate({ databaseUrl: cfg.DATABASE_URL, schema: def.service, dir: def.migrationsDir, log });
   }
   const app = buildApp({
     service: def.service,
