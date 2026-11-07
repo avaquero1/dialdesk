@@ -20,7 +20,7 @@ export interface ServiceDef<T extends Record<string, Endpoint>> {
 
 /** `main.ts` of every service: config, logs, migrations (real mode), then listen. */
 export async function runService<T extends Record<string, Endpoint>>(def: ServiceDef<T>) {
-  const cfg = loadConfig(def.service) as ReturnType<typeof loadConfig> & { PORT: number; FAKE: boolean; CALLERS: string; DATABASE_URL?: string };
+  const cfg = loadConfig(def.service) as ReturnType<typeof loadConfig> & { PORT: number; HOST: string; FAKE: boolean; CALLERS: string; DATABASE_URL?: string };
   const log = createLogger(def.service);
   const mode = cfg.FAKE ? 'fake' : 'real';
   if (mode === 'real' && def.migrationsDir) {
@@ -36,7 +36,7 @@ export async function runService<T extends Record<string, Endpoint>>(def: Servic
     log,
     sessionCheck: def.sessionCheck,
   });
-  const server = serve({ fetch: app.fetch, port: cfg.PORT, hostname: '127.0.0.1' }, (info) =>
+  const server = serve({ fetch: app.fetch, port: cfg.PORT, hostname: cfg.HOST }, (info) =>
     log.info({ port: info.port, mode }, 'listening'),
   );
   const stop = () => server.close(() => process.exit(0));

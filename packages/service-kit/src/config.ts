@@ -6,6 +6,7 @@ import { PORTS, type ServiceName } from '@app/contracts';
  * so one dev `.env` can hold all of them and a production container gets only its own.
  *
  *   <SVC>_PORT              port to listen on (default: PORTS[svc])
+ *   <SVC>_HOST              address to listen on (default 127.0.0.1; 0.0.0.0 inside a container)
  *   <SVC>_FAKE=1            serve the in-memory fake instead of the real handlers
  *   <SVC>_CALLERS           who may call it: "edge:<sha256 hex of edge's token>,agent:<hex>"
  *   <SVC>_TOKEN_<CALLEE>    the token this service presents to CALLEE (e.g. RUNNER_TOKEN_MARKETS)
@@ -16,6 +17,7 @@ import { PORTS, type ServiceName } from '@app/contracts';
  */
 export const BaseConfig = z.object({
   PORT: z.coerce.number().int().min(1).max(65535),
+  HOST: z.string().min(1).default('127.0.0.1'),
   FAKE: z
     .enum(['0', '1', ''])
     .default('')
