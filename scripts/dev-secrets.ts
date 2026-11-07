@@ -49,6 +49,11 @@ for (const s of SERVICES) {
   acl.push(`user ${valkeyUser(s)} on >${pw} ${valkeyAclRule(s)}`);
 }
 
+lines.push('', '# --- models: Vultr Serverless Inference. The key lives in its own file (one line, mode 600), never in .env.');
+lines.push('# Blank = the default: key file /run/secrets/vultr-inference, caps $5/day global, $0.25 and 200000 tokens per account, 30 calls/min.');
+put('MODELS_VULTR_KEY_FILE', example ? '' : (process.env.MODELS_VULTR_KEY_FILE ?? ''));
+for (const k of ['DAILY_CAP_USD', 'ACCOUNT_DAILY_USD', 'ACCOUNT_DAILY_TOKENS', 'ACCOUNT_RPM', 'KILL', 'KEY_FINGERPRINTS']) put(envKey('models', k), '');
+
 lines.push('', '# --- run a service as its in-memory fake: <SVC>_FAKE=1 (npm run fake -w services/<svc> sets it)');
 lines.push(`# ports: ${Object.entries(PORTS).map(([k, v]) => `${k} ${v}`).join(', ')}`);
 lines.push('LOG_LEVEL=info', '');

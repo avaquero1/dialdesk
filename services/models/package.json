@@ -4,15 +4,21 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
     "start": "tsx --env-file-if-exists=../../.env src/main.ts",
-    "fake": "MODELS_FAKE=1 tsx --env-file-if-exists=../../.env src/main.ts"
+    "fake": "MODELS_FAKE=1 tsx --env-file-if-exists=../../.env src/main.ts",
+    "fingerprint": "tsx scripts/fingerprint.ts",
+    "prices": "tsx scripts/prices.ts",
+    "probe": "tsx --env-file-if-exists=../../.env scripts/probe.ts"
   },
   "dependencies": {
     "@app/contracts": "*",
     "@app/guard": "*",
-    "@app/service-kit": "*"
+    "@app/service-kit": "*",
+    "postgres": "^4.1.0"
   }
 }
