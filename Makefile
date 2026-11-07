@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test
+.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test
 
 check: rust gen-check typecheck lint contracts web e2e
 	@echo "make check: all green"
@@ -80,6 +80,17 @@ audit-test:
 	$(AUDIT_TEST) up -d --wait postgres valkey
 	AUDIT_TEST=1 AUDIT_TEST_PG_PORT=$(AUDIT_TEST_PG_PORT) AUDIT_TEST_VALKEY_PORT=$(AUDIT_TEST_VALKEY_PORT) npx vitest run --project contracts services/audit/test/pg.test.ts; \
 	  s=$$?; $(AUDIT_TEST) down -v; exit $$s
+
+# The S3 client, board's screenshots and audit's write-once heads on a real S3 server (versitygw), with fresh credentials
+# each run: put/get/list, a wrong signature refused, write-once, and a bucket with object lock. Its own Compose project
+# and port, removed afterwards. Not part of `make check` (it needs Docker).
+S3_TEST_PORT ?= 57070
+S3_TEST_ENV := S3_TEST_PORT=$(S3_TEST_PORT) S3_TEST_ACCESS=vha$(shell openssl rand -hex 8) S3_TEST_SECRET=$(shell openssl rand -hex 20)
+S3_TEST := docker compose -p vha-s3-test -f deploy/compose.s3-test.yml
+s3-test:
+	@$(S3_TEST_ENV) $(S3_TEST) up -d s3
+	@$(S3_TEST_ENV) S3_TEST=1 npx vitest run --project contracts tests/deploy/s3.test.ts; \
+	  s=$$?; $(S3_TEST_ENV) $(S3_TEST) down -v; exit $$s
 
 # Local infra only (Postgres, Valkey, fixtures). The services run natively with tsx.
 infra-up:

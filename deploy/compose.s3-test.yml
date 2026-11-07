@@ -1,0 +1,16 @@
+# A local S3 stand-in for `make s3-test` only: versitygw (Apache-2.0) on a posix folder, with versioning on so a bucket
+# can be made with object lock. Its own Compose project (vha-s3-test) and port, removed afterwards. The credentials
+# are made fresh by the Makefile for each run; nothing here reaches Vultr.
+name: vha-s3-test
+
+services:
+  s3:
+    image: versity/versitygw@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316
+    environment:
+      ROOT_ACCESS_KEY: ${S3_TEST_ACCESS:?}
+      ROOT_SECRET_KEY: ${S3_TEST_SECRET:?}
+    command: ["--port", ":7070", "--region", "us-east-1", "posix", "--versioning-dir", "/tmp/versions", "/tmp/gw"]
+    entrypoint: ["sh", "-c", "mkdir -p /tmp/gw /tmp/versions && exec versitygw \"$$@\"", "versitygw"]
+    ports: ["127.0.0.1:${S3_TEST_PORT:-57070}:7070"]
+    tmpfs: ["/tmp:size=64m"]
+    # No healthcheck (the image may have no shell tools for one): the test waits until the port answers.

@@ -39,7 +39,7 @@ export class S3HeadStore implements HeadStore {
       if (e instanceof S3Error && (e.status === 412 || e.status === 409)) {
         const now = await this.s3.get(key);
         if (now?.equals(bytes)) return;
-        throw new Error(`audit: ${key} exists with other content (write-once)`);
+        throw new Error(`audit: ${key} exists with other content (write-once)`, { cause: e });
       }
       throw e;
     }

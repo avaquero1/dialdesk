@@ -15,5 +15,5 @@ export default tseslint.config(
       ],
     },
   },
-  { files: ['scripts/**', 'packages/contracts/scripts/**'], rules: { 'no-restricted-syntax': 'off' } },
+  { files: ['scripts/**', 'packages/contracts/scripts/**', 'deploy/*.ts'], rules: { 'no-restricted-syntax': 'off' } },
 );
