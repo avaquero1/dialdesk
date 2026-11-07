@@ -47,6 +47,8 @@ const chat = async (message: string, conversation_id: string | null = null, widg
 };
 const boardOf = (account_id: string) => as('agent', boardApp)(BOARD.getBoard, { params: { account_id } });
 const sentToModel = () => JSON.stringify(vultr.requests);
+/** The chat role's requests (the guard role's layer-two calls left out). */
+const chatCalls = () => vultr.requests.filter((q) => !String(q.messages[0]?.content).startsWith('You check text'));
 
 beforeAll(async () => {
   writeFileSync(keyPath, `${KEY}\n`, { mode: 0o600 });
@@ -56,7 +58,7 @@ beforeAll(async () => {
     service: 'models',
     mode: 'real',
     api: MODELS,
-    handlers: await modelsReal({ VULTR_KEY_FILE: keyPath, VULTR_BASE_URL: vultr.url, TIMEOUT_MS: '5000', ACCOUNT_RPM: '1000' }, { store: new MemoryUsageStore(), log }),
+    handlers: await modelsReal({ VULTR_KEY_FILE: keyPath, VULTR_BASE_URL: vultr.url, TIMEOUT_MS: '5000', ACCOUNT_RPM: '1000', ACCOUNT_DAILY_TOKENS: '100000000', ACCOUNT_DAILY_USD: '100', DAILY_CAP_USD: '100' }, { store: new MemoryUsageStore(), log }),
     callers: testCallers(),
     log,
   });
@@ -88,7 +90,7 @@ describe('agent real mode: the contract cases', () => {
 
 describe('agent real mode: the rules', () => {
   it('sends the six tools to the chat role, and only those', () => {
-    const names = vultr.requests.at(-1)!.tools.map((t: { function: { name: string } }) => t.function.name).sort();
+    const names = chatCalls().at(-1)!.tools.map((t: { function: { name: string } }) => t.function.name).sort();
     expect(names).toEqual(Object.keys(AGENT_TOOLS).sort());
   });
 
@@ -111,7 +113,7 @@ describe('agent real mode: the rules', () => {
     expect(r.body.turn.chips[0]).toMatchObject({ tool: 'quote_market', status: 'applied', args: { market_id: KC } });
     // The model got slot names, never the value.
     const price = r.body.turn.text.match(/(\d+(?:\.\d)?)%/)![1]!;
-    const toolResults = vultr.requests.at(-1)!.messages.filter((m: { content: string }) => m.content.startsWith('[tool result')).map((m: { content: string }) => m.content);
+    const toolResults = chatCalls().at(-1)!.messages.filter((m: { content: string }) => m.content.startsWith('[tool result')).map((m: { content: string }) => m.content);
     expect(toolResults.join('\n')).toContain('"n1"');
     expect(toolResults.join('\n')).not.toContain(price);
   });
@@ -121,6 +123,16 @@ describe('agent real mode: the rules', () => {
     expect(r.body.turn.text).toBe(BLOCKED_CHAT_LINE);
     expect(r.body.turn.chips).toEqual([]);
     expect(r.body.turn.verdict_id).toMatch(/^vrd_/);
+  });
+
+  it("layer two (the guard model) blocks advice the word lists miss, and fails closed when it can't judge", async () => {
+    const r = await chat('subtle advice');
+    expect(r.body.turn.text).toBe(BLOCKED_CHAT_LINE);
+    const g = await chat('guard garbled');
+    expect(g.body.turn.text).toBe(BLOCKED_CHAT_LINE);
+    const guardCalls = vultr.requests.filter((q) => q.messages[0].content.startsWith('You check text'));
+    expect(guardCalls.length).toBeGreaterThan(0);
+    expect(guardCalls.every((q) => !q.tools)).toBe(true);
   });
 
   it('a number the model typed itself blocks the reply', async () => {
@@ -143,7 +155,7 @@ describe('agent real mode: the rules', () => {
     expect(chips.map((c) => c.tool)).toEqual(['propose_widget', 'propose_widget', 'propose_widget', 'propose_widget', 'quote_market', 'read_receipt', 'remove_widget']);
     expect(chips.every((c) => c.status === 'refused' && c.proposal_id === null)).toBe(true);
     expect((await boardOf(ACC)).pending.length).toBe(pending);
-    const results = vultr.requests.at(-1)!.messages.filter((m: { content: string }) => m.content.startsWith('[tool result')).map((m: { content: string }) => m.content);
+    const results = chatCalls().at(-1)!.messages.filter((m: { content: string }) => m.content.startsWith('[tool result')).map((m: { content: string }) => m.content);
     expect(results[0]).toContain('no tool named place_trade');
     expect(results.join('\n')).toContain('no market kalshi:NOSUCHMARKET-1');
     expect(results.join('\n')).toContain('no such widget on this board');
@@ -187,9 +199,9 @@ describe('agent real mode: the rules', () => {
   });
 
   it('stops a tool loop after MAX_STEPS model calls', async () => {
-    const n = vultr.requests.length;
+    const n = chatCalls().length;
     const r = await chat('loop forever');
-    expect(vultr.requests.length - n).toBe(MAX_STEPS);
+    expect(chatCalls().length - n).toBe(MAX_STEPS);
     expect(r.body.turn.text).toBe('Done.');
   });
 
@@ -210,7 +222,7 @@ describe('agent real mode: the rules', () => {
     const first = await chat('should I buy YES on the Chiefs?');
     const price = first.body.turn.text.match(/(\d+(?:\.\d)?)%/)![1]!;
     await chat('hi', first.body.conversation_id);
-    const last = vultr.requests.at(-1)!.messages as { role: string; content: string }[];
+    const last = chatCalls().at(-1)!.messages as { role: string; content: string }[];
     const assistant = last.filter((m) => m.role === 'assistant').map((m) => m.content).join('\n');
     expect(assistant).toContain('(a number from a tool)');
     expect(assistant).not.toContain(`${price}%`);

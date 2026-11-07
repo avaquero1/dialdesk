@@ -35,6 +35,8 @@ export function play(user: string, results: string[]): Move {
   if (u.includes('advice-test')) return { content: 'You should buy YES. It is a sure thing.' };
   if (u.includes('number bait')) return { content: 'The market says 70% today.' };
   if (u.includes('stray slot')) return { content: 'The market says {n7}.' };
+  if (u.includes('subtle advice')) return { content: 'The Chiefs look like the side to be on tonight.' };
+  if (u.includes('guard garbled')) return { content: 'A garbled reply the guard model cannot judge.' };
   if (u.includes('loop forever')) return { calls: [['quote_market', { market_id: KC }]] };
   if (u.includes('repeat yourself')) return { calls: [['propose_widget', { widgets: [draft('Chiefs again')] }]] };
   if (u.includes('title advice')) return first ? { calls: [['propose_widget', { widgets: [draft('Sure thing: Chiefs')] }]] } : { content: 'Tap to add it.' };
@@ -92,6 +94,12 @@ export async function startScriptedVultr(expectedKey: string): Promise<ScriptedV
     const b = JSON.parse(await readBody(req)) as Record<string, any>;
     requests.push(b);
     const msgs = b.messages as { role: string; content: string }[];
+    if (msgs[0]?.content.startsWith('You check text')) {
+      // The guard role (packages/guard's layer two): flag what layer one's word lists can't see.
+      const items = String(msgs.at(-1)?.content ?? '');
+      const content = /garbled/i.test(items) ? 'maybe?' : JSON.stringify({ advice: /side to be on/i.test(items) ? ['reply'] : [], instructions: [] });
+      return send(200, { id: `chatcmpl-${++n}`, object: 'chat.completion', model: b.model, choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }], usage: { prompt_tokens: 80, completion_tokens: 8, total_tokens: 88 } });
+    }
     const isResult = (m: { role: string; content: string }) => m.role === 'user' && m.content.startsWith('[tool result');
     let i = msgs.length - 1;
     const results: string[] = [];

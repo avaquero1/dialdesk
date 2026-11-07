@@ -19,14 +19,14 @@ import {
   type Completion,
   type Verdict,
 } from '@app/contracts';
-import { checkChat } from '@app/guard';
+import { checkChat, guardChatReply } from '@app/guard';
 import { CallError, HttpError, MemoryBus, busFromConfig, clientFromEnv, createLogger, logEntry, now, type Bus, type Call, type Handlers, type Logger } from '@app/service-kit';
 import { RULES, boardForModel, dataBlock, marketsForModel } from './prompt.ts';
 import { Slots, digitsIn, forHistory, strayDigits } from './slots.ts';
 import { MemoryConversationStore, PgConversationStore, connect, type ConversationStore, type StoredTurn } from './store.ts';
 import { runTool, type ProposalChange, type TurnState } from './tools.ts';
 
-/** Checks a whole reply. Layer one by default; main wires layer two (the guard model) when packages/guard has it. */
+/** Checks a whole reply. Default: both layers (guardChatReply, layer two through models' guard role); it fails closed. */
 export type ChatGuard = (text: string, account_id: string) => Promise<Verdict>;
 
 export interface RealDeps {
@@ -67,7 +67,7 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
 }
 
 export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
-  const guard: ChatGuard = deps.guard ?? (async (text) => checkChat(text));
+  const guard: ChatGuard = deps.guard ?? (async (text, account_id) => (await guardChatReply(text, { models: deps.models, account_id })).verdict);
   const log = deps.log ?? createLogger('agent', 'silent');
 
   async function context(account_id: string, widget_id: string | null, message: string) {
@@ -183,12 +183,15 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
       const filled = st.slots.fill(template);
       const allowed = new Set([...digitsIn([...st.userTexts, ...ctx.names]), ...st.settingDigits]);
       const stray = fixed ? [] : [...strayDigits(template, allowed), ...st.shown.flatMap((s) => strayDigits(s, allowed))];
-      const labels = st.chips.filter((c) => c.status !== 'refused').map((c) => c.label);
-      const g = await guard([filled.text, ...labels, ...st.shown].filter(Boolean).join('\n'), account_id);
       const extra: Verdict['reasons'] = [
         ...(stray.length ? [{ code: 'bare_digit' as const, where: 'reply' }] : []),
         ...filled.missing.map((n) => ({ code: 'missing_receipt' as const, where: `reply.slots.${n}` })),
       ];
+      // One check over everything the model wrote that the user will read: the reply, and the titles and briefs it
+      // proposed. Chip labels are code (a tool name plus validated values or those titles), and the guard reads a tool
+      // name as an order aimed at an agent, so they aren't sent. Already blocked by its numbers: layer one only.
+      const shownText = [filled.text, ...st.shown].filter(Boolean).join('\n');
+      const g = extra.length ? checkChat(shownText) : await guard(shownText, account_id);
       const verdict: Verdict = extra.length ? { ...g, outcome: 'block', reasons: [...g.reasons, ...extra] } : g;
       const pass = verdict.outcome === 'pass';
       if (pass) await propose(st);
