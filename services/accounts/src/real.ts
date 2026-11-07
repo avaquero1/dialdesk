@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import postgres from 'postgres';
 import { z } from 'zod';
 import { ACCOUNTS, DEFAULT_LOOK, Look, newId, type Account } from '@app/contracts';
-import { HttpError, MemoryBus, createLogger, logEntry, now, type Bus, type Handlers, type Logger } from '@app/service-kit';
+import { HttpError, MemoryBus, busFromConfig, createLogger, logEntry, now, type Bus, type Handlers, type Logger } from '@app/service-kit';
 import { DEFAULT_COST, dummyHash, hashPassword, verifyPassword, type Argon2Cost } from './password.ts';
 import { loadSigningKey, signSession, type SigningKey } from './session.ts';
 import { memoryStore, pgStore, type AccountRow, type Store } from './store.ts';
@@ -164,10 +164,11 @@ export function scheduleGuestSweep(store: Store, log: Logger, bus: Bus, hourUtc 
 const RealConfig = z.object({
   SESSION_KEY_FILE: z.string({ error: 'set ACCOUNTS_SESSION_KEY_FILE to the Ed25519 private key (make dev-secrets writes one)' }).min(1),
   DATABASE_URL: z.string().optional(),
+  VALKEY_URL: z.string().optional(),
   GUEST_SWEEP_HOUR_UTC: z.coerce.number().int().min(0).max(23).default(8),
 });
 
-/** The real accounts from env: Postgres (ACCOUNTS_DATABASE_URL) and the key file (ACCOUNTS_SESSION_KEY_FILE). */
+/** The real accounts from env: Postgres (ACCOUNTS_DATABASE_URL), Valkey (ACCOUNTS_VALKEY_URL) and the key file (ACCOUNTS_SESSION_KEY_FILE). */
 export function real(cfg: Record<string, unknown> = {}): Handlers<typeof ACCOUNTS> {
   const c = RealConfig.parse(cfg);
   const log = createLogger('accounts');
@@ -175,8 +176,8 @@ export function real(cfg: Record<string, unknown> = {}): Handlers<typeof ACCOUNT
   // Pool max 3 per service (architecture: Postgres). Without a database (never in production) it runs in memory.
   const store = c.DATABASE_URL ? pgStore(postgres(c.DATABASE_URL, { max: 3, onnotice: () => {} })) : memoryStore();
   if (!c.DATABASE_URL) log.warn('no ACCOUNTS_DATABASE_URL: accounts are in memory and vanish on restart');
-  // MemoryBus until service-kit's ValkeyBus lands: look.changed and the log stay in this process.
-  const bus = new MemoryBus();
+  // look.changed goes out on Valkey (edge pushes it over /live), and every action to the log stream.
+  const bus = busFromConfig('accounts', c);
   scheduleGuestSweep(store, log, bus, c.GUEST_SWEEP_HOUR_UTC);
   log.info({ kid: key.kid }, 'session signing key loaded');
   return createAccounts({ store, key, bus });

@@ -45,7 +45,8 @@ most 5 sockets (429). A socket carries only its own account's events (`BrowserEv
 over 1 KiB closes it), closes with 4001 when the session expires, is revoked or logs out, and is dropped when it falls
 1 MiB behind. Events are hints: the browser refetches on reconnect.
 
-Until service-kit has the Valkey feed, /live hears only events published in edge's own process (`LocalBus`).
+edge listens to every event on Valkey (`ValkeyBus.subscribe('all')`, as `svc-edge`, which may only PSUBSCRIBE `events.*`)
+and fans each one out to the sockets of the account it names. In tests the same fan-out (`LocalBus`) is fed in process.
 
 ## Tests
 

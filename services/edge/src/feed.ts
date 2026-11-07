@@ -8,8 +8,8 @@ export interface EventFeed {
 }
 
 /**
- * An in-process bus that is also a feed: services in the same process (the tests, a one-process demo) emit, /live
- * pushes. It keeps nothing, so a long-running edge doesn't grow. Replaced by the Valkey feed when service-kit has it.
+ * An in-process bus that is also a feed: services in the same process (the tests) emit, /live pushes. In real mode
+ * edge feeds it from ValkeyBus.subscribe('all') with `deliver`. It keeps nothing, so a long-running edge doesn't grow.
  */
 export class LocalBus implements Bus, EventFeed {
   private readonly handlers = new Set<EventHandler>();
@@ -19,6 +19,10 @@ export class LocalBus implements Bus, EventFeed {
   }
   async log(entry: LogEntry) {
     LogEntry.parse(entry);
+  }
+  /** An event that is already validated (ValkeyBus checks it against its schema before handing it over). */
+  deliver(event: EventName, payload: unknown) {
+    for (const h of this.handlers) h(event, payload);
   }
   subscribe(h: EventHandler) {
     this.handlers.add(h);

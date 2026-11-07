@@ -1,8 +1,9 @@
 import { serve } from '@hono/node-server';
 import { z } from 'zod';
 import { EDGE } from '@app/contracts';
-import { createLogger, loadConfig, runService } from '@app/service-kit';
+import { busFromConfig, createLogger, loadConfig, runService } from '@app/service-kit';
 import { createFakeEdge, depsFromEnv } from './fake.ts';
+import { LocalBus } from './feed.ts';
 import { createRealEdge } from './real.ts';
 import { sessionKeys } from './session.ts';
 
@@ -19,19 +20,25 @@ if (process.env.EDGE_FAKE === '1') {
     HOST: z.string().default('127.0.0.1'),
   });
   const log = createLogger('edge');
+  // /live hears every event on Valkey (svc-edge may PSUBSCRIBE events.*) and fans it out to the sockets.
+  const valkey = busFromConfig('edge', cfg);
+  const feed = new LocalBus();
+  const unsubscribe = await valkey.subscribe('all', (event, payload) => feed.deliver(event, payload), (channel) =>
+    log.warn({ channel }, 'live: dropped an event that fails its schema'),
+  );
   const edge = createRealEdge({
+    feed,
     deps: await depsFromEnv(),
     keys: sessionKeys(cfg.SESSION_PUBLIC_KEYS),
     origins: cfg.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
     trustProxy: cfg.TRUST_PROXY === '1',
     log,
   });
-  // Until service-kit's Valkey feed lands, /live hears only this process's events.
-  log.warn('live: in-process events only (the Valkey feed is not wired yet)');
   const server = serve({ fetch: edge.app.fetch, port: cfg.PORT, hostname: cfg.HOST }, (info) => log.info({ port: info.port, mode: 'real' }, 'listening'));
   const live = edge.attach(server as never);
   const stop = () => {
     live.close();
+    void unsubscribe().then(() => valkey.close()).catch(() => {});
     server.close(() => process.exit(0));
   };
   process.on('SIGTERM', stop);
