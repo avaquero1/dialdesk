@@ -13,4 +13,7 @@ export const cases: Case[] = [
   { endpoint: 'history', caller: 'runner', input: () => ({ params: { market_id: kc }, query: { window_s: 7 * 86400 } }) },
   { endpoint: 'event', caller: 'runner', input: () => ({ params: { event_key: 'nfl-2026w10-kc-buf' } }) },
   { endpoint: 'candidates', caller: 'runner', input: () => ({ params: { market_id: kc }, query: {} }) },
+  { endpoint: 'resolved', caller: 'runner', input: () => ({ query: { league: 'nfl' } }) },
+  { endpoint: 'resolved', caller: 'runner', input: () => ({ query: { league: 'nba', kind: 'game_winner' } }) },
+  { endpoint: 'resolved', caller: 'runner', input: () => ({ query: { league: 'mlb' } }), expect: 404 },
 ];

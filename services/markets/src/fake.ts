@@ -1,7 +1,9 @@
 import { MARKETS, SOURCE_CATALOG, newId, type Candidate, type GamePairing, type Market } from '@app/contracts';
 import { HttpError, now, type Handlers } from '@app/service-kit';
 import { fixtures, readFixture } from '@app/testkit';
-import { KalshiCandles, KalshiMarketRaw, kalshiPoints, kalshiToMarket } from './kalshi.ts';
+import { KalshiCandles, KalshiCandlesBatch, KalshiMarketRaw, KalshiSettledPage, kalshiPoints, kalshiToMarket } from './kalshi.ts';
+import { pricesFrom, resolvedAnswer, settledGames } from './resolved.ts';
+import { GAME_SERIES, type GameLeague } from './teams.ts';
 import { PolyMarketRaw, polyToMarket } from './polymarket.ts';
 
 export type FakeDeps = Record<string, never>;
@@ -44,6 +46,10 @@ export function fake(_deps: FakeDeps = {}): Handlers<typeof MARKETS> {
   const candidateIds = new Map(pages.map((p) => [p.url, newId('cnd')]));
 
   return {
+    resolved: ({ query }) => {
+      if (query.league !== 'nfl' && query.league !== 'nba') throw new HttpError(404, 'not_found', `no resolved history for ${query.league} yet`);
+      return recordedResolved(query.league);
+    },
     list: ({ query }) => ({
       markets: [...markets.values()].filter(
         (m) =>
@@ -94,4 +100,33 @@ export function fake(_deps: FakeDeps = {}): Handlers<typeof MARKETS> {
       };
     },
   };
+}
+
+/**
+ * This season's settled games as markets.resolved answers them, from the recording in
+ * fixtures/markets/live/weekend/resolved (scripts/record-resolved.ts), through the real service's own parsers.
+ */
+export function recordedResolved(league: GameLeague) {
+  const dir = 'markets/live/weekend/resolved';
+  const index = readFixture<{ recorded_at: string; files: { series: string; tickers: string[]; file: string }[] }>(`${dir}/resolved.json`);
+  const series = GAME_SERIES[league];
+  const s = settledGames(league, KalshiSettledPage.parse(readFixture(`${dir}/settled-${series}.json`)).markets);
+  const byTicker = new Map(s.games.map((g) => [g.ticker, g]));
+  const prices = new Map<string, { t: number; price_cents: number } | null>();
+  for (const f of index.files.filter((x) => x.series === series)) {
+    const chunk = { games: f.tickers.map((t) => byTicker.get(t)!).filter(Boolean), start: 0, end: 0 };
+    for (const [t, v] of pricesFrom(chunk, KalshiCandlesBatch.parse(readFixture(`${dir}/${f.file}`)))) prices.set(t, v);
+  }
+  return resolvedAnswer(league, s, prices, index.recorded_at);
+}
+
+/** The recorded records in the engine's history shape, per league: every team's market, and the home teams' alone. */
+export function engineHistory() {
+  const shape = (rs: { t: number; price_cents: number; outcome: number }[]) => rs.map(({ t, price_cents, outcome }) => ({ t, price_cents, outcome }));
+  const out: Record<string, { all: ReturnType<typeof shape>; home: ReturnType<typeof shape> }> = {};
+  for (const league of ['nfl', 'nba'] as const) {
+    const h = recordedResolved(league);
+    out[league] = { all: shape(h.records), home: shape(h.records.filter((r) => r.home)) };
+  }
+  return out;
 }

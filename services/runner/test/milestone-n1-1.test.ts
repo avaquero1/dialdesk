@@ -15,7 +15,7 @@ import { createFakeAudit } from '../../audit/src/fake.ts';
 import { fake as boardFake } from '../../board/src/fake.ts';
 import { fake as modelsFake } from '../../models/src/fake.ts';
 import { WEEKEND_HISTORY, realApp, weekendFetch } from '../../markets/test/recorded.ts';
-import { LINE_POINTS, MAX_MOVERS, lineAgo } from '../src/plans.ts';
+import { LINE_POINTS, MAX_MOVERS, MIN_BASE_RATE_N, lineAgo } from '../src/plans.ts';
 import { handleRun, type RunnerDeps } from '../src/run.ts';
 import { MemoryStore } from '../src/store.ts';
 
@@ -25,7 +25,7 @@ const have = existsSync(MANAGER);
 const AT = Date.parse(WEEKEND_HISTORY.recorded_at);
 const DAY = 86400;
 
-const marketsApp = realApp({ BRAVE_KEY_FILE: '/nonexistent/brave-search', HISTORY_PER_MIN: 6000 }, { fetch: weekendFetch().fetch, now: () => AT, log: createLogger('markets', 'silent') });
+const marketsApp = realApp({ BRAVE_KEY_FILE: '/nonexistent/brave-search', HISTORY_PER_MIN: 6000, RESOLVED_PER_MIN: 6000, RESOLVED_WAIT_S: 30 }, { fetch: weekendFetch().fetch, now: () => AT, log: createLogger('markets', 'silent') });
 const via = (caller: keyof typeof TEST_TOKENS, app: { fetch: (r: Request) => Response | Promise<Response> }) =>
   createClient({ baseUrl: 'http://svc.internal', token: TEST_TOKENS[caller], fetch: (r) => app.fetch(r) });
 const boardApp = fakeApp('board', BOARD, boardFake({ markets: via('board', marketsApp), enqueue: () => undefined }));
@@ -137,6 +137,15 @@ describe.skipIf(!have)('Milestone N1.1: a new board’s numbers come from the en
     expect(line.length).toBe(LINE_POINTS);
     expect(line.map((n) => market.receipts.find((x) => x.id === n.receipt_id)!.args.ago_s)).toEqual(lineAgo(7 * DAY));
     expect(line.at(-1)!.value).toBe((await moveOf(mId, 7 * DAY)).last);
+    // Its base rates from this season's settled games: the home teams' and that of teams priced near this one, each
+    // the engine's count with its sample size and where the games came from.
+    const rates = market.numbers.filter((n) => n.op === 'base_rate_history');
+    expect(rates.length).toBe(2);
+    for (const n of rates) {
+      const rc = market.receipts.find((x) => x.id === n.receipt_id)!;
+      expect(rc.sample_size).toBeGreaterThanOrEqual(MIN_BASE_RATE_N);
+      expect(rc.provenance?.history?.source).toMatch(/^kalshi:KXN(FL|BA)GAME settled, (home teams|every team), since 2026-/);
+    }
 
     // Two prices: the gap, both prices from the paired game.
     const gap = results.get('gap')!;

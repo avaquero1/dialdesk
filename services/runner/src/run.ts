@@ -56,6 +56,8 @@ import { toRunState, type RunRecord, type Store } from './store.ts';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
 type Draft = Pick<WidgetResult, 'summary' | 'facts' | 'receipts' | 'numbers' | 'sources'>;
+/** A result's notes (a base rate not shown, in words), only when there are some. */
+const notesOf = (m: { notes: string[] }) => (m.notes.length ? { notes: m.notes } : {});
 
 /** At most this many sources per research run, read at most READ_PARALLEL at a time. */
 export const MAX_SOURCES = 5;
@@ -187,7 +189,7 @@ interface Outputs {
   sources?: { candidates: Candidate[]; quotes: MarketNumbers['quotes'] };
   plan?: { plan: EnginePlan; candidate_ids: string[]; from: 'planner' | 'default' };
   reads?: Record<string, ReadOutcome>;
-  math?: { result: EngineResult; as_of: string; stale: boolean };
+  math?: { result: EngineResult; as_of: string; stale: boolean; notes: string[] };
   summary?: { template: string } | null;
   /** How many of each sandbox job's trust_log rows are in the audit log already (so a retry never logs one twice). */
   trust?: Record<string, number>;
@@ -382,7 +384,7 @@ class Run {
     const note = [mn.down.length ? `${mn.down.length} market(s) down` : '', mn.stale ? 'cached price, as of the stamp' : '', er.data.errors.length ? `${er.data.errors.length} op error(s)` : '']
       .filter(Boolean)
       .join('; ');
-    this.out.math = { result: er.data, as_of: mn.as_of, stale: mn.stale || mn.down.length > 0 };
+    this.out.math = { result: er.data, as_of: mn.as_of, stale: mn.stale || mn.down.length > 0, notes: mn.notes ?? [] };
     await this.step(
       { step: 'math', status: er.data.numbers.length ? 'ok' : 'failed', sandbox: { sandbox_id: j.sandbox_id, state: 'destroyed' }, receipt_ids: er.data.receipts.map((r) => r.id), note: note || null },
       t0,
@@ -393,7 +395,7 @@ class Run {
 
   // ---------- guard + publish (both kinds) ----------
 
-  async publish(draft: Draft, extra: Pick<WidgetResult, 'blocked' | 'as_of' | 'stale'>, phase: 'numbers' | 'summary') {
+  async publish(draft: Draft, extra: Pick<WidgetResult, 'blocked' | 'as_of' | 'stale' | 'notes'>, phase: 'numbers' | 'summary') {
     const guard = this.guard;
     const t0 = Date.now();
     let verdict = await guard.publish(draft, this.account_id);
@@ -477,7 +479,7 @@ class Run {
     }
     await this.publish(
       { summary, facts: cur?.facts ?? [], sources: cur?.sources ?? [], numbers: er.numbers, receipts: er.receipts },
-      { blocked: cur?.blocked ?? [], as_of: m.as_of, stale: m.stale },
+      { blocked: cur?.blocked ?? [], as_of: m.as_of, stale: m.stale, ...notesOf(m) },
       'numbers',
     );
   }
@@ -771,7 +773,7 @@ class Run {
       return;
     }
     const summary = await this.summary(facts, m.result);
-    await this.publish({ summary, facts, sources, numbers: m.result.numbers, receipts: m.result.receipts }, { blocked, as_of: m.as_of, stale: m.stale }, 'summary');
+    await this.publish({ summary, facts, sources, numbers: m.result.numbers, receipts: m.result.receipts }, { blocked, as_of: m.as_of, stale: m.stale, ...notesOf(m) }, 'summary');
   }
 }
 
@@ -798,7 +800,7 @@ const PLANNER_PROMPT = [
   'You plan one research run for a widget on a prediction-market board. You do math, not advice.',
   'Pick up to max_sources candidate ids worth reading (by domain and date only) and a math plan.',
   'The plan uses only allowed_ops; each op arg names a key in number_keys or an earlier op id. Op ids are n1, n2, ...',
-  'The engine has 11 ops. base_rate and base_rate_history need resolved results that are not available yet: never use them.',
+  'base_rate_history reads home_history (home teams this season) or band_history with lo_cents band_lo and hi_cents band_hi (teams priced near this market), when they are in number_keys. Never use base_rate.',
   'expected_value takes its probability only from user_probability, never from a number you make up.',
   'Answer one JSON object: {"candidate_ids": [...], "plan": {"plan_version": 1, "ops": [{"id": "n1", "op": "...", "args": {...}}]}}.',
 ].join('\n');

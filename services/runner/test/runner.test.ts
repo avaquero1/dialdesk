@@ -118,7 +118,7 @@ describe.skipIf(!have)('runner', () => {
     ]);
     expect(seen).toEqual([]);
     const r = (await current(w)).result!;
-    expect(r.numbers.map((n) => n.op)).toEqual(['implied_probability', 'implied_probability', 'expected_value', 'movement', ...Array(LINE_POINTS).fill('price_at')]);
+    expect(r.numbers.map((n) => n.op)).toEqual(['implied_probability', 'implied_probability', 'expected_value', 'movement', ...Array(LINE_POINTS).fill('price_at'), 'base_rate_history', 'base_rate_history']);
     const ev = r.receipts.find((x) => x.op === 'expected_value')!;
     expect([...ev.origins!].sort()).toEqual(['market', 'user']);
     expect(r.receipts.find((x) => x.op === 'movement')!.origins).toContain('history');

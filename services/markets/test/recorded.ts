@@ -130,7 +130,21 @@ export function weekendFetch() {
       const file = WEEKEND_HISTORY.files.find((x) => x.market_id === `polymarket:${slug}`)?.file;
       if (file) return json(live(`weekend/history/${file}`));
     }
+    // Settled games and their pre-game candles (weekend/resolved, scripts/record-resolved.ts).
+    if (u.hostname === 'api.elections.kalshi.com' && u.pathname === '/trade-api/v2/markets' && u.searchParams.get('status') === 'settled')
+      return json(live(`weekend/resolved/settled-${u.searchParams.get('series_ticker')}.json`));
+    if (u.hostname === 'api.elections.kalshi.com' && u.pathname === '/trade-api/v2/markets/candlesticks') {
+      const want = u.searchParams.get('market_tickers') ?? '';
+      const file = WEEKEND_RESOLVED.files.find((x) => x.tickers.join(',') === want)?.file;
+      if (file) return json(live(`weekend/resolved/${file}`));
+    }
     return new Response('{"error":"not found"}', { status: 404 });
   }) as typeof fetch;
   return { fetch: f, calls };
 }
+
+/** When weekend/resolved was recorded (scripts/record-resolved.ts), and which markets each candles file prices. */
+export const WEEKEND_RESOLVED = JSON.parse(live('weekend/resolved/resolved.json')) as {
+  recorded_at: string;
+  files: { series: string; tickers: string[]; file: string }[];
+};

@@ -8,15 +8,21 @@ import { CallError, type Call } from '@app/service-kit';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
 type Op = EnginePlan['ops'][number];
-type Value = number | { t: number; v: number }[];
+type Value = number | { t: number; v: number }[] | { t: number; price_cents: number; outcome: number }[];
 type Origins = NonNullable<EngineInput['origins']>;
 type Provenance = NonNullable<EngineInput['provenance']>;
 
 /**
- * Ops no plan may use yet. base_rate_history needs resolved results, and markets has no resolved-history endpoint;
- * base_rate needs hits and totals from the same place.
+ * Ops no plan may use. base_rate takes hits and totals, which only a count by code could give: base rates come from
+ * base_rate_history, which counts the settled games itself (markets.resolved).
  */
-export const NOT_YET_OPS = new Set<string>(['base_rate', 'base_rate_history']);
+export const NOT_YET_OPS = new Set<string>(['base_rate']);
+
+/** Settled games a base rate needs, at least: with fewer, the widget says so in words and shows no number. */
+export const MIN_BASE_RATE_N = 30;
+/** The price band of "teams priced near this one": the market's price, this many cents either side. */
+export const BAND_CENTS = 5;
+const BASE_RATE_KEYS = ['home_history', 'band_history', 'band_lo', 'band_hi'];
 
 /** The ops a type's plans may use: its catalog ops, less NOT_YET_OPS. */
 export const allowedOps = (type: DisplayType) => displayEntry(type).engine_ops.filter((o) => !NOT_YET_OPS.has(o));
@@ -39,6 +45,8 @@ export function numberKeys(spec: DisplaySpec): string[] {
   for (const ex of ['kalshi', 'polymarket'] as const)
     if (spec.market_ids.some((m) => m.startsWith(`${ex}:`))) keys.push(`${ex}_price`, `${ex}_series`);
   if (spec.params.user_probability !== undefined) keys.push('user_probability');
+  // A Market's base rates: home teams' wins, and teams priced near this one (band_lo..band_hi), this season.
+  if (spec.type === 'probability' && spec.market_ids.length) keys.push(...BASE_RATE_KEYS);
   return keys;
 }
 
@@ -61,6 +69,12 @@ export function defaultPlan(spec: DisplaySpec): EnginePlan {
     // "Up 4 points since yesterday", then the 7-day line (window_s): its points, oldest first.
     if (n >= 1) add('movement', { series: 'series_1', window_s: 'day_s' });
     if (n >= 1) for (const k of LINE_KEYS) add('price_at', { series: 'series_1', ago_s: k });
+    // Base rates from this season's settled games: how often the home team won, and how often a team priced near
+    // this market before the start won.
+    if (n >= 1) {
+      add('base_rate_history', { history: 'home_history' });
+      add('base_rate_history', { history: 'band_history', lo_cents: 'band_lo', hi_cents: 'band_hi' });
+    }
   } else if (type === 'gap') {
     if (has(spec, 'kalshi') && has(spec, 'polymarket')) add('gap', { a_cents: 'kalshi_price', b_cents: 'polymarket_price' });
   } else if (type === 'news') {
@@ -117,6 +131,8 @@ export interface MarketNumbers {
   stale: boolean;
   /** Market ids markets couldn't answer for (503 or 404). */
   down: string[];
+  /** Plain words, no digits, for a number left out on purpose (a base rate whose sample is too small). */
+  notes?: string[];
 }
 
 /** Prices (and history, when the plan reads a series) from markets. A market that is down is left out. */
@@ -139,9 +155,9 @@ export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: Engi
     numbers.user_probability = spec.params.user_probability;
     origins.user_probability = 'user';
   }
-  const put = (key: string, v: Value, o: Origins[string], from: Provenance[string]) => {
+  const put = (key: string, v: Value, o: Origins[string] | undefined, from: Provenance[string]) => {
     numbers[key] = v;
-    origins[key] = o;
+    if (o) origins[key] = o;
     provenance[key] = from;
   };
   const quotes: Market[] = [];
@@ -176,9 +192,58 @@ export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: Engi
       }
     }),
   );
+  const notes: string[] = [];
+  const wantsBase = spec.type === 'probability' && (!want || BASE_RATE_KEYS.some((k) => want.has(k)));
+  if (wantsBase && quotes[0]) notes.push(...(await baseRateNumbers(markets, quotes[0], put)));
   const got = quotes.filter(Boolean);
   const as_of = got.length ? got.map((q) => q.as_of).sort()[0]! : new Date().toISOString();
-  return { numbers, origins, provenance, quotes: got, as_of, stale: got.some((q) => q.stale), down };
+  return { numbers, origins, provenance, quotes: got, as_of, stale: got.some((q) => q.stale), down, ...(notes.length ? { notes } : {}) };
+}
+
+const LEAGUE_NAME: Record<string, string> = { nfl: 'NFL', nba: 'NBA' };
+
+/**
+ * A Market's base-rate inputs from markets' settled games of its league this season (markets.resolved): home_history
+ * (each game's home-team market) and band_history (every team's market) with band_lo..band_hi around the market's own
+ * price. The engine counts them (base_rate_history) and its receipt holds the sample size; runner only checks there
+ * are enough (MIN_BASE_RATE_N). An input with too few games is left out, so its op doesn't run, and the returned note
+ * says why in words. Every input carries its source (the exchange's series, which games, since when) and time.
+ */
+export async function baseRateNumbers(
+  markets: Call,
+  m: Market,
+  put: (key: string, v: Value, o: Origins[string] | undefined, from: Provenance[string]) => void,
+): Promise<string[]> {
+  const name = m.league ? LEAGUE_NAME[m.league] : undefined;
+  if (!name || !m.event_key) return [];
+  let h;
+  try {
+    h = await markets(MARKETS.resolved, { query: { league: m.league!, kind: 'game_winner' } });
+  } catch (e) {
+    if (e instanceof CallError && e.status === 404) return [];
+    if (e instanceof CallError && e.status === 503) return ["No base rates right now: the exchange's settled games aren't answering."];
+    throw e;
+  }
+  const ex = h.exchange === 'kalshi' ? 'Kalshi' : 'Polymarket';
+  const loading = h.left_out.pending > 0;
+  const tooFew = (what: string) =>
+    loading ? `The ${what} base rate is still loading: ${ex}'s settled games are read a few at a time.` : `Too few ${name} games have settled on ${ex} this season for the ${what} base rate.`;
+  const asRecords = (rs: typeof h.records) => rs.map((r) => ({ t: r.t, price_cents: r.price_cents, outcome: r.outcome }));
+  const notes: string[] = [];
+  const home = h.records.filter((r) => r.home);
+  if (home.length >= MIN_BASE_RATE_N)
+    put('home_history', asRecords(home), 'history', { source: `${h.exchange}:${h.series} settled, home teams, since ${h.season_start}`, as_of: h.as_of });
+  else notes.push(tooFew('home-team'));
+  const lo = Math.max(0, m.yes_price_cents - BAND_CENTS);
+  const hi = Math.min(100, m.yes_price_cents + BAND_CENTS);
+  const inBand = h.records.filter((r) => r.price_cents >= lo && r.price_cents <= hi).length;
+  if (inBand >= MIN_BASE_RATE_N) {
+    put('band_history', asRecords(h.records), 'history', { source: `${h.exchange}:${h.series} settled, every team, since ${h.season_start}`, as_of: h.as_of });
+    const from = { source: m.market_id, as_of: m.as_of };
+    put('band_lo', lo, undefined, from);
+    put('band_hi', hi, undefined, from);
+  } else notes.push(loading ? tooFew('price') : `Too few ${name} teams this season were priced near this one before the start for a base rate.`);
+  return notes;
 }
 
 /** The plan without the ops whose inputs are missing (a market down, no history), and without ops that read them. */

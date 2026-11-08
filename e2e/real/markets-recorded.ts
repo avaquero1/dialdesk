@@ -30,6 +30,7 @@ function single(u: URL): Response | null {
   const p = u.pathname;
   let m: RegExpExecArray | null;
   if (u.hostname === 'api.elections.kalshi.com') {
+    if (p.endsWith('/markets/candlesticks')) return null; // settled games' pre-game prices: the recording has them
     if ((m = /\/markets\/([^/]+)$/.exec(p))) {
       const market = events.flatMap((e) => e.markets).find((x) => x.ticker === decodeURIComponent(m![1]!));
       return market ? json({ market }) : missing();

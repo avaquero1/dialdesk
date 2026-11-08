@@ -11,6 +11,7 @@ import { eventKeyOf, kalshiEventOf, parseEventKey, parseKalshiTicker, polymarket
 import { kalshiClient, kalshiPoints, kalshiToMarket, type KalshiEventRaw } from './kalshi.ts';
 import { gameStart, polymarketClient, polyToMarket, type PolyMarketRaw } from './polymarket.ts';
 import { pairGame } from './pairing.ts';
+import { pregamePrices, resolvedAnswer, settledGames } from './resolved.ts';
 import { memoryStore, postgresStore, type SearchRecord, type SearchStore } from './store.ts';
 import { GAME_SERIES, type GameLeague } from './teams.ts';
 import { UpstreamError, httpGet, type Fetch } from './upstream.ts';
@@ -24,6 +25,12 @@ export const MarketsConfig = z.object({
   HISTORY_PER_MIN: z.coerce.number().int().min(1).max(6000).default(20),
   /** A history request that would wait longer than this for its turn is refused (the cached copy is served if any). */
   HISTORY_MAX_WAIT_S: z.coerce.number().int().min(0).max(60).default(20),
+  /** How long the list of settled games is kept (a game settles a few minutes after it ends). */
+  RESOLVED_TTL_S: z.coerce.number().int().min(60).max(86400).default(1800),
+  /** Requests per minute, at most, for pre-game prices (a batch per game day, fetched once each and kept). */
+  RESOLVED_PER_MIN: z.coerce.number().int().min(1).max(6000).default(30),
+  /** How long one resolved request waits for prices still being fetched; the rest come in the background. */
+  RESOLVED_WAIT_S: z.coerce.number().int().min(0).max(30).default(8),
   FEED_TTL_S: z.coerce.number().int().min(60).max(3600).default(600),
   SEARCH_TTL_S: z.coerce.number().int().min(300).max(86400).default(1800),
   FEED_MAX_AGE_H: z.coerce.number().int().min(6).max(720).default(96),
@@ -67,6 +74,10 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
   const ms = (seconds: number) => seconds * 1000;
   const spacers = { kalshi: spacer(60_000 / cfg.HISTORY_PER_MIN, ms(cfg.HISTORY_MAX_WAIT_S)), polymarket: spacer(60_000 / cfg.HISTORY_PER_MIN, ms(cfg.HISTORY_MAX_WAIT_S)) };
   const stale = { staleIf: isUpstream };
+  // Pre-game prices: their own budget, apart from history's. A turn waits as long as it must (fills run in the
+  // background), by a monotonic clock: a test that pins Date would otherwise stack every wait on the last.
+  const resolvedSpacer = spacer(60_000 / cfg.RESOLVED_PER_MIN, Number.MAX_SAFE_INTEGER, () => performance.now());
+  const pregame = pregamePrices(kalshi, (fn) => resolvedSpacer.run('kalshi', fn));
 
   // --- raw reads, cached by what they fetch (never by who asks) ---------------------------------------------------
   const kalshiMarket = (ticker: string) => cache.get(`k:m:${ticker}`, ms(cfg.QUOTE_TTL_S), () => kalshi.market(ticker), stale);
@@ -239,6 +250,28 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
         if (isUpstream(err)) throw down(market.exchange);
         throw err;
       }
+    },
+
+    resolved: async ({ query }) => {
+      const league = query.league;
+      if (!GAME_LEAGUES.includes(league as GameLeague)) throw new HttpError(404, 'not_found', `no resolved history for ${league} yet`);
+      const lg = league as GameLeague;
+      let list;
+      try {
+        list = await cache.get(`k:settled:${lg}`, ms(cfg.RESOLVED_TTL_S), () => kalshi.settled(GAME_SERIES[lg]), stale);
+      } catch (err) {
+        if (isUpstream(err)) throw down('kalshi');
+        throw err;
+      }
+      const s = settledGames(lg, list.value);
+      const filling = pregame.fill(lg, s.games).catch((err: Error) => {
+        if (!isUpstream(err)) throw err;
+        log.warn({ league: lg, err: err.message }, 'pre-game prices failed');
+      });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([filling, new Promise((r) => (timer = setTimeout(r, ms(cfg.RESOLVED_WAIT_S))))]);
+      clearTimeout(timer);
+      return resolvedAnswer(lg, s, pregame.prices, iso(list.at));
     },
 
     event: async ({ params }) => {

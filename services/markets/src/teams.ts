@@ -107,3 +107,9 @@ export const teamByCode = (league: GameLeague, code: string) => TEAMS.find((t) =
 export const GAME_SERIES: Record<GameLeague, string> = { nfl: 'KXNFLGAME', nba: 'KXNBAGAME' };
 export const leagueOfSeries = (series: string): GameLeague | null =>
   (Object.entries(GAME_SERIES).find(([, s]) => s === series)?.[0] as GameLeague | undefined) ?? null;
+
+/**
+ * The first regular-season game day (ET) of the season now running, per league: base rates count from here, so a
+ * preseason game never counts. Checked against Kalshi's settled games on 2026-11-07 (NFL opener Sep 9, NBA Oct 20).
+ */
+export const SEASON_START: Record<GameLeague, string> = { nfl: '2026-09-09', nba: '2026-10-20' };

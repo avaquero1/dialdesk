@@ -60,6 +60,33 @@ export const KalshiCandles = z.object({
 });
 export type KalshiCandles = z.infer<typeof KalshiCandles>;
 
+/** A settled market, as /markets?status=settled lists it: only what a base rate needs. */
+export const KalshiSettledRaw = z.object({
+  ticker: z.string(),
+  event_ticker: z.string(),
+  status: z.string(),
+  result: z.string(),
+  latest_expiration_time: z.string().optional(),
+  expiration_time: z.string(),
+});
+export type KalshiSettledRaw = z.infer<typeof KalshiSettledRaw>;
+export const KalshiSettledPage = z.object({ markets: z.array(KalshiSettledRaw), cursor: z.string().nullish() });
+
+/** /markets/candlesticks: several markets' candles in one request. */
+export const KalshiCandlesBatch = z.object({
+  markets: z.array(z.object({ market_ticker: z.string(), candlesticks: KalshiCandles.shape.candlesticks })),
+});
+export type KalshiCandlesBatch = z.infer<typeof KalshiCandlesBatch>;
+
+/**
+ * When a game market's game starts (unix seconds). Kalshi's game rules keep a market open until 48 h after the
+ * scheduled start (`latest_expiration_time`), so the start is that minus 48 h (checked on 2026-11-07 against the NFL's
+ * 1:00, 4:25 and 8:15 PM ET kickoffs and an NBA tip-off).
+ */
+export function kalshiGameStart(m: KalshiSettledRaw): number {
+  return Math.floor(Date.parse(m.latest_expiration_time ?? m.expiration_time) / 1000) - 48 * 3600;
+}
+
 export const cents = (d: string) => Math.min(100, Math.max(0, Math.round(Number(d) * 100)));
 const centsExact = (d: string) => Math.min(100, Math.max(0, Math.round(Number(d) * 1000) / 10));
 const iso = (s: string) => new Date(s).toISOString();
@@ -149,6 +176,26 @@ export function kalshiClient(get: HttpGet, base = KALSHI_BASE) {
     async openEvents(series: string) {
       const r = await json(`/events?series_ticker=${encodeURIComponent(series)}&status=open&limit=200&with_nested_markets=true`);
       return r === null ? [] : KalshiEventsPage.parse(r).events;
+    },
+    /** Settled markets of one series, every page (a season of one league's games is a few pages of 1000 at most). */
+    async settled(series: string, maxPages = 5) {
+      const out: KalshiSettledRaw[] = [];
+      let cursor = '';
+      for (let page = 0; page < maxPages; page++) {
+        const r = await json(`/markets?series_ticker=${encodeURIComponent(series)}&status=settled&limit=1000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+        if (r === null) break;
+        const p = KalshiSettledPage.parse(r);
+        out.push(...p.markets);
+        if (!p.cursor) break;
+        cursor = p.cursor;
+      }
+      return out;
+    },
+    /** Up to 100 markets' candles over one span, in one request. */
+    async candlesBatch(tickers: string[], startTs: number, endTs: number, periodMin: 1 | 60 | 1440) {
+      const q = `market_tickers=${tickers.map(encodeURIComponent).join(',')}&start_ts=${startTs}&end_ts=${endTs}&period_interval=${periodMin}`;
+      const r = await json(`/markets/candlesticks?${q}`);
+      return r === null ? null : KalshiCandlesBatch.parse(r);
     },
     async candles(series: string, ticker: string, startTs: number, endTs: number, periodMin: 1 | 60 | 1440) {
       const q = `start_ts=${startTs}&end_ts=${endTs}&period_interval=${periodMin}`;
