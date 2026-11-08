@@ -775,7 +775,7 @@ class Run {
     this.held.delete(job_id);
     await this.ended(job_id, k);
     await this.emit('run.poisoned', { account_id: this.account_id, at: now(), widget_id: spec.widget_id, run_id: this.run_id, reason: 'poison', sandbox_id: k.sandbox_id, audit_row_id: row });
-    await this.step({ step: 'extract', status: 'poisoned', sandbox: { sandbox_id: k.sandbox_id, state: 'killed' }, verdict_id: verdict.verdict_id, audit_row_id: row, note: POISONED_NOTE }, t1);
+    await this.step({ step: 'extract', status: 'poisoned', sandbox: { sandbox_id: k.sandbox_id, state: 'killed' }, verdict_id: verdict.verdict_id, audit_row_id: row, note: `${POISONED_NOTE} ${verdict.reasons.map((r) => `${r.code}@${r.where}`).join(', ')}` }, t1);
     return { status: 'blocked', blocked: { candidate_id: c.candidate_id, domain: c.domain, reason: 'poison', note: POISONED_NOTE, killed_at: k.updated_at, audit_row_id: row } };
   }
 

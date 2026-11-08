@@ -275,7 +275,8 @@ describe.skipIf(!have)('runner', () => {
     expect(rec.status).toBe('poisoned');
     const poisoned = rec.steps.filter((s) => s.status === 'poisoned');
     expect(poisoned).toHaveLength(1);
-    expect(poisoned[0]!.note).toBe(POISONED_NOTE);
+    // The trace note names the verdict's reasons (code@where only); the words on screen, `blocked[].note`, stay POISONED_NOTE.
+    expect(poisoned[0]!.note).toMatch(new RegExp(`^${POISONED_NOTE.replace(/[.]/g, '\\.')} (?:instruction|exfil)@page(?:, (?:instruction|exfil)@page)*$`));
     const read = rec.steps.find((s) => s.step === 'read' && s.sandbox?.sandbox_id === poisoned[0]!.sandbox!.sandbox_id)!;
     const job = await sandbox.getJob(`${rec.run_id}:read:${read.source!.candidate_id}`);
     expect(job).toMatchObject({ state: 'killed', kill_reason: 'poison' });
