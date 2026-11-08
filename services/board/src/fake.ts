@@ -67,6 +67,8 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
   const widgets = new Map<string, Widget>();
   const proposals = new Map<string, Proposal>();
   const traces = new Map<string, RunTraceStep[]>();
+  /** When each board was last read by its owner (edge), for runner's scheduler. */
+  const opened = new Map<string, string>();
 
   /** Folder children follow the places: a display whose place names a folder is in it. */
   const withChildren = (w: Widget, ids: string[]): Widget => {
@@ -108,10 +110,10 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
   const requested = new Map<string, { at: number; reason: WidgetRunJob['reason']; widget_id: string }>();
   async function enqueueRun(spec: DisplaySpec, kind: RunKind, reason: WidgetRunJob['reason']) {
     const job = runJob(spec, kind, reason);
-    if (requested.has(job.job_id)) return job.job_id;
+    if (requested.has(job.job_id)) return { job_id: job.job_id, joined: true };
     requested.set(job.job_id, { at: Date.now(), reason, widget_id: spec.widget_id });
     await enqueue(QUEUES.widgetRuns, job);
-    return job.job_id;
+    return { job_id: job.job_id, joined: false };
   }
   async function addDisplay(account_id: string, d: DisplayTile, place: Widget['spec']['place'], state: Widget['state'], quotes: Widget['quotes']) {
     validateDisplay(d);
@@ -149,7 +151,14 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
   };
 
   return {
-    getBoard: ({ params }) => board(params.account_id),
+    getBoard: ({ params }, ctx) => {
+      const b = board(params.account_id);
+      if (ctx.caller === 'edge') opened.set(params.account_id, now());
+      return b;
+    },
+    lastOpened: ({ body }) => ({
+      boards: [...new Set(body.account_ids)].filter((a) => boards.has(a)).map((account_id) => ({ account_id, last_opened_at: opened.get(account_id) ?? null })),
+    }),
     createDefaults: async ({ params }) => {
       const account_id = params.account_id;
       if (boards.has(account_id)) throw new HttpError(409, 'exists', 'board already exists');
@@ -276,7 +285,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       const hour = Date.now() - 3600_000;
       const recent = [...requested.values()].filter((r) => r.widget_id === w.spec.widget_id && r.reason === 'refresh' && r.at > hour);
       if (recent.length >= REFRESH_PER_HOUR) throw new HttpError(429, 'too_many_refreshes', 'this widget was refreshed too often this hour');
-      return { job_id: await enqueueRun(w.spec, refreshKind(w.spec), 'refresh') };
+      return enqueueRun(w.spec, refreshKind(w.spec), 'refresh');
     },
     addSource: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);

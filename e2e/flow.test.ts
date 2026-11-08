@@ -25,7 +25,7 @@ import { fake as connections } from '../services/connections/src/fake.ts';
 import { createFakeEdge, inProcess } from '../services/edge/src/fake.ts';
 import { fake as markets } from '../services/markets/src/fake.ts';
 import { fake as models } from '../services/models/src/fake.ts';
-import { MemoryStore, Scheduler, handleRun, type RunRecord, type RunnerDeps } from '../services/runner/src/index.ts';
+import { MemoryStore, Scheduler, runJob, type RunRecord, type RunnerDeps } from '../services/runner/src/index.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 const MANAGER = join(ROOT, 'target', 'debug', 'sandbox-manager');
@@ -113,7 +113,10 @@ async function drain(): Promise<RunRecord[]> {
   const d = runnerDeps();
   while (queue.length) {
     const job = queue.shift()!;
-    out.push(await handleRun(d, job, { jobId: job.job_id, attempt: 1, signal: new AbortController().signal }));
+    // As the worker does: a board's numbers batch runs every widget in it, anything else is one widget's run (runJob).
+    const before = new Set(runnerStore.runs.keys());
+    await runJob(d, job, { jobId: job.job_id, attempt: 1, signal: new AbortController().signal });
+    for (const [id, r] of runnerStore.runs) if (!before.has(id) || r.job_id === job.job_id) out.push((await runnerStore.get(id))!);
   }
   return out;
 }
@@ -277,7 +280,12 @@ describe('e2e on fakes', () => {
     expect(row!.every_s).toBe(120);
     const later = new Scheduler(runnerStore, async (j) => void queue.push(j), () => row!.next_at + 1);
     const jobs = await later.tick();
-    expect(jobs.find((j) => j.widget_id === gap.spec.widget_id)).toMatchObject({ kind: 'numbers', reason: 'schedule' });
+    // One numbers job for the whole board (A1.4.1); the gap widget is in its batch.
+    const mine = jobs.filter((j) => j.account_id === gap.spec.account_id && j.kind === 'numbers');
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ kind: 'numbers', reason: 'schedule' });
+    const batch = mine[0]!.widget_id === gap.spec.widget_id ? null : await runnerStore.batches.get(mine[0]!.job_id);
+    if (batch) expect(batch.widget_ids).toContain(gap.spec.widget_id);
     expect(await later.tick()).toEqual([]);
     const runs = await drain();
     expect(runs.every((r) => r.status === 'done')).toBe(true);

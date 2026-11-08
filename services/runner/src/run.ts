@@ -23,6 +23,7 @@ import {
   displayEntry,
   newId,
   type CompleteBody,
+  type EngineInput,
   type EnginePlan,
   type EventName,
   type EventPayload,
@@ -55,6 +56,16 @@ import { allowedOps, biggestMoveNumbers, isBiggestMove, defaultPlan, gapNumbers,
 import { toRunState, type RunRecord, type Store } from './store.ts';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
+
+/** One run's own compute box (computeOne). batch.ts uses the first widget's run for the batch's box. */
+export interface ComputeRunner {
+  computeOne(spec: DisplaySpec, input: EngineInput): Promise<SbxJobStatus | null>;
+}
+/** A board's numbers batch (batch.ts): a member run's engine input goes in the batch's one compute box. */
+export interface BatchSlot {
+  /** The status of the batch's box with this run's part of the result; null when it timed out (and was killed). */
+  compute(run: ComputeRunner, spec: DisplaySpec, input: EngineInput): Promise<SbxJobStatus | null>;
+}
 type Draft = Pick<WidgetResult, 'summary' | 'facts' | 'receipts' | 'numbers' | 'sources'>;
 /** A result's notes (a base rate not shown, in words), only when there are some. */
 const notesOf = (m: { notes: string[] }) => (m.notes.length ? { notes: m.notes } : {});
@@ -107,6 +118,8 @@ export interface RunnerDeps {
   /** Default TEARDOWN_WAIT_MS. */
   teardownWaitMs?: number;
   timeouts?: Partial<(typeof RUN_RULES)['timeoutsMs']>;
+  /** Set for the runs of a board's numbers batch (batch.ts). */
+  batch?: BatchSlot;
 }
 
 const FAIL_REASONS = ['timeout', 'busy', 'exchange_down', 'model_error', 'guard_block', 'internal'] as const;
@@ -362,18 +375,13 @@ class Run {
       await this.step({ step: 'math', status: 'skipped', note: 'no numbers to compute' }, t0);
       return null;
     }
-    const job_id = `${this.run_id}:math`;
-    // Busy: the job waits on the queue without spending an attempt, and resumes here (reads are already saved).
-    const created = await this.createJob({ job_id, run_id: this.run_id, widget_id: spec.widget_id, kind: 'compute', compute: { engine_input: { plan: p, numbers: mn.numbers, origins: mn.origins, ...(mn.provenance ? { provenance: mn.provenance } : {}) } } }, 0);
-    await this.forward(created);
-    const settled = await this.settle(job_id, created, this.t.compute);
-    if (!settled) {
-      await this.endSandbox(job_id, 'kill', 'timeout');
+    const input: EngineInput = { plan: p, numbers: mn.numbers, origins: mn.origins, ...(mn.provenance ? { provenance: mn.provenance } : {}) };
+    // In a board's numbers batch, the input goes in the batch's one compute box.
+    const j = this.d.batch ? await this.d.batch.compute(this, spec, input) : await this.computeOne(spec, input);
+    if (!j) {
       await this.step({ step: 'math', status: 'failed', note: 'compute timed out' }, t0);
       throw new NoRetry('timeout', 'compute timed out');
     }
-    // The manager destroys a compute sandbox when its job ends; its rows come back with the job.
-    const j = (await this.ended(job_id, settled)) ?? settled;
     const parsed = j.state === 'done' ? EngineResult.safeParse(j.compute_result) : null;
     // Biggest move keeps the game with the largest move: the engine's own numbers and receipts, unchanged.
     const er = parsed?.success && isBiggestMove(spec) ? { success: true as const, data: pickBiggest(parsed.data) ?? parsed.data } : parsed;
@@ -391,6 +399,21 @@ class Run {
     );
     if (!er.data.numbers.length) throw new NoRetry('internal', 'the engine computed no numbers');
     return this.out.math;
+  }
+
+  /** A compute box for one engine input. Returns null when it timed out (the box is killed). */
+  async computeOne(spec: DisplaySpec, input: EngineInput): Promise<SbxJobStatus | null> {
+    const job_id = `${this.run_id}:math`;
+    // Busy: the job waits on the queue without spending an attempt, and resumes here (reads are already saved).
+    const created = await this.createJob({ job_id, run_id: this.run_id, widget_id: spec.widget_id, kind: 'compute', compute: { engine_input: input } }, 0);
+    await this.forward(created);
+    const settled = await this.settle(job_id, created, this.t.compute);
+    if (!settled) {
+      await this.endSandbox(job_id, 'kill', 'timeout');
+      return null;
+    }
+    // The manager destroys a compute sandbox when its job ends; its rows come back with the job.
+    return (await this.ended(job_id, settled)) ?? settled;
   }
 
   // ---------- guard + publish (both kinds) ----------

@@ -23,6 +23,13 @@ export interface ScheduleRow {
   active_at: number;
 }
 
+/** One board's numbers widgets, computed in one compute box: the scheduler saves it under the first widget's job id. */
+export interface Batch {
+  job_id: string;
+  account_id: string;
+  widget_ids: string[];
+}
+
 export interface Store {
   /** The run for this job: the stored one (a retry, a busy wait or a duplicate), or a new one. */
   begin(job: WidgetRunJob, run_id: string, at: string): Promise<RunRecord>;
@@ -33,6 +40,10 @@ export interface Store {
     put(row: ScheduleRow): Promise<void>;
     remove(widget_id: string, kind?: RunKind): Promise<void>;
     due(now: number, limit: number): Promise<ScheduleRow[]>;
+  };
+  batches: {
+    put(b: Batch): Promise<void>;
+    get(job_id: string): Promise<Batch | null>;
   };
 }
 
@@ -83,6 +94,11 @@ export class MemoryStore implements Store {
     },
     due: async (now: number, limit: number) =>
       [...this.rows.values()].filter((r) => r.next_at <= now).sort((a, b) => a.next_at - b.next_at).slice(0, limit),
+  };
+  readonly batchRows = new Map<string, Batch>();
+  batches = {
+    put: async (b: Batch) => void this.batchRows.set(b.job_id, structuredClone(b)),
+    get: async (job_id: string) => structuredClone(this.batchRows.get(job_id) ?? null),
   };
 }
 
@@ -139,5 +155,17 @@ export class PgStore implements Store {
     },
     due: async (now: number, limit: number) =>
       (await this.sql<SchedRow[]>`select * from schedule where next_at <= ${new Date(now)} order by next_at limit ${limit}`).map(fromSched),
+  };
+  batches = {
+    put: async (b: Batch) => {
+      // A batch is read once, by its job: a day is far past the job's retries and busy waits.
+      await this.sql`delete from batches where created_at < now() - interval '1 day'`;
+      await this.sql`insert into batches (job_id, account_id, widget_ids) values (${b.job_id}, ${b.account_id}, ${this.sql.json(b.widget_ids)})
+                     on conflict (job_id) do nothing`;
+    },
+    get: async (job_id: string) => {
+      const [r] = await this.sql<Batch[]>`select job_id, account_id, widget_ids from batches where job_id = ${job_id}`;
+      return r ?? null;
+    },
   };
 }

@@ -255,14 +255,17 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
   const changed = (o: Out, account_id: string, widget_id: string, change: EventPayload<'widget.updated'>['change']) =>
     o.events.push({ event: 'widget.updated', payload: { account_id, at: now(), widget_id, change } });
 
-  /** Records the run in run_requests; queues it only when new (the same job id in the same minute collapses). */
+  /**
+   * Records the run in run_requests; queues it only when new. The same job id in the same minute joins the run
+   * already asked for (`joined`), so a refresh right after a run can say "Updated just now" instead of nothing.
+   */
   async function run(tx: Tx, o: Out, spec: DisplaySpec, kind: RunKind, reason: WidgetRunJob['reason']) {
     const job = runJob(spec, kind, reason);
     const [r] = await tx`insert into run_requests (job_id, widget_id, account_id, kind, reason, window_start)
                          values (${job.job_id}, ${job.widget_id}, ${job.account_id}, ${job.kind}, ${job.reason}, ${job.window_start})
                          on conflict (job_id) do nothing returning job_id`;
     if (r) o.jobs.push(job);
-    return job.job_id;
+    return { job_id: job.job_id, joined: !r };
   }
 
   async function addDisplay(tx: Tx, o: Out, account_id: string, d: DisplayTile, place: Widget['spec']['place'], state: Widget['state'], quotes: Map<string, Quote>) {
@@ -296,7 +299,21 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
   const audit = (action: string, rest: Parameters<typeof logEntry>[2]) => bus.log(logEntry('board', action, rest)).catch(() => {});
 
   return {
-    getBoard: ({ params }) => loadBoard(params.account_id),
+    getBoard: async ({ params }, ctx) => {
+      const b = await loadBoard(params.account_id);
+      // Read by its owner (edge serves only the session's own board): runner's scheduler keeps this board's runs going.
+      // At most one write a minute per board.
+      if (ctx.caller === 'edge')
+        await sql`update boards set last_opened_at = now()
+                  where account_id = ${params.account_id} and (last_opened_at is null or last_opened_at < now() - interval '1 minute')`;
+      return b;
+    },
+
+    lastOpened: async ({ body }) => {
+      const rows = await sql<{ account_id: string; last_opened_at: Date | null }[]>`
+        select account_id, last_opened_at from boards where account_id = any(${[...new Set(body.account_ids)]})`;
+      return { boards: rows.map((r) => ({ account_id: r.account_id, last_opened_at: r.last_opened_at ? r.last_opened_at.toISOString() : null })) };
+    },
 
     createDefaults: async ({ params }, ctx) => {
       const account_id = params.account_id;
@@ -485,7 +502,7 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
 
     refresh: async ({ params, body }) => {
       const o = outbox();
-      const job_id = await sql.begin(async (tx) => {
+      const r = await sql.begin(async (tx) => {
         const l = await lockSpec(tx, params.widget_id, body.account_id);
         if (!l || l.spec.kind !== 'display') throw new HttpError(404, 'not_found', 'only displays refresh');
         const [c] = await tx<{ n: number }[]>`select count(*)::int as n from run_requests
@@ -494,7 +511,7 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
         return run(tx, o, l.spec, refreshKind(l.spec), 'refresh');
       });
       await flush(o);
-      return { job_id };
+      return r;
     },
 
     addSource: async ({ params, body }) => {

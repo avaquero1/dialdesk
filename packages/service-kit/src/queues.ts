@@ -20,6 +20,30 @@ export const RUN_RULES = {
   sandboxRetries: { retries: 1, baseMs: 2_000 },
   /** About 6 Chromium sandboxes fit on 8 GB. */
   sandboxSlots: 6,
+  /**
+   * runner's scheduler (A1.4.1). The sandbox machine (a VX1, 2 vCPUs) is shared by every user of the public demo,
+   * and one board has about 30 displays, so the cadence runs are rationed:
+   */
+  schedule: {
+    /**
+     * Numbers runs only for boards their owner opened (read through edge) in the last 3 hours. Nobody sees a 2-minute
+     * price on a board that is closed, and a judge's or guest's visit lasts minutes, not hours. When the owner opens it
+     * again, the next window (at most one cadence, 2 min by default) runs it; until then it shows its last numbers.
+     */
+    numbersOpenForMs: 3 * 3600_000,
+    /** Research runs only for boards opened in the last day ("Run rules"). */
+    researchOpenForMs: 24 * 3600_000,
+    /**
+     * A display inside a folder (the game cards) runs its numbers at the slow speed: at most every 30 min. It is out
+     * of sight until its folder opens. Top-level displays keep their own cadence (the fast speed).
+     */
+    folderNumbersEveryS: 1800,
+    /**
+     * One compute box per board per tick: the board's due numbers widgets go in one engine plan. The batch waits at
+     * most this long for every widget to have its inputs; a widget later than that computes alone.
+     */
+    batchWaitMs: 10_000,
+  },
 } as const;
 
 export interface QueueRule {

@@ -458,7 +458,7 @@ describe.skipIf(!have)('runner', () => {
 describe('scheduler', () => {
   const widget = (numbers: number | null, research: number | null): Widget =>
     ({
-      spec: { widget_id: 'wid_sched0000001', account_id: 'acc_sched0000001', kind: 'display' },
+      spec: { widget_id: 'wid_sched0000001', account_id: 'acc_sched0000001', kind: 'display', place: { col: 0, row: 0 } },
       profile: { cadence: { numbers_every_s: numbers, research_every_s: research } },
     }) as unknown as Widget;
 
@@ -478,13 +478,17 @@ describe('scheduler', () => {
     expect((await s.tick()).map((j) => j.kind).sort()).toEqual(['numbers', 'research']);
   });
 
-  it('research stops on an idle board (no user-started run in a day); numbers go on', async () => {
+  it('an idle board stops: numbers after 3 hours without a visit, research after a day (runload.test.ts has the rest)', async () => {
     let t = Date.UTC(2026, 10, 7, 15, 0, 0);
     const store = new MemoryStore();
     const s = new Scheduler(store, async () => undefined, () => t);
     await s.noteRun(widget(300, 3600), { kind: 'research', reason: 'accept' });
-    t += ACTIVE_FOR_MS + 3600_000;
-    expect((await s.tick()).map((j) => j.kind)).toEqual(['numbers']);
+    t += 2 * 3600_000;
+    expect((await s.tick()).map((j) => j.kind).sort()).toEqual(['numbers', 'research']);
+    t += 2 * 3600_000;
+    expect((await s.tick()).map((j) => j.kind)).toEqual(['research']);
+    t += ACTIVE_FOR_MS;
+    expect(await s.tick()).toEqual([]);
     await s.noteRun(widget(300, 3600), { kind: 'numbers', reason: 'refresh' });
     t += 3600_000;
     expect((await s.tick()).map((j) => j.kind).sort()).toEqual(['numbers', 'research']);

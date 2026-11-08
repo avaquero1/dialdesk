@@ -6,7 +6,7 @@
  * Env: RUNNER_DATABASE_URL, RUNNER_VALKEY_URL, RUNNER_TOKEN_<CALLEE> / RUNNER_URL_<CALLEE> for board, markets, models,
  * connections and sandbox-manager, RUNNER_SOURCE_ENV (prod | fixture, default prod), RUNNER_SCHEDULE_TICK_MS (default 30000).
  */
-import { QUEUES, RUNNER } from '@app/contracts';
+import { BOARD, QUEUES, RUNNER, type WidgetRunJob } from '@app/contracts';
 import {
   HttpError,
   busFromConfig,
@@ -19,8 +19,9 @@ import {
   type Handlers,
   type Logger,
 } from '@app/service-kit';
+import { handleBoardNumbers } from './batch.ts';
 import { handleRun, type RunnerDeps } from './run.ts';
-import { Scheduler } from './scheduler.ts';
+import { Scheduler, type OpenedFn } from './scheduler.ts';
 import { PgStore, connect, toRunState, type Store } from './store.ts';
 
 export function getRunHandlers(store: Store): Handlers<typeof RUNNER> {
@@ -33,7 +34,27 @@ export function getRunHandlers(store: Store): Handlers<typeof RUNNER> {
   };
 }
 
-/** The widget-runs worker: each job is one handleRun on `deps`. `opts` is for tests (faster rules). */
+/** One widget-runs job: a board's numbers batch (the scheduler saved one under this job id), or one widget's run. */
+export async function runJob(deps: RunnerDeps, job: WidgetRunJob, ctx: Parameters<typeof handleRun>[2]) {
+  const batch = job.kind === 'numbers' && job.reason === 'schedule' ? await deps.store.batches.get(job.job_id) : null;
+  if (!batch) {
+    const r = await handleRun(deps, job, ctx);
+    return { run_id: r.run_id, status: r.status, runs: 1 };
+  }
+  const rs = await handleBoardNumbers(deps, job, ctx, batch.widget_ids);
+  const lead = rs.find((r) => r.widget_id === job.widget_id);
+  return { run_id: lead?.run_id ?? null, status: lead?.status ?? 'failed', runs: rs.length };
+}
+
+/** board's lastOpened, as the scheduler reads it. */
+export const openedFrom =
+  (board: RunnerDeps['board']): OpenedFn =>
+  async (account_ids) => {
+    const r = await board(BOARD.lastOpened, { body: { account_ids } });
+    return new Map(r.boards.map((b) => [b.account_id, b.last_opened_at ? Date.parse(b.last_opened_at) : null]));
+  };
+
+/** The widget-runs worker: each job is one runJob on `deps`. `opts` is for tests (faster rules). */
 export function consumeWidgetRuns(deps: RunnerDeps, valkey: string, log: Logger, opts: Parameters<typeof createWorker>[4] = {}) {
   return createWorker(
     QUEUES.widgetRuns,
@@ -42,8 +63,8 @@ export function consumeWidgetRuns(deps: RunnerDeps, valkey: string, log: Logger,
     async (job, ctx) => {
       const t0 = Date.now();
       try {
-        const r = await handleRun(deps, job, ctx);
-        log.info({ job_id: job.job_id, run_id: r.run_id, status: r.status, ms: Date.now() - t0 }, 'run ended');
+        const r = await runJob(deps, job, ctx);
+        log.info({ job_id: job.job_id, run_id: r.run_id, status: r.status, runs: r.runs, ms: Date.now() - t0 }, 'run ended');
       } catch (e) {
         log.warn({ job_id: job.job_id, attempt: ctx.attempt, err: e instanceof Error ? e.name : 'error', msg: e instanceof Error ? e.message.slice(0, 200) : '' }, 'run did not finish');
         throw e;
@@ -62,11 +83,12 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
   const store = new PgStore(connect(url));
   const bus = busFromConfig('runner', { VALKEY_URL: valkey });
   const queue = createQueue(QUEUES.widgetRuns, valkey, 'runner');
-  const scheduler = new Scheduler(store, (j) => queue.enqueue(j));
+  const board = await clientFromEnv('runner', 'board');
+  const scheduler = new Scheduler(store, (j) => queue.enqueue(j), Date.now, openedFrom(board));
   const sm = calleeConfig('runner', 'sandbox-manager');
   if (!sm.token) throw new Error('runner: RUNNER_TOKEN_SANDBOX_MANAGER is required in real mode');
   const deps: RunnerDeps = {
-    board: await clientFromEnv('runner', 'board'),
+    board,
     markets: await clientFromEnv('runner', 'markets'),
     models: await clientFromEnv('runner', 'models'),
     connections: await clientFromEnv('runner', 'connections'),

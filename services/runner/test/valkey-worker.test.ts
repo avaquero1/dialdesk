@@ -149,6 +149,28 @@ describe.skipIf(!on)('runner worker on Valkey', () => {
     expect((await store.schedule.get(w.spec.widget_id, 'numbers'))!.next_at).toBeGreaterThan(clock);
   }, 40_000);
 
+  it("a board's due numbers widgets go on BullMQ as one job, and each widget gets its own result (A1.4.1)", async () => {
+    const byTitle = await freshBoard();
+    const ws = ['Chiefs beat the Bills', 'Positions', 'Tonight'].map(byTitle).filter((w) => w && w.spec.kind === 'display');
+    const numbers = ws.filter((w) => w.profile!.cadence.numbers_every_s);
+    expect(numbers.length).toBeGreaterThan(1);
+    for (const w of numbers) {
+      await scheduler.noteRun(w, { kind: 'numbers', reason: 'accept' });
+      await store.schedule.remove(w.spec.widget_id, 'research');
+    }
+    clock += 3600_000;
+    const jobs = (await scheduler.tick()).filter((j) => j.account_id === numbers[0]!.spec.account_id);
+    expect(jobs).toHaveLength(1);
+    const lead = jobs[0]!;
+    expect((await store.batches.get(lead.job_id))!.widget_ids.sort()).toEqual(numbers.map((w) => w.spec.widget_id).sort());
+    await until(() => lead.widget_id in completed || lead.widget_id in failed);
+    expect(failed[lead.widget_id]).toBeUndefined();
+    for (const w of numbers) {
+      const rec = await store.get(store.byJob.get(widgetRunJobId(w.spec.widget_id, 'numbers', lead.window_start))!);
+      expect(rec?.status).toBe('done');
+    }
+  }, 40_000);
+
   it('a research run that meets the poisoned page ends poisoned on its first attempt, with no retry', async () => {
     const w = (await freshBoard())('Bills news');
     const window_start = Math.floor(clock / 1000);
