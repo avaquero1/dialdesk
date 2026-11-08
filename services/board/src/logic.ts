@@ -272,3 +272,40 @@ export function packPlaces(sizes: ([number, number] | readonly [number, number])
     return place;
   });
 }
+
+/** A tile as makeFolder sees it: its kind and where it sits. */
+export type TileRef = { widget_id: string; kind: WidgetSpec['kind']; place: WidgetSpec['place'] };
+type GridPlace = { col: number; row: number };
+
+/**
+ * makeFolder's checks and plan, the same on both stores. 404 for a widget not on this board, 400 for a duplicate, an app
+ * or a folder in the list. The folder takes `place`, else the first widget's grid place (for a widget inside a folder:
+ * that folder's place when this empties it, else `below`). `emptied`: the folders every child of which moves in, which
+ * the same change removes. Then the cap: the new folder counts, the emptied folders don't.
+ */
+export function planFolder(
+  tiles: Map<string, TileRef>,
+  widget_ids: string[],
+  place: GridPlace | undefined,
+  below: () => GridPlace,
+): { place: GridPlace; emptied: string[] } {
+  if (new Set(widget_ids).size !== widget_ids.length) throw new HttpError(400, 'duplicate', 'a widget is in the list twice');
+  for (const id of widget_ids) {
+    const t = tiles.get(id);
+    if (!t) throw new HttpError(404, 'not_found', 'no such widget');
+    if (t.kind !== 'display') throw new HttpError(400, 'not_display', "only displays go in a folder: no apps, and folders don't nest");
+  }
+  const moving = new Set(widget_ids);
+  const emptied = [...tiles.values()]
+    .filter((f) => f.kind === 'folder')
+    .map((f) => f.widget_id)
+    .filter((fid) => {
+      const kids = [...tiles.values()].filter((t) => 'folder_id' in t.place && t.place.folder_id === fid);
+      return kids.length > 0 && kids.every((k) => moving.has(k.widget_id));
+    });
+  const first = tiles.get(widget_ids[0]!)!.place;
+  const from = (p: WidgetSpec['place']): GridPlace | null => ('col' in p ? p : null);
+  const own = 'folder_id' in first && emptied.includes(first.folder_id) ? from(tiles.get(first.folder_id)!.place) : from(first);
+  checkWidgetCap(tiles.size - emptied.length, 1);
+  return { place: place ?? own ?? below(), emptied };
+}

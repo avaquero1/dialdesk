@@ -29,6 +29,7 @@ import {
   fetchQuotes,
   movementFlag,
   packPlaces,
+  planFolder,
   quotesFor,
   refreshKind,
   runJob,
@@ -39,7 +40,7 @@ import {
   ownConnection,
   type DisplaySpec,
 } from './logic.ts';
-import { draftsFor, prescribedTiles } from './defaults.ts';
+import { draftsFor, folderTitleFor, prescribedTiles } from './defaults.ts';
 import { MemoryObjectStore, isPng, type ObjectStore } from './storage.ts';
 
 export interface FakeDeps {
@@ -235,6 +236,36 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
         await bus.emit('widget.updated', { account_id: b.account_id, at: now(), widget_id, change: 'changed' });
       }
       return board(params.account_id);
+    },
+    makeFolder: async ({ params, body }) => {
+      const account_id = params.account_id;
+      board(account_id); // 404 for an unknown board
+      const ids = boards.get(account_id)!.widgets;
+      const tiles = new Map(ids.map((id) => widgets.get(id)!.spec).map((s) => [s.widget_id, { widget_id: s.widget_id, kind: s.kind, place: s.place }]));
+      const plan = planFolder(tiles, body.widget_ids, body.place, () => ({ col: 0, row: nextRow(account_id) }));
+      const cards = body.widget_ids.map((id) => widgets.get(id)!.spec as DisplaySpec);
+      const title = body.title ?? (await folderTitleFor(deps.markets, cards, Date.now()));
+      const folder_id = newId('wid');
+      tile(account_id, { widget_id: folder_id, account_id, kind: 'folder', title, children: [], place: plan.place });
+      for (const [index, id] of body.widget_ids.entries()) {
+        const w = widgets.get(id)!;
+        w.spec = WidgetSpec.parse({ ...w.spec, place: { folder_id, index } });
+        await bus.emit('widget.updated', { account_id, at: now(), widget_id: id, change: 'changed' });
+      }
+      for (const f of plan.emptied) {
+        removeWidget(account_id, f);
+        await bus.emit('widget.updated', { account_id, at: now(), widget_id: f, change: 'removed' });
+      }
+      await bus.emit('widget.updated', { account_id, at: now(), widget_id: folder_id, change: 'added' });
+      return board(account_id);
+    },
+    setTitle: async ({ params, body }) => {
+      const w = widget(params.widget_id, params.account_id);
+      if (w.spec.kind !== 'folder') throw new HttpError(400, 'not_folder', 'only a folder can be renamed');
+      w.spec = WidgetSpec.parse({ ...w.spec, title: body.title });
+      w.updated_at = now();
+      await bus.emit('widget.updated', { account_id: params.account_id, at: now(), widget_id: params.widget_id, change: 'changed' });
+      return shown(w);
     },
     propose: async ({ params, body }) => {
       const b = boards.get(params.account_id);

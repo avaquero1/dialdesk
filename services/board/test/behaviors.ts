@@ -7,7 +7,7 @@ import { createClient, type Call, type MemoryBus } from '@app/service-kit';
 import { sampleResult, TEST_TOKENS } from '@app/testkit';
 import type { Hono } from 'hono';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { REFRESH_PER_ACCOUNT_HOUR, REFRESH_PER_HOUR } from '../src/logic.ts';
+import { MAX_WIDGETS, REFRESH_PER_ACCOUNT_HOUR, REFRESH_PER_HOUR } from '../src/logic.ts';
 import { TINY_PNG, marketsForBoard } from './cases.ts';
 
 export interface Rig {
@@ -111,6 +111,68 @@ export function boardBehaviors(name: string, rig: () => Promise<Rig>) {
       const back = after.widgets.find((w) => w.spec.widget_id === card)!;
       expect('col' in back.spec.place).toBe(true);
       expect(after.widgets.filter((w) => w.spec.kind === 'folder')).toHaveLength(1);
+    });
+
+    it('makeFolder: a new folder from grid widgets or from another folder (which empties and goes), named like the first board', async () => {
+      const a = acc();
+      const b = await edge(BOARD.createDefaults, { params: { account_id: a }, body: { category: 'sports' } });
+      const folders = (x: Board) => x.widgets.filter((w) => w.spec.kind === 'folder') as (Widget & { spec: { kind: 'folder'; children: string[] } })[];
+      const grid = displays(b).filter((w) => 'col' in w.spec.place);
+      const oneNfl = grid.filter((w) => w.spec.params.event_keys?.length === 1 && w.spec.params.event_keys[0]!.startsWith('nfl-2026w10-'));
+      const many = grid.find((w) => (w.spec.params.event_keys?.length ?? 0) > 1)!;
+      expect(oneNfl.length).toBeGreaterThanOrEqual(2);
+      const [x, y] = oneNfl;
+      const made = await edge(BOARD.makeFolder, { params: { account_id: a }, body: { widget_ids: [y!.spec.widget_id, x!.spec.widget_id] } });
+      const f1 = folders(made).find((f) => f.spec.children.includes(x!.spec.widget_id))!;
+      expect(f1.spec.title).toBe('NFL Week 10');
+      expect(f1.spec.children).toEqual([y!.spec.widget_id, x!.spec.widget_id]);
+      expect(f1.spec.place).toEqual(y!.spec.place);
+      expect(made.widgets).toHaveLength(b.widgets.length + 1);
+
+      // A given title and place; a card that follows several games makes it "Folder" by default.
+      const given = await edge(BOARD.makeFolder, { params: { account_id: a }, body: { widget_ids: [many.spec.widget_id, x!.spec.widget_id], title: ' Sunday ', place: { col: 7, row: 40 } } });
+      const f2 = folders(given).find((f) => f.spec.children.includes(many.spec.widget_id))!;
+      expect([f2.spec.title, f2.spec.place]).toEqual(['Sunday', { col: 7, row: 40 }]);
+      expect(folders(given).find((f) => f.spec.widget_id === f1.spec.widget_id)!.spec.children).toEqual([y!.spec.widget_id]);
+
+      // Every card of the NBA folder: that folder is emptied and removed in the same change; the title is the NBA folder's.
+      const nba = folders(b).find((f) => f.spec.title === 'NBA Tonight')!;
+      const moved = await edge(BOARD.makeFolder, { params: { account_id: a }, body: { widget_ids: [...nba.spec.children].reverse() } });
+      expect(moved.widgets.some((w) => w.spec.widget_id === nba.spec.widget_id)).toBe(false);
+      const f3 = folders(moved).find((f) => f.spec.children.includes(nba.spec.children[0]!))!;
+      expect([f3.spec.title, f3.spec.place, f3.spec.children]).toEqual(['NBA Tonight', nba.spec.place, [...nba.spec.children].reverse()]);
+      expect(await edge(BOARD.getBoard, { params: { account_id: a } })).toEqual(expect.objectContaining({ widgets: expect.arrayContaining([expect.objectContaining({ spec: f3.spec })]) }));
+
+      // Refused: a folder in the list (400), a duplicate (400), another account's widget (404).
+      const card = y!.spec.widget_id;
+      expect(await status(edge(BOARD.makeFolder, { params: { account_id: a }, body: { widget_ids: [f3.spec.widget_id, card] } }))).toBe(400);
+      expect(await status(edge(BOARD.makeFolder, { params: { account_id: a }, body: { widget_ids: [card, card] } }))).toBe(400);
+      const other = acc();
+      const ob = await edge(BOARD.createDefaults, { params: { account_id: other }, body: { category: 'sports' } });
+      expect(await status(edge(BOARD.makeFolder, { params: { account_id: a }, body: { widget_ids: [card, displays(ob)[0]!.spec.widget_id] } }))).toBe(404);
+
+      // Rename: a folder only, trimmed; a display is 400, another account's folder 404.
+      const t = await edge(BOARD.setTitle, { params: { account_id: a, widget_id: f3.spec.widget_id }, body: { title: '  Late games ' } });
+      expect(t.spec.title).toBe('Late games');
+      expect(await status(edge(BOARD.setTitle, { params: { account_id: a, widget_id: card }, body: { title: 'Mine' } }))).toBe(400);
+      expect(await status(edge(BOARD.setTitle, { params: { account_id: other, widget_id: f3.spec.widget_id }, body: { title: 'Mine' } }))).toBe(404);
+    });
+
+    it("makeFolder: past the board's cap is 409 (a folder counts, and a folder it empties doesn't)", async () => {
+      const a = acc();
+      let b = await edge(BOARD.createDefaults, { params: { account_id: a }, body: { category: 'sports' } });
+      const add = { op: 'add' as const, widget: { kind: 'display' as const, type: 'gap' as const, title: 'Gap', market_ids: displays(b).find((w) => w.spec.type === 'gap')!.spec.market_ids, params: displays(b).find((w) => w.spec.type === 'gap')!.spec.params } };
+      while (b.widgets.length < MAX_WIDGETS) {
+        const n = Math.min(6, MAX_WIDGETS - b.widgets.length);
+        const p = await agent(BOARD.propose, { params: { account_id: a }, body: { changes: Array.from({ length: n }, () => add) } });
+        await edge(BOARD.accept, { params: { proposal_id: p.proposal_id }, body: { account_id: a } });
+        b = await edge(BOARD.getBoard, { params: { account_id: a } });
+      }
+      const grid = displays(b).filter((w) => 'col' in w.spec.place).map((w) => w.spec.widget_id);
+      expect(await status(edge(BOARD.makeFolder, { params: { account_id: a }, body: { widget_ids: grid.slice(0, 2) } }))).toBe(409);
+      const nba = b.widgets.find((w) => w.spec.kind === 'folder' && w.spec.title === 'NBA Tonight')!.spec as { children: string[] };
+      const full = await edge(BOARD.makeFolder, { params: { account_id: a }, body: { widget_ids: nba.children } });
+      expect(full.widgets).toHaveLength(MAX_WIDGETS);
     });
 
     it('proposals stay pending until the click; accept validates, saves and enqueues numbers then research', async () => {

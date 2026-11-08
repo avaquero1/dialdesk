@@ -122,6 +122,10 @@ export function weekPicks(markets: Market[], now: number): WeekPicks | null {
   return { today, nfl, nba, featured, mover, tonight };
 }
 
+/** The first board's NBA folder: "NBA tonight", "NBA tomorrow" or the day ("NBA Friday"). */
+const nbaFolderTitle = ({ today, nba }: WeekPicks) =>
+  !nba ? 'NBA tonight' : nba.date === today ? 'NBA tonight' : nba.date === addDays(today, 1) ? 'NBA tomorrow' : `NBA ${weekday(nba.date)}`;
+
 /**
  * The catalog's default board with this week's games in it, or null when there are no NFL and no NBA games ahead.
  * Tonight: the three most traded games of the NBA's next night and of the NFL week, by start. The market, Two prices and
@@ -131,9 +135,9 @@ export function weekPicks(markets: Market[], now: number): WeekPicks | null {
 export function weekBoard(markets: Market[], now: number, catalog: DefaultTile[] = WIDGET_CATALOG.default_board.tiles): DefaultTile[] | null {
   const pick = weekPicks(markets, now);
   if (!pick) return null;
-  const { today, nfl, nba } = pick;
+  const { nfl, nba } = pick;
   const nbaGames = nba?.games ?? [];
-  const nbaTitle = !nba ? 'NBA tonight' : nba.date === today ? 'NBA tonight' : nba.date === addDays(today, 1) ? 'NBA tomorrow' : `NBA ${weekday(nba.date)}`;
+  const nbaTitle = nbaFolderTitle(pick);
   const card = (g: Game): DisplayTile => ({ kind: 'display', type: 'probability', size: 'S', title: g.title, market_ids: ids(g), params: { event_keys: [g.event_key] } });
 
   const out: DefaultTile[] = [];
@@ -231,4 +235,39 @@ export async function prescribedTiles(markets: Call | undefined, now: number, ti
 export function fixtureOnly(markets: Market[], catalog: DefaultTile[] = WIDGET_CATALOG.default_board.tiles): boolean {
   const named = new Set(catalog.flatMap((t) => (t.kind === 'display' ? t.market_ids : t.kind === 'folder' ? t.children.flatMap((c) => c.market_ids) : [])));
   return markets.length > 0 && markets.every((m) => named.has(m.market_id));
+}
+
+/** A display as folderTitle sees it: the games it follows. */
+type Card = { params: { event_keys?: string[] } };
+
+/**
+ * makeFolder's default title, with the first board's naming: its NFL folder's title when every card follows one game of
+ * that NFL week, its NBA folder's when every card follows one game of that NBA night, else "Folder". On this week's real
+ * games that is "NFL this week" and "NBA tonight" (weekBoard); on the catalog's board, "NFL Week 10" and "NBA Tonight".
+ */
+export function folderTitle(markets: Market[] | null, cards: Card[], now: number): string {
+  const keys = cards.map((c) => c.params.event_keys ?? []);
+  if (keys.some((k) => k.length !== 1)) return 'Folder';
+  const pick = markets && !fixtureOnly(markets) ? weekPicks(markets, now) : null;
+  const groups: [string, string[]][] = pick
+    ? [
+        ['NFL this week', pick.nfl.map((g) => g.event_key)],
+        [nbaFolderTitle(pick), (pick.nba?.games ?? []).map((g) => g.event_key)],
+      ]
+    : WIDGET_CATALOG.default_board.tiles.flatMap((t): [string, string[]][] =>
+        t.kind === 'folder' ? [[t.title, t.children.flatMap((c) => c.params.event_keys ?? [])]] : [],
+      );
+  for (const [title, events] of groups) {
+    const set = new Set(events);
+    if (set.size && keys.every((k) => set.has(k[0]!))) return title;
+  }
+  return 'Folder';
+}
+
+/** folderTitle on markets' list now. Waits at most timeoutMs for markets, then names by the catalog's board. */
+export async function folderTitleFor(markets: Call | undefined, cards: Card[], now: number, timeoutMs = 3000): Promise<string> {
+  if (!markets) return folderTitle(null, cards, now);
+  const timeout = new Promise<null>((r) => setTimeout(() => r(null), timeoutMs).unref());
+  const got = await Promise.race([markets(MARKETS.list, { query: { category: 'sports' } }).catch(() => null), timeout]);
+  return folderTitle(got?.markets ?? null, cards, now);
 }

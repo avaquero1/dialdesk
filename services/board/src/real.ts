@@ -54,6 +54,7 @@ import {
   sinceOf,
   VISIT_GAP_S,
   packPlaces,
+  planFolder,
   quotesFor,
   refreshKind,
   runJob,
@@ -65,7 +66,7 @@ import {
   ownConnection,
   type DisplaySpec,
 } from './logic.ts';
-import { draftsFor, prescribedTiles } from './defaults.ts';
+import { draftsFor, folderTitleFor, prescribedTiles } from './defaults.ts';
 import { s3ObjectStoreFromConfig } from './s3-store.ts';
 import { LocalDirObjectStore, isPng, type ObjectStore } from './storage.ts';
 
@@ -413,6 +414,48 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
       });
       await flush(o);
       return loadBoard(account_id);
+    },
+
+    makeFolder: async ({ params, body }) => {
+      const account_id = params.account_id;
+      const o = outbox();
+      const folder_id = newId('wid');
+      // The default title asks markets for this week's games: before the transaction, so no lock waits on it. Displays
+      // only: an app or a folder in the list has no params, and the transaction refuses that list with a 400.
+      const picked = body.title ? [] : (await widgetRows(sql, account_id)).filter((r) => r.kind === 'display' && body.widget_ids.includes(r.widget_id));
+      const title = body.title ?? (await folderTitleFor(deps.markets, picked.map((r) => r.spec as { params: { event_keys?: string[] } }), Date.now()));
+      await sql.begin(async (tx) => {
+        const [b] = await tx`select 1 from boards where account_id = ${account_id} for update`;
+        if (!b) throw new HttpError(404, 'not_found', 'no board for this account');
+        const rows = await widgetRows(tx, account_id);
+        const below = await nextRow(tx, account_id);
+        const tiles = new Map(rows.map((r) => [r.widget_id, { widget_id: r.widget_id, kind: r.kind, place: placeOf(r) }]));
+        const plan = planFolder(tiles, body.widget_ids, body.place, () => ({ col: 0, row: below }));
+        await insertWidget(tx, { widget_id: folder_id, account_id, kind: 'folder', title, children: [], place: plan.place }, null, 'normal', null);
+        for (const [index, id] of body.widget_ids.entries()) {
+          await setPlace(tx, id, account_id, { folder_id, index });
+          changed(o, account_id, id, 'changed');
+        }
+        for (const f of plan.emptied) await removeWidget(tx, o, account_id, f);
+        changed(o, account_id, folder_id, 'added');
+      });
+      await flush(o);
+      return loadBoard(account_id);
+    },
+
+    setTitle: async ({ params, body }) => {
+      const { account_id, widget_id } = params;
+      const o = outbox();
+      await sql.begin(async (tx) => {
+        const l = await lockSpec(tx, widget_id, account_id);
+        if (!l) throw new HttpError(404, 'not_found', 'no such widget');
+        if (l.spec.kind !== 'folder') throw new HttpError(400, 'not_folder', 'only a folder can be renamed');
+        await tx`update widgets set spec = ${json(tx, stored({ ...l.spec, title: body.title }))}, updated_at = now()
+                 where widget_id = ${widget_id} and account_id = ${account_id}`;
+        changed(o, account_id, widget_id, 'changed');
+      });
+      await flush(o);
+      return loadWidget(widget_id, account_id);
     },
 
     propose: async ({ params, body }) => {
