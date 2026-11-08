@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { liveSandboxes, startManager, topologyUp, type Manager, type Topology } from '../sandbox/dev/topology.ts';
 import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, EDGE, MARKETS, MODELS, POISONED_NOTE, widgetRunJobId, type Board, type ChatReply, type WidgetRunJob } from '@app/contracts';
-import { MemoryBus, buildApp, createClient, createLogger, hashToken, sandboxClient, type Call, type SandboxClient } from '@app/service-kit';
+import { MemoryBus, RUN_RULES, buildApp, createClient, createLogger, hashToken, sandboxClient, type Call, type SandboxClient } from '@app/service-kit';
 import { fakeApp, fixtures, pageText, testCallers, TEST_TOKENS } from '@app/testkit';
 import { fake as accounts } from '../services/accounts/src/fake.ts';
 import { createReal as agentReal } from '../services/agent/src/real.ts';
@@ -218,6 +218,8 @@ describe('e2e on fakes', () => {
     expect(bad.turn.text).toBe('I do math, not calls.');
   });
 
+  // Step 3 drains every first run in turn (a numbers batch per board, the research run with its browse boxes). Its cap
+  // is the product's own run cap, not vitest's 60 s default: on a box busy with other checks it took longer (Nov 7).
   it('3. board enqueues the runs on widget-runs and runner consumes them: numbers fill every display', async () => {
     const jobs = [...queue];
     expect(jobs.filter((j) => j.widget_id === s.widget_id).map((j) => j.kind)).toEqual(['numbers', 'research']);
@@ -232,7 +234,7 @@ describe('e2e on fakes', () => {
     expect(gap.result!.receipts[0]!.origins).toEqual(['market']);
     const ev = b.widgets.find((w) => w.spec.kind === 'display' && w.spec.type === 'probability' && 'col' in w.spec.place)!;
     expect(ev.result!.numbers.find((n) => n.op === 'expected_value')).toBeDefined();
-  });
+  }, RUN_RULES.timeoutsMs.run);
 
   it('3+4. the research run fills the widget with numbers and receipts; the poisoned page gets its sandbox killed', async () => {
     const run = s.runs!.find((r) => r.widget_id === s.widget_id && r.kind === 'research')!;
