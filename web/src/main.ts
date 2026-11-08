@@ -3,7 +3,7 @@
  * board (first paint from the quotes board copied from markets), and /live for what changes.
  */
 import type { Account, EventName, Look } from '@app/contracts';
-import { initActions, menuAction } from './actions.ts';
+import { initActions, menuAction, refreshFolder } from './actions.ts';
 import { $, finishAnimations, raf2, root, wait } from './dom.ts';
 import { ApiError, OFFLINE, api, setApiHooks } from './api.ts';
 import { showAuth } from './auth.ts';
@@ -158,7 +158,17 @@ async function start(a: Account) {
   updateRefraction();
   const b = await api.board();
   mount(b.widgets);
-  bindBoard({ openMenu, openApp, openFolder, openHow, saveOrder, closeSurface });
+  bindBoard({
+    openMenu,
+    openApp,
+    openFolder: (id) => {
+      openFolder(id);
+      refreshFolder(id);
+    },
+    openHow,
+    saveOrder,
+    closeSurface,
+  });
   initSurfaces({
     account: () => account,
     logout,

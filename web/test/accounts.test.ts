@@ -39,6 +39,8 @@ const settled = () =>
     { timeout: 30_000, polling: 100 },
   );
 const tile = (title: string) => page.locator(`#board > .w:not(.is-out)[aria-label="${title}"]`);
+/** The display's name on screen (W1.2.1): the catalog's inside titles in plain words. */
+const plain = (t: string) => ({ Gap: 'Two prices', Positions: 'Your account', Movement: 'Biggest move' } as Record<string, string>)[t] ?? t;
 const sheet = () => page.locator('.surface.sheet.is-open');
 const close = async () => {
   await page.keyboard.press('Escape');
@@ -90,7 +92,7 @@ beforeAll(async () => {
   const b = await page.evaluate(async () => (await (await fetch('/api/board')).json()) as { widgets: { spec: { title: string; type?: string; place: object } }[] });
   const pos = b.widgets.map((w) => w.spec).find((s) => s.type === 'positions' && !('folder_id' in s.place));
   expect(pos, 'the first board has a Your account display').toBeTruthy();
-  accountTitle = pos!.title;
+  accountTitle = plain(pos!.title);
 });
 afterAll(async () => {
   await browser?.close();

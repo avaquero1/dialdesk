@@ -29,6 +29,8 @@ let ctx: BrowserContext;
 let page: Page;
 const problems: string[] = [];
 const T = { gap: '', news: '' };
+/** The display's name on screen (W1.2.1): the catalog's inside titles in plain words. */
+const plain = (t: string) => ({ Gap: 'Two prices', Positions: 'Your account', Movement: 'Biggest move' } as Record<string, string>)[t] ?? t;
 const TRAP = 'Sports Wire Extra';
 
 const ready = (p: Page) => p.waitForFunction(() => window.__ready === true && document.documentElement.dataset.view === 'board', null, { timeout: 90_000 });
@@ -107,7 +109,7 @@ beforeAll(async () => {
   const gap = grid.find((s) => s.type === 'gap')!;
   const news = grid.find((s) => s.type === 'news')!;
   expect(gap && news, JSON.stringify(grid.map((s) => s.type))).toBeTruthy();
-  T.gap = gap.title;
+  T.gap = plain(gap.title);
   T.news = news.title;
   await seed(me.account_id, { gap: gap.widget_id, news: news.widget_id });
   // audit reads the log stream on its own clock: wait until it has counted the rows.

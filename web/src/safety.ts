@@ -43,6 +43,7 @@ const OP: Record<string, string> = {
   odds_to_probability: 'The odds as a chance',
   expected_value: 'What it is worth at your number',
   movement: 'How far it moved',
+  price_at: 'The price on a day of the line',
   volatility: 'How much it swings',
   gap: 'How far apart the two exchanges are',
   base_rate: 'How often this happened before',
@@ -325,11 +326,13 @@ function checkStep(r: WidgetResult | null, trace: RunTraceStep[]) {
   return p(`Checked before it reached you${g ? ` at ${fmtTime(g.at)}` : ''}: every number came from the math, and nothing tells you what to trade.`);
 }
 
+/** A batched run's receipts keep their batch prefix (b3_n1, b3_kalshi_price): the widget's own names are without it. */
+export const unbatch = (id: string) => id.replace(/^b\d+_/, '');
 const kv = (k: string, v: string) => `<div><dt>${esc(k)}</dt><dd class="mono">${esc(v)}</dd></div>`;
 function detailsHTML(r: WidgetResult | null, trace: RunTraceStep[]) {
   if (!r) return `<dl class="how-kv">${kv('result', 'none yet (first paint from cached quotes)')}</dl>`;
   const rec = (x: Receipt) =>
-    `<dl class="how-kv">${kv('receipt', x.id)}${kv('op', `${x.op} (${x.op_id})`)}${kv('formula', x.formula)}${kv('args', JSON.stringify(x.args))}${kv('value', `${x.value} ${x.unit}`)}` +
+    `<dl class="how-kv">${kv('receipt', x.id)}${kv('op', `${x.op} (${unbatch(x.op_id)})`)}${x.refs ? kv('inputs', Object.entries(x.refs).map(([a, r]) => `${a}: ${unbatch(r)}`).join(', ')) : ''}${kv('formula', x.formula)}${kv('args', JSON.stringify(x.args))}${kv('value', `${x.value} ${x.unit}`)}` +
     `${kv('engine', `${x.engine_version} · ${x.git_hash}`)}${kv('plan hash', x.plan_hash)}${kv('input hash', x.input_hash)}</dl>`;
   const steps = trace
     .map((s) => `<li class="mono">${esc(fmtTime(s.at))} ${esc(s.step)} ${esc(s.status)}${s.sandbox ? ` · ${esc(s.sandbox.sandbox_id)} ${esc(s.sandbox.state)}` : ''}${s.proxy ? ` · proxy ${s.proxy.allowed}/${s.proxy.refused}` : ''}</li>`)

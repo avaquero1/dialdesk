@@ -284,3 +284,38 @@ html[data-transparency="reduced"] :is(.w--display, .f-tile, .a-tile, .bar, .chat
   background: var(--solid); -webkit-backdrop-filter: none; backdrop-filter: none;
 }
 html[data-transparency="reduced"] :is(.chip, .btn, .w-menu-btn, .seg, .mini, .card, .theme-chip, .tool-chip, .wchip, .iconbtn, .chat-quick button, .avatar, .add-plus) { background: var(--solid-chip); }
+
+/* ---- the displays' plain words (W1.2.1) ---- */
+/* Up and down are an arrow and words, never a good or bad color (design.md section 8): the themes' --up and --down
+   tints are not used for moves. Red stays for a blocked trick or a real error, amber for "this needs you". */
+.mv--up, .mv--down { color: var(--text-2); }
+.mv .mv-a { font-size: .8em; }
+.big-row { display: flex; align-items: baseline; gap: 6px; }
+.big-u { font: 600 calc(14px * var(--u))/1 var(--font-ui); color: var(--text-2); }
+.c-mv .mv { font-weight: 600; white-space: normal; line-height: 1.25; }
+.c-chart { position: relative; }
+.c-chart .c-span { position: absolute; right: 2px; bottom: -2px; font-size: calc(10.5px * var(--u)); color: var(--text-3); }
+.c-ex .sep { color: var(--text-3); }
+.c-base { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow: hidden; }
+.w-note { margin-top: 6px; font-size: calc(12px * var(--u)); line-height: 1.35; color: var(--text-2); }
+.c-base .w-note { margin-top: 0; }
+.w--s .w-note { font-size: calc(11px * var(--u)); }
+.g-lab b { font-weight: 600; }
+/* A medium Market holds the chance, its move and its line first, then one line each: the prices, your number and the
+   first base rate (the rest are in How we got this, and on a large Market). */
+.w--m .c-main { flex: none; height: calc(var(--u) * 58px); }
+.w--m .c-left { max-width: 62%; justify-content: flex-start; gap: calc(var(--u) * 2px); }
+.w--m .c-mv .mv { font-size: calc(var(--u) * 11px); white-space: nowrap; }
+.w--m .c-ex, .w--m .c-foot .ev, .w--m .c-base .w-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.w--m .c-ex { flex-wrap: nowrap; }
+.w--m .c-foot { font-size: calc(var(--u) * 11.5px); min-width: 0; }
+.w--m .c-base { flex: 1; gap: 0; }
+.w--m .c-base .w-note { font-size: calc(var(--u) * 11px); }
+.w--m .c-base .w-note:nth-child(n+2) { display: none; }
+.c-ex, .c-foot, .c-base { margin-top: calc(var(--u) * 3px); }
+.w--m .c-base .w-note { line-height: 1.25; }
+/* A move and a base rate are words: the text font, with even-width digits. */
+.mv, .w-note.num { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+/* A small tile's title stays whole; its game name gives way. */
+.w--s .w-title { flex: none; }
+.w--s .w-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

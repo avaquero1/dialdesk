@@ -14,7 +14,7 @@ import { $, esc } from './dom.ts';
 import { S, refreshTile } from './board.ts';
 import { IC } from './icons.ts';
 import { panel, refill, rz, sheetHead, tileFrom, toast } from './surfaces.ts';
-import { fmtTime } from './widgets.ts';
+import { fmtTime, tileName } from './widgets.ts';
 
 export const PROMISE = 'Read only. We can see your balance and positions. We can never trade or move money.';
 
@@ -108,7 +108,7 @@ function linkOffer(c: Connection) {
   const ds = yourAccountDisplays();
   const on = ds.filter((w) => linkedTo(w) === c.connection_id);
   const off = ds.filter((w) => linkedTo(w) !== c.connection_id);
-  const name = (w: Widget) => (ds.length > 1 ? `${w.spec.title} (${ds.indexOf(w) + 1})` : w.spec.title);
+  const name = (w: Widget) => (ds.length > 1 ? `${tileName(w)} (${ds.indexOf(w) + 1})` : tileName(w));
   return (
     (on.length ? `<div class="s ac-shown">Shown on ${esc(on.map(name).join(', '))}.</div>` : '') +
     off

@@ -4,10 +4,10 @@
  */
 import { ApiError, api } from './api.ts';
 import { $, mk } from './dom.ts';
-import { S, hideTile, placesWithout, reconcile, saveLayout, shimmer, upsert } from './board.ts';
+import { S, hideTile, placesWithout, reconcile, refreshTile, saveLayout, shimmer, upsert } from './board.ts';
 import { closeSurface, toast } from './surfaces.ts';
 import { openHow } from './safety.ts';
-import { tileName } from './widgets.ts';
+import { justNow, tileName } from './widgets.ts';
 import { Undo, type UndoView } from './undo.ts';
 import type { MenuAction, Size } from './menu.ts';
 
@@ -63,10 +63,20 @@ export function menuAction(id: string, act: MenuAction, arg?: string) {
   if (act === 'how') return void openHow(id);
   if (act === 'refresh') {
     shimmerOnce(id);
-    api.refresh(id).catch((e: unknown) => {
-      if (e instanceof ApiError && e.status === 429) toast(`${title(id)} was refreshed often this hour. Try again later.`);
-      else if (!(e instanceof ApiError) || e.status !== 401) toast('Couldn’t refresh it.');
-    });
+    api
+      .refresh(id)
+      .then((r) => {
+        // It joined the run already asked for this minute: the numbers on screen are that run's, so say so.
+        if (r.joined) {
+          justNow.set(id, Date.now());
+          refreshTile(id);
+          toast(`${title(id)}: updated just now.`);
+        }
+      })
+      .catch((e: unknown) => {
+        if (e instanceof ApiError && e.status === 429) toast(`${title(id)} was refreshed often this hour. Try again later.`);
+        else if (!(e instanceof ApiError) || e.status !== 401) toast('Couldn’t refresh it.');
+      });
   } else if (act === 'size' && arg) {
     api
       .resize(id, arg as Size)
@@ -123,3 +133,17 @@ export function menuAction(id: string, act: MenuAction, arg?: string) {
   }
 }
 
+
+/** A folder's cards are refreshed at most this often when it opens (each card may refresh 12 times an hour). */
+const FOLDER_REFRESH_MS = 10 * 60_000;
+const folderRefreshed = new Map<string, number>();
+
+/**
+ * Opening a folder refreshes its cards: each one asks for a numbers run, which joins one already asked for this
+ * minute, so it costs little. Quietly: a card that can't refresh keeps its numbers.
+ */
+export function refreshFolder(id: string, now = Date.now()) {
+  if (now - (folderRefreshed.get(id) ?? 0) < FOLDER_REFRESH_MS) return;
+  folderRefreshed.set(id, now);
+  for (const k of S.kids.get(id) ?? []) if (S.widgets.get(k)?.spec.kind === 'display') api.refresh(k).catch(() => {});
+}

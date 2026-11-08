@@ -1,7 +1,8 @@
 /**
  * Renders a widget from its spec and data: a result when one exists, else the first-paint quotes board copied from
  * markets (exchange prices with their "as of" time). Every value is escaped; nothing here renders HTML from the
- * server or from a model. The words follow the house rules: implied probability, movement, expected value.
+ * server or from a model. The words follow design.md section 3: "62% chance", "Up 4 points since yesterday", "2
+ * points apart"; a move has an arrow and words, never a good or bad color.
  */
 import type { Quote, Widget, WidgetResult } from '@app/contracts';
 import { connections, exchangeName } from './conns.ts';
@@ -9,12 +10,15 @@ import { css, esc } from './dom.ts';
 import { IC } from './icons.ts';
 
 type Num = WidgetResult['numbers'][number];
+type Receipt = WidgetResult['receipts'][number];
 type Display = Extract<Widget['spec'], { kind: 'display' }>;
 
 /** The apps' names on screen (design section 6); the inside names (trust, receipts, catalog) stay in code. */
 export const APP_NAMES: Record<string, string> = { trust: 'Safety', receipts: 'How we got it', accounts: 'Accounts', catalog: 'Add', settings: 'Settings' };
-/** A tile's name on screen: an app's plain name, else its title. */
-export const tileName = (w: Widget) => (w.spec.kind === 'app' ? (APP_NAMES[w.spec.app] ?? w.spec.title) : w.spec.title);
+/** The catalog's inside titles of the displays, and their names on screen. A title the user or the agent chose stays. */
+export const DISPLAY_NAMES: Record<string, string> = { Gap: 'Two prices', Positions: 'Your account', Movement: 'Biggest move' };
+/** A tile's name on screen: an app's plain name, else its title in plain words. */
+export const tileName = (w: Widget) => (w.spec.kind === 'app' ? (APP_NAMES[w.spec.app] ?? w.spec.title) : w.spec.kind === 'display' ? (DISPLAY_NAMES[w.spec.title] ?? w.spec.title) : w.spec.title);
 
 // ---------- small formatters ----------
 
@@ -22,21 +26,42 @@ export const fmtTime = (iso: string) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 };
-const fmtMove = (d: number) => (d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : '— 0');
+const DAY_S = 86400;
 const mvCls = (d: number) => (d > 0 ? 'up' : d < 0 ? 'down' : 'flat');
-const mvEl = (d: number, tail = '') => `<span class="mv mv--${mvCls(d)} num">${esc(fmtMove(d))}${esc(tail)}</span>`;
+const ARROW = { up: '▲', down: '▼', flat: '—' } as const;
+const points = (n: number) => `${n} ${n === 1 ? 'point' : 'points'}`;
+/** A move's time window in words: "since yesterday" for 24 h. */
+export function sinceWords(window_s: number | undefined): string {
+  if (window_s == null) return '';
+  if (window_s === DAY_S) return 'since yesterday';
+  if (window_s % DAY_S === 0) return window_s === 7 * DAY_S ? 'this week' : `in ${window_s / DAY_S} days`;
+  if (window_s % 3600 === 0) return `in ${window_s / 3600} ${window_s === 3600 ? 'hour' : 'hours'}`;
+  return `in ${Math.round(window_s / 60)} minutes`;
+}
+/** "Up 4 points since yesterday", "Down 1 point", "No change since yesterday". */
+export function moveWords(d: number, since = ''): string {
+  const t = d > 0 ? `Up ${points(d)}` : d < 0 ? `Down ${points(-d)}` : 'No change';
+  return since ? `${t} ${since}` : t;
+}
+/** A move with its arrow and words. Short: "▲ up 4" (a row of games); long: "▲ Up 4 points since yesterday". */
+function mvEl(d: number, o: { long?: boolean; since?: string } = {}) {
+  const c = mvCls(d);
+  const words = o.long ? moveWords(d, o.since) : d === 0 ? 'no change' : `${c} ${Math.abs(d)}`;
+  return `<span class="mv mv--${c} num"><span class="mv-a" aria-hidden="true">${ARROW[c]}</span> ${esc(words)}</span>`;
+}
 const usd = (v: number) => (v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const signedUsd = (v: number) => (v > 0 ? '+' : '') + usd(v);
 
-/** One engine number in its unit. */
+/** One engine number in its unit, in plain words ("62%", "4 points", "61¢"). */
 export function fmtNum(n: Num): string {
   switch (n.unit) {
     case 'probability':
-      return `${Math.round(n.value * 100)}%`;
+    case 'ratio':
+      return n.op === 'base_rate_history' || n.unit === 'probability' ? `${Math.round(n.value * 100)}%` : String(Math.round(n.value * 1000) / 1000);
     case 'cents':
-      return `${n.value > 0 ? '+' : ''}${Math.round(n.value * 10) / 10}¢`;
+      return `${n.op === 'expected_value' && n.value > 0 ? '+' : ''}${Math.round(n.value * 10) / 10}¢`;
     case 'points':
-      return `${Math.round(n.value * 10) / 10} pts`;
+      return points(Math.round(n.value * 10) / 10);
     case 'dollars':
       return usd(n.value);
     case 'decimal_odds':
@@ -47,7 +72,7 @@ export function fmtNum(n: Num): string {
 }
 
 const head = (t: string, sub?: string, dot?: string) =>
-  `<div class="w-head"><i class="w-dot${dot ? ' ' + dot : ''}"></i><span class="w-title">${esc(t)}</span>${sub ? `<span class="w-sub num">${esc(sub)}</span>` : ''}</div>`;
+  `<div class="w-head"><i class="w-dot${dot ? ' ' + dot : ''}"></i><span class="w-title">${esc(DISPLAY_NAMES[t] ?? t)}</span>${sub ? `<span class="w-sub num">${esc(sub)}</span>` : ''}</div>`;
 
 /** A small line chart. Points are real values only (first paint has two: 24 h ago and now). */
 export function spark(v: number[], o: { extra?: number[][]; area?: boolean; end?: boolean } = {}) {
@@ -80,6 +105,93 @@ const line2 = (q: Quote | undefined) => (q && q.previous_price_cents != null ? [
 const pctOf = (n: Num | undefined) => (n && n.unit === 'probability' ? Math.round(n.value * 100) : null);
 const ptsOf = (n: Num | undefined) => (n ? Math.round(n.unit === 'probability' ? n.value * 100 : n.value) : null);
 
+/** A number's receipt: how the engine got it. */
+const recOf = (w: Widget, n: Num | undefined): Receipt | undefined => (n ? w.result?.receipts.find((r) => r.id === n.receipt_id) : undefined);
+const argNum = (r: Receipt | undefined, k: string) => {
+  const v = r?.args[k];
+  return typeof v === 'number' ? v : undefined;
+};
+/** The markets a number was read from (its receipt's provenance: "kalshi:KX…", "polymarket:…"). */
+const sourcesOf = (w: Widget, n: Num) => Object.values(recOf(w, n)?.provenance ?? {}).map((p) => p.source);
+/** The number of an op read from one market, else the i-th of that op (results before provenance). */
+function numFor(w: Widget, op: Num['op'], marketId: string | undefined, i: number): Num | undefined {
+  const all = nums(w, op);
+  if (marketId) {
+    const hit = all.find((n) => sourcesOf(w, n).includes(marketId));
+    if (hit) return hit;
+    if (all.some((n) => sourcesOf(w, n).length)) return undefined;
+  }
+  return all[i];
+}
+
+/** A move from the result: its points and its window (the receipt's args.window_s). `window_s` picks one window. */
+function moveOf(w: Widget, o: { window_s?: number; market?: string; i?: number } = {}): { d: number; since: string } | null {
+  const cands = o.market !== undefined || o.i !== undefined ? [numFor(w, 'movement', o.market, o.i ?? 0)] : nums(w, 'movement');
+  const n = cands.find((x) => x && (o.window_s === undefined || argNum(recOf(w, x), 'window_s') === o.window_s));
+  return n ? { d: ptsOf(n)!, since: sinceWords(argNum(recOf(w, n), 'window_s')) } : null;
+}
+
+/** A line from the engine's price_at numbers (one point each, receipt args.ago_s), oldest first. */
+function lineOf(w: Widget, market?: string): number[] {
+  const pts = nums(w, 'price_at')
+    .map((n) => ({ n, r: recOf(w, n) }))
+    .filter(({ n }) => !market || sourcesOf(w, n).includes(market))
+    .map(({ n, r }) => ({ v: n.value, ago: argNum(r, 'ago_s') ?? 0 }))
+    .sort((a, b) => b.ago - a.ago);
+  return pts.length >= 2 ? pts.map((p) => p.v) : [];
+}
+/** How far back a line from the engine reaches, in words ("7 days"). */
+function lineSpan(w: Widget): string {
+  const most = Math.max(0, ...nums(w, 'price_at').map((n) => argNum(recOf(w, n), 'ago_s') ?? 0));
+  return most >= DAY_S ? `${Math.round(most / DAY_S)} ${Math.round(most / DAY_S) === 1 ? 'day' : 'days'}` : most >= 3600 ? `${Math.round(most / 3600)} hours` : '';
+}
+
+/**
+ * The exchange prices the result's numbers were worked out from (a receipt's cents args, with their market and time),
+ * over first paint's quotes once a result exists.
+ */
+function priceOn(w: Widget, ex: Quote['exchange']): number | null {
+  for (const r of w.result?.receipts ?? []) {
+    for (const [arg, p] of Object.entries(r.provenance ?? {})) {
+      const v = r.args[arg];
+      if (p.source.startsWith(`${ex}:`) && /cents$/.test(arg) && !/^(lo|hi)_cents$/.test(arg) && typeof v === 'number') return v;
+    }
+  }
+  return quoteOn(w, ex)?.yes_price_cents ?? null;
+}
+
+/** A result's sentence with no numbers in it (a game that isn't paired says why), when it has one. */
+const plainSummary = (w: Widget) => (w.result?.summary && !Object.keys(w.result.summary.slots).length ? w.result.summary.template : null);
+/** The result's notes, as plain sentences. */
+const notesHtml = (w: Widget, skip: string | null = null) =>
+  (w.result?.notes ?? [])
+    .filter((n) => n !== skip)
+    .map((n) => `<div class="w-note">${esc(n)}</div>`)
+    .join('');
+
+const EXCHANGE: Record<Quote['exchange'], string> = { kalshi: 'Kalshi', polymarket: 'Polymarket' };
+const LEAGUE = /\b(?:KX)?(NFL|NBA|MLB|NHL)/i;
+
+/**
+ * A base rate in words, from its receipt: "Home teams won 51% of 121 NFL games on Kalshi this season", or "Teams priced
+ * 57–67¢ before the start won 61% of 54 NFL games on Kalshi this season". The receipt's provenance names the games
+ * (home teams or every team) and the exchange; its sample size is n; lo_cents and hi_cents are the band.
+ */
+export function baseRateWords(n: Num, r: Receipt | undefined): string | null {
+  if (n.op !== 'base_rate_history' || !r) return null;
+  const pct = Math.round(n.value * 100);
+  const src = r.provenance?.history?.source ?? '';
+  const size = r.sample_size;
+  const ex = src.startsWith('kalshi:') ? ' on Kalshi' : src.startsWith('polymarket:') ? ' on Polymarket' : '';
+  const league = LEAGUE.exec(src)?.[1]?.toUpperCase();
+  const games = size == null ? '' : ` of ${size}${league ? ` ${league}` : ''} ${size === 1 ? 'game' : 'games'}`;
+  const season = /since /.test(src) ? ' this season' : '';
+  const lo = argNum(r, 'lo_cents');
+  const hi = argNum(r, 'hi_cents');
+  const who = lo != null && hi != null ? `Teams priced ${lo}–${hi}¢ before the start` : /home/.test(src) ? 'Home teams' : 'Teams like this';
+  return `${who} won ${pct}%${games}${ex}${season}.`;
+}
+
 /** When the numbers are from: the result's market time, else the oldest quote. */
 function asOf(w: Widget): { at: string; stale: boolean; from: 'result' | 'quotes' } | null {
   if (w.result) return { at: w.result.as_of, stale: w.result.stale, from: 'result' };
@@ -88,7 +200,10 @@ function asOf(w: Widget): { at: string; stale: boolean; from: 'result' | 'quotes
   const oldest = q.reduce((a, b) => (a.as_of < b.as_of ? a : b));
   return { at: oldest.as_of, stale: q.some((x) => x.stale), from: 'quotes' };
 }
-const EXCHANGE: Record<Quote['exchange'], string> = { kalshi: 'Kalshi', polymarket: 'Polymarket' };
+
+/** "Updated just now" for a while after a refresh joined a run already asked for this minute (board.ts sets it). */
+export const justNow = new Map<string, number>();
+const JUST_NOW_MS = 60_000;
 
 /**
  * When the prices are from, in plain words (design.md section 11): "Prices as of 9:41", "Prices from 2 minutes ago",
@@ -103,6 +218,8 @@ export function stampWords(w: Widget, now = Date.now()): string {
     const who = a.from === 'quotes' && down.length === 1 ? `${down[0]} isn’t answering` : 'An exchange isn’t answering';
     return `${who}. Showing the last prices from ${t}.`;
   }
+  const j = justNow.get(w.spec.widget_id);
+  if (j && now - j < JUST_NOW_MS) return `Updated just now · prices as of ${t}`;
   const min = Math.floor((now - new Date(a.at).getTime()) / 60_000);
   if (min >= 2 && min < 60) return `Prices from ${min} minutes ago · as of ${t}`;
   return `Prices as of ${t}`;
@@ -123,26 +240,42 @@ export function eventLabel(key: string, titles: Map<string, string>): string {
   return a && b && /^[a-z]{2,4}$/.test(a) && /^[a-z]{2,4}$/.test(b) ? `${a.toUpperCase()} at ${b.toUpperCase()}` : key;
 }
 
+/**
+ * A readable name for a market id: its game's title when the board has it, else the teams in its ticker
+ * ("kalshi:KXNFLGAME-26NOV08CINATL-CIN" is "CIN at ATL"; "polymarket:nfl-kc-buf-2026-11-08" is "KC at BUF").
+ */
+export function marketLabel(id: string, c: RenderCtx): string {
+  const key = c.events?.get(id);
+  if (key) return eventLabel(key, c.titles);
+  const k = /^kalshi:KX[A-Z]+GAME-\d{2}[A-Z]{3}\d{2}([A-Z]+)-([A-Z]+)$/.exec(id);
+  if (k && k[1]!.startsWith(k[2]!) && k[1]!.length > k[2]!.length) return `${k[2]} at ${k[1]!.slice(k[2]!.length)}`;
+  const p = /^polymarket:[a-z]+-([a-z]{2,4})-([a-z]{2,4})-/.exec(id);
+  if (p) return `${p[1]!.toUpperCase()} at ${p[2]!.toUpperCase()}`;
+  return '';
+}
+
 export interface RenderCtx {
   /** event key -> a title from the board's one-market cards */
   titles: Map<string, string>;
+  /** market id -> its event key, from the board's displays */
+  events?: Map<string, string>;
 }
 
 // ---------- the six display types ----------
 
 function events(w: Widget, s: Display, c: RenderCtx) {
   const keys = s.params.event_keys ?? [];
-  const ip = nums(w, 'implied_probability');
-  const mv = nums(w, 'movement');
   const rows = keys.map((k, i) => {
-    const q = quoteOf(w, s.market_ids[i]);
-    const p = pctOf(ip[i]) ?? q?.yes_price_cents ?? null;
-    const d = ptsOf(mv[i]) ?? move(q);
+    const m = s.market_ids[i];
+    const q = quoteOf(w, m);
+    const p = pctOf(numFor(w, 'implied_probability', m, i)) ?? q?.yes_price_cents ?? null;
+    const d = moveOf(w, { market: m, i })?.d ?? move(q);
     return `<div class="game"><span class="g-n">${esc(eventLabel(k, c.titles))}</span><span class="g-s">${spark(line2(q), { area: false, end: false })}</span><span class="g-p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '<span class="mv mv--flat num">—</span>' : mvEl(d)}</div>`;
   });
   return (
     head(s.title, `${keys.length} ${keys.length === 1 ? 'game' : 'games'}`) +
     `<div class="games">${rows.join('')}</div>` +
+    notesHtml(w) +
     stamp(w)
   );
 }
@@ -150,45 +283,61 @@ function events(w: Widget, s: Display, c: RenderCtx) {
 function probability(w: Widget, s: Display) {
   const k = quoteOn(w, 'kalshi');
   const p = quoteOn(w, 'polymarket');
+  const kc = priceOn(w, 'kalshi');
+  const pc = priceOn(w, 'polymarket');
   const ip = pctOf(nums(w, 'implied_probability')[0]);
-  const big = ip ?? k?.yes_price_cents ?? p?.yes_price_cents ?? null;
-  const bigLabel = ip != null ? 'Implied probability' : k ? 'Kalshi price, implied' : 'Implied probability';
-  const d = ptsOf(nums(w, 'movement')[0]) ?? move(k) ?? move(p);
+  const big = ip ?? kc ?? pc ?? null;
+  // "Up 4 points since yesterday": the result's 24 h move, else first paint's (the quote's price 24 h ago).
+  const day = moveOf(w, { window_s: DAY_S });
+  const qd = move(k) ?? move(p);
+  const mv = day ? mvEl(day.d, { long: true, since: day.since }) : qd != null ? mvEl(qd, { long: true, since: sinceWords(DAY_S) }) : '';
   const ev = nums(w, 'expected_value')[0];
   const up = s.params.user_probability;
   const evLine =
     up == null
       ? ''
       : ev
-        ? `<span class="ev">At your ${Math.round(up * 100)}%: EV <b class="num">${esc(fmtNum(ev))}</b> <span>per contract</span></span><span class="pillnote">receipt ${esc(ev.receipt_id)}</span>`
-        : `<span class="ev">At your ${Math.round(up * 100)}%: EV after the first run</span>`;
-  const ex = [k ? `<span>Kalshi <b class="num">${esc(k.yes_price_cents)}¢</b></span>` : '', p ? `<span>Polymarket <b class="num">${esc(p.yes_price_cents)}¢</b></span>` : ''].join('');
-  const chart = line2(k).length ? spark(line2(k), { extra: [line2(k), line2(p)] }) : '';
+        ? `<span class="ev">You think ${Math.round(up * 100)}%: by the math, a YES at this price is worth <b class="num">${esc(fmtNum(ev))}</b> per contract.</span>`
+        : `<span class="ev">You think ${Math.round(up * 100)}%. The math for it comes with the first run.</span>`;
+  const ex = [kc != null ? `<span>Kalshi <b class="num">${esc(kc)}¢</b></span>` : '', pc != null ? `<span>Polymarket <b class="num">${esc(pc)}¢</b></span>` : ''].filter(Boolean).join('<span class="sep">·</span>');
+  const line = lineOf(w);
+  const chart = line.length ? spark(line) : line2(k).length ? spark(line2(k), { extra: [line2(k), line2(p)] }) : '';
+  const span = line.length ? lineSpan(w) : '';
+  const rates = nums(w, 'base_rate_history')
+    .map((n) => baseRateWords(n, recOf(w, n)))
+    .filter((x): x is string => !!x)
+    .map((t) => `<div class="w-note num">${esc(t)}</div>`)
+    .join('');
   return (
-    head(s.title, [k && 'Kalshi', p && 'Polymarket'].filter(Boolean).join(' + ') || undefined) +
-    `<div class="c-main"><div class="c-left"><span class="lbl">${bigLabel}</span><div class="big num">${big == null ? '—' : esc(big) + '%'}</div><div>${d == null ? '' : mvEl(d, ' pts') + ' <span class="lbl">in 24 h</span>'}</div></div><div class="c-chart">${chart}</div></div>` +
-    (ex ? `<div class="c-ex from-m">${ex}<span class="lbl">24 h</span></div>` : '') +
+    head(s.title, [kc != null && 'Kalshi', pc != null && 'Polymarket'].filter(Boolean).join(' + ') || undefined) +
+    `<div class="c-main"><div class="c-left"><div class="big-row"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div><span class="lbl">the market says</span><div class="c-mv">${mv}</div></div><div class="c-chart">${chart}${span ? `<span class="lbl c-span">${esc(span)}</span>` : ''}</div></div>` +
+    (ex ? `<div class="c-ex from-m">${ex}<span class="lbl">for a YES that pays $1</span></div>` : '') +
     (evLine ? `<div class="c-foot from-m">${evLine}</div>` : '') +
+    (rates || w.result?.notes?.length ? `<div class="c-base from-m">${rates}${notesHtml(w)}</div>` : '') +
     stamp(w, 'w-foot from-l')
   );
 }
 
 function gap(w: Widget, s: Display, c: RenderCtx) {
-  const k = quoteOn(w, 'kalshi');
-  const p = quoteOn(w, 'polymarket');
+  const a = priceOn(w, 'kalshi');
+  const b = priceOn(w, 'polymarket');
   const g = nums(w, 'gap')[0];
   const label = eventLabel(s.params.event_keys?.[0] ?? '', c.titles);
-  if (!k || !p) return head(s.title, label) + '<div class="w-empty">Needs a price from both exchanges.</div>' + stamp(w);
-  const a = k.yes_price_cents;
-  const b = p.yes_price_cents;
+  // A game that isn't paired: no gap, and the result says why in words.
+  const why = !g ? plainSummary(w) : null;
+  if (why) return head(s.title, label) + `<div class="w-note">${esc(why)}</div>` + notesHtml(w, why) + stamp(w);
+  if (a == null || b == null) return head(s.title, label) + '<div class="w-empty">Needs a price from both exchanges.</div>' + notesHtml(w) + stamp(w);
   const lo = Math.min(a, b) - 4;
   const span = Math.max(Math.abs(b - a) + 8, 8);
   const pos = (v: number) => 16 + ((v - lo) / span) * 68;
-  const gapPts = g ? ptsOf(g)! : Math.abs(b - a);
+  // The gap is a distance: never negative, whichever exchange is higher.
+  const gapPts = Math.abs(g ? ptsOf(g)! : b - a);
   return (
     head(s.title, label) +
     `<div class="strand"><i class="track"></i><i class="neck"${css(`left:${pos(Math.min(a, b)).toFixed(1)}%;width:${(pos(Math.max(a, b)) - pos(Math.min(a, b))).toFixed(1)}%`)}></i><i class="bead"${css(`left:${pos(a).toFixed(1)}%`)}></i><i class="bead p"${css(`left:${pos(b).toFixed(1)}%`)}></i></div>` +
-    `<div class="g-lab"><span>Kalshi <b class="num">${esc(a)}</b></span><span>Polymarket <b class="num">${esc(b)}</b></span></div><div class="g-big"><span class="big num">${esc(gapPts)}</span><span class="lbl">${gapPts === 1 ? 'pt' : 'pts'} apart</span></div>`
+    `<div class="g-lab"><span>Kalshi <b class="num">${esc(a)}¢</b></span><span>Polymarket <b class="num">${esc(b)}¢</b></span></div>` +
+    `<div class="g-big">${gapPts === 0 ? '<span class="lbl">The same price on both</span>' : `<span class="big num">${esc(gapPts)}</span><span class="lbl">${gapPts === 1 ? 'point' : 'points'} apart</span>`}</div>` +
+    notesHtml(w)
   );
 }
 
@@ -270,13 +419,21 @@ function positions(w: Widget, s: Display) {
 
 function movement(w: Widget, s: Display, c: RenderCtx) {
   const q = quotes(w)[0];
+  // Biggest move compares many games and keeps one: its game is the one the move's receipt was read from.
+  const mvNum = nums(w, 'movement')[0];
+  const src = mvNum ? sourcesOf(w, mvNum)[0] : undefined;
+  const game = (src && marketLabel(src, c)) || eventLabel(s.params.event_keys?.[0] ?? '', c.titles);
   const ip = pctOf(nums(w, 'implied_probability')[0]);
-  const big = ip ?? q?.yes_price_cents ?? null;
-  const d = ptsOf(nums(w, 'movement')[0]) ?? move(q);
+  const big = ip ?? (src ? null : (q?.yes_price_cents ?? null));
+  const m = moveOf(w);
+  const d = m?.d ?? (src ? null : move(q));
+  const since = m ? m.since : d != null ? sinceWords(DAY_S) : '';
+  const line = lineOf(w, src);
   const fresh = w.state === 'new' ? 'is-fresh' : undefined;
   return (
     head(s.title, fresh ? 'new' : undefined, fresh) +
-    `<div class="mvt"><span class="lbl">${esc(eventLabel(s.params.event_keys?.[0] ?? '', c.titles))}</span><div class="row1"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${d == null ? '' : mvEl(d)}</div><div class="c-chart">${spark(line2(q))}</div></div>`
+    `<div class="mvt"><span class="lbl">${esc(game)}</span><div class="row1"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div>${d == null ? '' : `<div class="c-mv">${mvEl(d, { long: true, since })}</div>`}<div class="c-chart">${spark(line.length ? line : line2(q))}</div></div>` +
+    notesHtml(w)
   );
 }
 
@@ -305,12 +462,13 @@ export function displayHtml(w: Widget, c: RenderCtx): string {
 export function cardNumbers(w: Widget): { p: number | null; d: number | null; line: number[] } {
   const q = quoteOn(w, 'kalshi') ?? quotes(w)[0];
   const ip = pctOf(nums(w, 'implied_probability')[0]);
-  return { p: ip ?? q?.yes_price_cents ?? null, d: ptsOf(nums(w, 'movement')[0]) ?? move(q), line: line2(q) };
+  const line = lineOf(w);
+  return { p: ip ?? q?.yes_price_cents ?? null, d: moveOf(w, { window_s: DAY_S })?.d ?? ptsOf(nums(w, 'movement')[0]) ?? move(q), line: line.length ? line : line2(q) };
 }
 
 export function cardHtml(w: Widget, i: number): string {
   const { p, d, line } = cardNumbers(w);
-  return `<div class="card rz"${css(`--i:${i}`)}><div class="top"><span class="p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '' : mvEl(d)}</div><div class="n">${esc(w.spec.title)}</div><div class="c-chart">${spark(line, { end: false })}</div></div>`;
+  return `<div class="card rz"${css(`--i:${i}`)}><div class="top"><span class="p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '' : mvEl(d)}</div><div class="n">${esc(tileName(w))}</div><div class="c-chart">${spark(line, { end: false })}</div></div>`;
 }
 
 export function miniHtml(w: Widget): string {

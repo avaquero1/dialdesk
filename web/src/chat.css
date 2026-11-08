@@ -97,3 +97,6 @@ html[data-motion="reduced"] .chat-shim { animation: none; display: none; }
 html[data-motion="reduced"] .chat, html[data-motion="reduced"] .chat *, html[data-motion="reduced"] .chat-fab { transition-property: opacity, visibility !important; }
 html[data-motion="reduced"][data-layout="phone"] .chat-glass--sheet { transform: none; }
 @keyframes chat-fade { from { opacity: 0; } to { opacity: 1; } }
+/* The sheet's grab handle shows only on the open sheet: closed, the chat box still keeps the sheet's height above the
+   pill, so the handle drew a faint grey bar over the board (W1.2.1). */
+html[data-layout="phone"] .chat:not(.is-open) .chat-handle { opacity: 0; visibility: hidden; }

@@ -91,7 +91,7 @@ export const api = {
   setLook: (look: Look) => call<Look>('PUT', '/api/look', look),
   // The ⋯ menu. keepalive: an Undo offer still waiting when the page goes away is sent anyway.
   resize: (id: string, size: 'S' | 'M' | 'L' | 'XL') => call<Widget>('PATCH', `/api/widgets/${encodeURIComponent(id)}/size`, { size }),
-  refresh: (id: string) => call<{ job_id: string }>('POST', `/api/widgets/${encodeURIComponent(id)}/refresh`, {}),
+  refresh: (id: string) => call<{ job_id: string; joined?: boolean }>('POST', `/api/widgets/${encodeURIComponent(id)}/refresh`, {}),
   clear: (id: string, o: { keepalive?: boolean } = {}) => call<Widget>('POST', `/api/widgets/${encodeURIComponent(id)}/clear`, {}, o),
   remove: (id: string, o: { keepalive?: boolean } = {}) => call<{ ok: true }>('DELETE', `/api/widgets/${encodeURIComponent(id)}`, undefined, o),
   chat: (conversation_id: string | null, message: string) =>

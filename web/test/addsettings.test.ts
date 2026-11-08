@@ -202,7 +202,7 @@ describe('Add, Settings, screenshots and the article count at phone size', () =>
   it('Add: one tap adds a Two prices widget with its prescribed defaults, and it pours in', async () => {
     const gaps = () => page.evaluate(() => fetch('/api/board').then((r) => r.json()).then((b: { widgets: { spec: { type?: string; widget_id: string } }[] }) => b.widgets.filter((w) => w.spec.type === 'gap').map((w) => w.spec.widget_id)));
     const before = await gaps();
-    const onBoard = await tile('Gap').count();
+    const onBoard = await tile('Two prices').count();
     await tile('Add').tap();
     await sheet().waitFor();
     await settled(page);
@@ -212,7 +212,7 @@ describe('Add, Settings, screenshots and the article count at phone size', () =>
     await sheet().locator('[data-add="gap"]').tap();
     // It pours in like an accepted proposal: the board's is-new entrance.
     await page.waitForFunction(() => !!document.querySelector('#board > .w.is-new'), null, { timeout: 10_000, polling: 'raf' });
-    await expect.poll(() => tile('Gap').count(), { timeout: 10_000 }).toBe(onBoard + 1);
+    await expect.poll(() => tile('Two prices').count(), { timeout: 10_000 }).toBe(onBoard + 1);
     const after = await gaps();
     expect(after.length).toBe(before.length + 1);
     const added = after.find((id) => !before.includes(id))!;
@@ -223,7 +223,7 @@ describe('Add, Settings, screenshots and the article count at phone size', () =>
     );
     expect(spec).toMatchObject({ size: 'S', title: 'Gap' });
     await settled(page);
-    await tile('Gap').last().scrollIntoViewIfNeeded();
+    await tile('Two prices').last().scrollIntoViewIfNeeded();
     await shot(page, '5-add-poured-in');
   });
 

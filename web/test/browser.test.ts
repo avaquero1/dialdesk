@@ -115,7 +115,7 @@ describe('web app on the local stack', () => {
       const market = await tileText(page, 'Chiefs beat the Bills');
       expect(market).toMatch(/Kalshi \d+¢/);
       expect(market).toMatch(/Polymarket \d+¢/);
-      expect(await tileText(page, 'Gap')).toMatch(/pts? apart/);
+      expect(await tileText(page, 'Two prices')).toMatch(/points? apart|same price/);
       expect(await tileText(page, 'NFL Week 10')).toMatch(/\d+\s*%/);
       expect(await page.locator('.foot').innerText()).toContain('Not investment advice.');
 
@@ -158,7 +158,7 @@ describe('web app on the local stack', () => {
     const page = await open(ctx);
     await ready(page);
     const before = await visualOrder(page);
-    const gap = page.locator('#board > .w[aria-label="Gap"]');
+    const gap = page.locator('#board > .w[aria-label="Two prices"]');
     const tonight = page.locator('#board > .w[aria-label="Tonight"]');
     const a = (await gap.boundingBox())!;
     const b = (await tonight.boundingBox())!;

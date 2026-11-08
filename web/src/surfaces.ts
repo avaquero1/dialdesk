@@ -288,7 +288,7 @@ export function openFolder(id: string) {
   panel(
     'folder-open',
     `<div class="sh-head${rz(0)}><h2 class="fo-title">${esc(f.spec.title)}</h2>${closeBtn(0)}</div>` +
-      `<div class="sh-sub${rz(1)}>${kids.length} ${kids.length === 1 ? 'market' : 'markets'} · implied probability and 24 h move</div><div class="fo-grid">${cards}</div>`,
+      `<div class="sh-sub${rz(1)}>${kids.length} ${kids.length === 1 ? 'market' : 'markets'} · the chance and the move since yesterday</div><div class="fo-grid">${cards}</div>`,
     { w: 540, from: tileFrom(id), fromFn: () => tileFrom(id) },
   );
 }

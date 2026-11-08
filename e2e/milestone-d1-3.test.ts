@@ -194,7 +194,7 @@ describe('Milestone D1.3: "Your account" shows the balance and positions, read o
     const { displayHtml, setConnections } = await web();
     setConnections((await me(EDGE.connections, {})).connections);
     const shown = text(displayHtml(display, { titles: new Map() }));
-    expect(shown).toMatch(/^Positions as of \d{1,2}:\d\d/);
+    expect(shown).toMatch(/^Your account as of \d{1,2}:\d\d/);
     expect(shown).toContain('Kalshi read only');
     expect(shown).toMatch(/\$[\d,]+\.\d\d Balance · \d open positions?/);
     expect(shown).toMatch(/[+−]?\$[\d,]+\.\d\d today/);

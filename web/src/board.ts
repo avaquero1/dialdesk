@@ -60,10 +60,20 @@ const sizeCls = (w: Widget) => (w.spec.kind === 'display' ? `w--${w.spec.size.to
 /** Titles of the board's one-market cards, by event key, so other widgets can name an event. */
 function renderCtx(): RenderCtx {
   const titles = new Map<string, string>();
+  const events = new Map<string, string>();
   for (const w of S.widgets.values()) {
-    if (w.spec.kind === 'display' && w.spec.params.event_keys?.length === 1 && w.spec.type === 'probability') titles.set(w.spec.params.event_keys[0]!, w.spec.title);
+    const s = w.spec;
+    if (s.kind !== 'display') continue;
+    const keys = s.params.event_keys ?? [];
+    // A game's title from its one-market card ("Chiefs at Bills"); a larger Market display may say "Chiefs beat the Bills".
+    if (keys.length === 1 && s.type === 'probability' && (s.size === 'S' || !titles.has(keys[0]!))) titles.set(keys[0]!, s.title);
+    // Which game each market is: one game's markets, or a list of games with one market each.
+    s.market_ids.forEach((m, i) => {
+      const k = keys.length === 1 ? keys[0] : keys.length === s.market_ids.length ? keys[i] : undefined;
+      if (k && !events.has(m)) events.set(m, k);
+    });
   }
-  return { titles };
+  return { titles, events };
 }
 
 // ---------- refraction: one lens map per glass size, cut to that size, written as data URLs ----------

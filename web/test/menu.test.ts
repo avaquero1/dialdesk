@@ -39,6 +39,8 @@ const tile = (title: string) => page.locator(`#board > .w:not(.is-out)[aria-labe
 const menu = () => page.locator('.surface.menu.is-open');
 const row = (label: string) => menu().locator('.m-main .mi', { hasText: label });
 const undoToast = () => page.locator('.undo-toast');
+/** The display's name on screen (W1.2.1): the catalog's inside titles in plain words. */
+const plain = (t: string) => ({ Gap: 'Two prices', Positions: 'Your account', Movement: 'Biggest move' } as Record<string, string>)[t] ?? t;
 
 async function openMenu(title: string) {
   await tile(title).locator('.w-menu-btn').tap();
@@ -78,7 +80,7 @@ beforeAll(async () => {
   await ready(page);
   const b = await page.evaluate(() => fetch('/api/board').then((r) => r.json() as Promise<{ widgets: { spec: Record<string, unknown> & { title: string; place: object } }[] }>));
   const grid = b.widgets.map((w) => w.spec).filter((s) => !('folder_id' in s.place));
-  const find = (f: (s: Record<string, unknown>) => boolean) => grid.find(f)?.title ?? '';
+  const find = (f: (s: Record<string, unknown>) => boolean) => plain(grid.find(f)?.title ?? '');
   T.market = find((s) => s.type === 'probability' && s.size === 'M');
   T.gap = find((s) => s.type === 'gap');
   T.tonight = find((s) => s.type === 'events');
