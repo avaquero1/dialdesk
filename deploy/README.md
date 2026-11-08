@@ -65,6 +65,8 @@ buckets, the secrets, `db-init.sql` over TLS, `docker compose up --wait`, and th
   An unchanged, confirmed table isn't reloaded.
 - **Egress starts log-only.** Read `journalctl -k | grep vha-egress-would-drop` on control, add what's missing to
   `egress-hosts.ts`, then deploy again with `--enforce-egress` (`--log-only-egress` goes back).
-- **The sandbox machine** comes after: `VHA_CONTROL_HOST=… VHA_SANDBOX_HOST=root@<its VPC address> VHA_SSH_KEY=…
-  deploy/scripts/deploy.sh sandbox` copies runner's token hash (`/etc/vha/secrets/sandbox-manager/env`) to
-  `/etc/vha/sandbox-manager.env` there, through control, and then runs the sandbox machine's own setup.
+- **The sandbox machine** (`deploy/sandbox-host`): with `VHA_SANDBOX_HOST=root@<it>` set, `push` does it first, and
+  `deploy.sh sandbox` does it alone. The VPC must already be attached (`PROVISION.md`, step 4). It checks the VPC address
+  is on `SANDBOX_VPC_IF`, runs `setup.sh` with `--vpc-if`, `--control-vpc-ip` and `--vpc-subnet` (and `vha-nft-confirm`
+  from a new connection), sets `SANDBOX_MANAGER_ADDR` to `SANDBOX_VPC_IP:8200`, and copies the machine's runner token
+  (`/etc/vha/runner-token`) to control as `SANDBOX_MANAGER_TOKEN_FILE`, which prod-secrets.ts gives to runner.

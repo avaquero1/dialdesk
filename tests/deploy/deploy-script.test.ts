@@ -83,7 +83,7 @@ describe('deploy.sh control --dry-run', () => {
       /docker compose -p vha-control -f \S+\/deploy\/compose\.control\.yml --env-file \S+ --env-file \/etc\/vha\/release\.env up -d --wait/,
       /curl .*--resolve vultrcontest\.vaquerothe\.dev:443:127\.0\.0\.1 .*https:\/\/vultrcontest\.vaquerothe\.dev\//,
       /exec -T runner wget .*http:\/\/10\.1\.96\.4:8200\/health/,
-      /\/etc\/vha\/sandbox-manager\.env/,
+      /SANDBOX_MANAGER_TOKEN_FILE|sandbox machine's own/,
     ];
     for (const re of want) expect(r.out, String(re)).toMatch(re);
     expect(r.out).toContain('egress mode: log-only');
@@ -181,29 +181,62 @@ describe('deploy.sh control --dry-run, options and settings', () => {
 });
 
 describe('deploy.sh push and sandbox --dry-run (the dev PC side)', () => {
-  const machines = { VHA_CONTROL_HOST: 'root@control.example.invalid', VHA_SANDBOX_HOST: 'root@10.1.96.4', VHA_SSH_KEY: '/nonexistent/key' };
+  const machines = { VHA_CONTROL_HOST: 'root@control.example.invalid', VHA_SANDBOX_HOST: 'root@sandbox.example.invalid', VHA_SSH_KEY: '/nonexistent/key' };
 
-  it('push copies HEAD, runs control there and confirms over a new connection', () => {
-    const r = deploy(['push', '--dry-run', '--enforce-egress'], example, machines);
+  it('push copies HEAD, does the sandbox machine first, runs control there and confirms over a new connection', () => {
+    const r = deploy(['push', '--dry-run', '--env-file', '@env', '--enforce-egress'], example, machines);
+    expect(r.err.replace(/^push: uncommitted changes are NOT copied.*\n/m, '')).toBe('');
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/git archive --format=tar HEAD \| ssh root@control\.example\.invalid .*\/opt\/vha\/src\/[0-9a-f]{12}/);
-    expect(r.out).toMatch(/deploy\/scripts\/deploy\.sh\\? control\\? --dry-run\\? --enforce-egress/);
+    const sbx = r.out.indexOf('== 2/3 the sandbox machine first');
+    const ctl = r.out.indexOf('== 3/3 run deploy.sh control');
+    expect(sbx).toBeGreaterThan(0);
+    expect(ctl).toBeGreaterThan(sbx);
+    // control reads its own /etc/vha/deploy.env: the local --env-file is not passed on.
+    expect(r.out).toMatch(/deploy\/scripts\/deploy\.sh\\? control\\? --dry-run\\? --enforce-egress'?$/m);
     expect(r.out).toContain('ssh root@control.example.invalid vha-nft-confirm');
     expect(r.calls).toBe('');
   });
 
-  it('sandbox copies runner\'s token hash through control and names the hook', () => {
-    const r = deploy(['sandbox', '--dry-run'], example, machines);
+  it('push without VHA_SANDBOX_HOST does control only', () => {
+    const r = deploy(['push', '--dry-run'], example, { ...machines, VHA_SANDBOX_HOST: '' });
     expect(r.code).toBe(0);
-    expect(r.out).toContain('ssh root@control.example.invalid cat /etc/vha/secrets/sandbox-manager/env | ssh (via control) root@10.1.96.4');
-    expect(r.out).toContain('/etc/vha/sandbox-manager.env');
-    expect(r.out).toMatch(/S1\.3\.1/);
+    expect(r.out).toContain('== 2/2 run deploy.sh control');
+    expect(r.out).not.toContain('sandbox-host/push.sh');
+  });
+
+  it('sandbox: checks the VPC, runs setup.sh with the VPC flags, moves the manager to the VPC address, copies the token', () => {
+    const r = deploy(['sandbox', '--dry-run', '--env-file', '@env'], example, machines);
+    expect(r.err).toBe('');
+    expect(r.code).toBe(0);
+    const want = [
+      /ssh root@sandbox\.example\.invalid .*ip\\? -4\\? -o\\? addr\\? show\\? dev\\? enp8s0.*10\.1\.96\.4/,
+      /deploy\/sandbox-host\/push\.sh --ssh-from 203\.0\.113\.10 --vpc-if enp8s0 --control-vpc-ip 10\.1\.96\.3 --vpc-subnet 10\.1\.96\.0\/20$/m,
+      /ssh root@sandbox\.example\.invalid vha-nft-confirm/,
+      /SANDBOX_MANAGER_ADDR=10\.1\.96\.4:8200/,
+      /systemctl\\? restart\\? vha-sandbox-manager/,
+      /ssh root@sandbox\.example\.invalid cat \/etc\/vha\/runner-token \| ssh root@control\.example\.invalid .*\/etc\/vha\/inputs\/sandbox-runner-token/,
+    ];
+    for (const re of want) expect(r.out, String(re)).toMatch(re);
+    // In order: VPC, setup, confirm, manager address, token.
+    const at = want.map((re) => r.out.search(re));
+    expect([...at].sort((x, y) => x - y)).toEqual(at);
     expect(r.calls).toBe('');
   });
 
-  it('push needs the machines from the environment', () => {
+  it('a dry run of the sandbox part needs a local --env-file; push needs the machines', () => {
+    expect(deploy(['sandbox', '--dry-run'], example, machines).err).toMatch(/needs --env-file/);
     const r = deploy(['push', '--dry-run'], example, { VHA_CONTROL_HOST: '', VHA_SSH_KEY: '' });
     expect(r.code).not.toBe(0);
     expect(r.err).toMatch(/VHA_SSH_KEY/);
+  });
+});
+
+describe('control.nft', () => {
+  it('keeps a drop policy on input and forward (ufw is turned off on both machines)', () => {
+    const nft = readFileSync(join(root, 'deploy/nftables/control.nft'), 'utf8');
+    expect(nft).toMatch(/chain input \{\s*type filter hook input priority filter - 10; policy drop;/);
+    expect(nft).toMatch(/chain forward \{\s*type filter hook forward priority filter - 10; policy drop;/);
+    expect(nft).toMatch(/iifname \$PUBLIC_IF ip saddr \$ADMIN_IP tcp dport 22 accept/);
   });
 });

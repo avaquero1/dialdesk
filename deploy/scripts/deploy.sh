@@ -478,7 +478,7 @@ sandbox_part() {
   [[ $(cfg VPC_SUBNET) =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$ ]] || die "VPC_SUBNET must look like 10.1.96.0/20" 2
   input SANDBOX_MANAGER_TOKEN_FILE
   local ip; ip=$(cfg SANDBOX_VPC_IP)
-  local setup=$SCRIPT_DIR/../sandbox-host/push.sh
+  local setup; setup=$(cd "$SCRIPT_DIR/.." && pwd)/sandbox-host/push.sh
   [[ -x $setup ]] || die "deploy/sandbox-host/push.sh is missing" 2
 
   note "b: the VPC interface"
