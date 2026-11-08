@@ -78,14 +78,18 @@ SELECT
   format('GRANT %I TO CURRENT_USER WITH INHERIT FALSE, SET TRUE', 'svc_' || s.svc),
   format('CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I', s.svc, s.owner),
   format('ALTER SCHEMA %I OWNER TO %I', s.svc, s.owner),
+  -- Only the schema's owner may change its rights, and the admin has none of the owner's rights by inheritance
+  -- (a non-superuser on managed Postgres): these run as the owner, through the SET the GRANTs above gave.
+  format('SET ROLE %I', s.owner),
   format('REVOKE ALL ON SCHEMA %I FROM PUBLIC', s.svc),
-  format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), 'svc_' || s.svc),
   -- A schema the login doesn't own (audit): it may use it, not create in it, and it may only
   -- SELECT and INSERT on the tables the owner makes there.
   CASE WHEN s.owner <> 'svc_' || s.svc THEN format('GRANT USAGE ON SCHEMA %I TO %I', s.svc, 'svc_' || s.svc) END,
   CASE WHEN s.owner <> 'svc_' || s.svc THEN format('REVOKE CREATE ON SCHEMA %I FROM %I', s.svc, 'svc_' || s.svc) END,
   CASE WHEN s.owner <> 'svc_' || s.svc
-       THEN format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT, INSERT ON TABLES TO %I', s.owner, s.svc, 'svc_' || s.svc) END
+       THEN format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT, INSERT ON TABLES TO %I', s.owner, s.svc, 'svc_' || s.svc) END,
+  'RESET ROLE',
+  format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), 'svc_' || s.svc)
 FROM db_init_services s
 ORDER BY s.svc
 \gexec

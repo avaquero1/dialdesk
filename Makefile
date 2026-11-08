@@ -15,7 +15,7 @@ export SANDBOX_COMPUTE_IMAGE ?= vha-engine-compute:$(IMAGE_TAG)
 prune-tags = $(if $(filter file,$(origin $(1))),docker image ls --format '{{.Repository}}:{{.Tag}}' $(2) | \
   grep -x '$(2):$(IMAGE_WT)-[0-9a-f]\{12\}' | grep -vx '$($(1))' | xargs -r docker image rm || true,true)
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check shellcheck deploy-dry-run e2e-real e2e-live agent-pg-test
+.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check shellcheck deploy-dry-run db-init-test e2e-real e2e-live agent-pg-test
 
 check: rust gen-check typecheck lint shellcheck contracts web e2e
 	@echo "make check: all green"
@@ -86,6 +86,10 @@ valkey-test:
 	$(VALKEY_TEST) up -d --wait valkey
 	VALKEY_TEST=1 VALKEY_TEST_PORT=$(VALKEY_TEST_PORT) npx vitest run --project contracts packages/service-kit/test/valkey.test.ts services/runner/test/valkey-worker.test.ts; \
 	  s=$$?; $(VALKEY_TEST) down -v; exit $$s
+
+# db-init.sql as Managed Postgres runs it (a non-superuser admin that owns the database), on a throwaway Postgres. Needs Docker.
+db-init-test:
+	tests/deploy/db-init-managed.sh
 
 # audit on a real Postgres 17 and Valkey 8.1, as svc_audit and svc-audit: the chain, signed heads, verify catching a
 # tampered row, UPDATE/DELETE refused, XAUTOCLAIM and the trust numbers. Its own Compose project and ports, removed afterwards.
