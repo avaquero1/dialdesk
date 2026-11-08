@@ -295,6 +295,7 @@ control_main() {
 # starts audit (audit refuses to start while one is pending). AUDIT_MIGRATE_DATABASE_URL is an admin login that may
 # SET ROLE audit_owner: it is built inside the container from the pgpass file (or, for the local database, postgres/env)
 # and exists only in npm's environment there. It is never on a command line, in `docker inspect`, or in audit's env.
+# shellcheck disable=SC2016 # JavaScript, not shell: nothing in it expands here
 MIGRATE_JS='
 const fs = require("fs");
 const e = process.env;
@@ -502,7 +503,9 @@ sandbox_part() {
   if [[ $ENV_FILE == "$ETC/deploy.env" ]]; then
     note "settings: control:$ETC/deploy.env"
     if ((DRY)); then die "a dry run of the sandbox part needs --env-file (it doesn't read control's settings)" 2; fi
-    local tmp; tmp=$(mktemp); ssh "${SSH_OPTS[@]}" "$control" cat "$ETC/deploy.env" > "$tmp"; read_env "$tmp"; rm -f "$tmp"
+    local tmp; tmp=$(mktemp)
+    # shellcheck disable=SC2029 # a fixed path, built here on purpose
+    ssh "${SSH_OPTS[@]}" "$control" cat "$ETC/deploy.env" > "$tmp"; read_env "$tmp"; rm -f "$tmp"
   else
     read_env "$ENV_FILE"
   fi

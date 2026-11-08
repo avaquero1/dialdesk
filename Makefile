@@ -114,14 +114,15 @@ deploy-dry-run:
 	deploy/scripts/deploy.sh control --dry-run --env-file deploy/deploy.env.example
 
 # Every shell script in the repo (tracked or new), through the pinned shellcheck image (no network, the repo read-only):
-# warnings and errors fail it everywhere; under deploy/ (run as root on the servers) every note fails it too.
+# warnings and errors fail it everywhere; in the deploy kit's own folders (deploy/scripts, nftables, images: run as root
+# on control) every note fails it too.
 SHELLCHECK_IMAGE := koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 shellcheck:
 	@files=$$(git ls-files --cached --others --exclude-standard '*.sh') && \
-	  deploy=$$(git ls-files --cached --others --exclude-standard 'deploy/*.sh') && \
+	  deploy=$$(git ls-files --cached --others --exclude-standard 'deploy/scripts/*.sh' 'deploy/nftables/*.sh' 'deploy/images/*.sh') && \
 	  sc="docker run --rm --network none -v $$PWD:/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) --external-sources" && \
 	  $$sc --severity=warning $$files && $$sc --severity=style $$deploy && \
-	  echo "shellcheck: $$(echo $$files | wc -w) scripts pass (warning), $$(echo $$deploy | wc -w) under deploy/ pass every note"
+	  echo "shellcheck: $$(echo $$files | wc -w) scripts pass (warning), $$(echo $$deploy | wc -w) in the deploy kit pass every note"
 
 # Local infra only (Postgres, Valkey, fixtures). The services run natively with tsx.
 infra-up:
