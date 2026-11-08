@@ -14,6 +14,8 @@
 #   board and audit s3, markets brave-search, connections connections-master, models vultr-inference, audit
 #   audit-signing-key), so no *_FILE variable is set here. tests/deploy/key-files.test.ts checks this file, those
 #   defaults and what deploy/prod-secrets.ts writes against each other.
+# - Services call each other by their `apps-<name>` alias: a plain name on a container that is also on `egress` can
+#   resolve to its egress address, and that bridge has container-to-container traffic off.
 # - Networks: `apps` is internal (no route out). Only the containers that must reach something outside are also on
 #   `egress`, each at a fixed address, so the host firewall (deploy/nftables/control.nft) can allow per container.
 #   edge and valkey are on `apps` only.
@@ -91,7 +93,7 @@ services:
       ACCOUNTS_HOST: 0.0.0.0
     secrets: [{ source: accounts-env, target: env }, { source: session-key, target: session-key }]
     networks:
-      apps: {}
+      apps: { aliases: [apps-accounts] }
       egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.17" }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8101/health"], <<: *health }
 
@@ -110,7 +112,7 @@ services:
     secrets: [{ source: board-env, target: env }, { source: board-s3, target: s3 }]
     volumes: ["board_screenshots:/var/lib/board/screenshots"]
     networks:
-      apps: {}
+      apps: { aliases: [apps-board] }
       egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.16" }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8102/health"], <<: *health }
 
@@ -122,7 +124,7 @@ services:
     environment: { NODE_ENV: production, AGENT_HOST: 0.0.0.0 }
     secrets: [{ source: agent-env, target: env }]
     networks:
-      apps: {}
+      apps: { aliases: [apps-agent] }
       egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.18" }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8103/health"], <<: *health }
 
@@ -134,7 +136,7 @@ services:
     environment: { NODE_ENV: production, RUNNER_HOST: 0.0.0.0 }
     secrets: [{ source: runner-env, target: env }]
     networks:
-      apps: {}
+      apps: { aliases: [apps-runner] }
       # Reaches sandbox-manager over the VPC (RUNNER_URL_SANDBOX_MANAGER in its env file).
       egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.14" }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8104/health"], <<: *health }
@@ -149,7 +151,7 @@ services:
       # /run/secrets/brave-search: an empty file = no Brave key, and markets skips Brave with one log line.
     secrets: [{ source: markets-env, target: env }, { source: brave-search, target: brave-search }]
     networks:
-      apps: {}
+      apps: { aliases: [apps-markets] }
       egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.12" }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8105/health"], <<: *health }
 
@@ -164,7 +166,7 @@ services:
       CONNECTIONS_KALSHI_ENVS: ${CONNECTIONS_KALSHI_ENVS:-demo}
     secrets: [{ source: connections-env, target: env }, { source: connections-master, target: connections-master }]
     networks:
-      apps: {}
+      apps: { aliases: [apps-connections] }
       egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.13" }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8106/health"], <<: *health }
 
@@ -177,7 +179,7 @@ services:
       MODELS_HOST: 0.0.0.0
     secrets: [{ source: models-env, target: env }, { source: vultr-inference, target: vultr-inference }]
     networks:
-      apps: {}
+      apps: { aliases: [apps-models] }
       egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.11" }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8107/health"], <<: *health }
 
@@ -197,7 +199,7 @@ services:
     secrets: [{ source: audit-env, target: env }, { source: audit-signing-key, target: audit-signing-key }, { source: audit-s3, target: s3 }]
     volumes: ["audit_heads:/var/lib/audit/heads"]
     networks:
-      apps: {}
+      apps: { aliases: [apps-audit] }
       egress: { ipv4_address: "${EGRESS_PREFIX:-172.31.250}.15" }
     healthcheck: { test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8108/health"], <<: *health }
 

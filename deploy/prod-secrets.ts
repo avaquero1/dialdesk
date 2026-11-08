@@ -121,7 +121,7 @@ export function run(argv: string[], env: Env, print: (s: string) => void): numbe
       if (caller === 'browser' || caller === 'public') continue;
       for (const callee of callees) {
         const t = value(`token.${caller}.${callee}`);
-        const url = callee === 'sandbox-manager' ? `http://${vpcIp}:${PORTS['sandbox-manager']}` : `http://${callee}:${PORTS[callee as ServiceName]}`;
+        const url = callee === 'sandbox-manager' ? `http://${vpcIp}:${PORTS['sandbox-manager']}` : `http://apps-${callee}:${PORTS[callee as ServiceName]}`;
         envs.get(caller)!.push(`${envKey(caller, `TOKEN_${tag(callee)}`)}=${t}`, `${envKey(caller, `URL_${tag(callee)}`)}=${url}`);
         (callers[callee] ??= []).push(`${caller}:${hashToken(t)}`);
       }

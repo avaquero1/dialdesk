@@ -319,3 +319,10 @@ describe('control.nft and the apps network', () => {
     expect(rules.map((l) => l.trim())).toEqual(['iifname "vha-apps" oifname "vha-apps" accept']);
   });
 });
+
+describe('service names on the apps network', () => {
+  const compose = readFileSync(join(root, 'deploy/compose.control.yml'), 'utf8');
+  it('every service on both networks has an apps-only alias (a plain name can resolve to its egress address)', () => {
+    for (const s of ['accounts', 'board', 'agent', 'runner', 'markets', 'connections', 'models', 'audit']) expect(compose).toContain(`apps: { aliases: [apps-${s}] }`);
+  });
+});

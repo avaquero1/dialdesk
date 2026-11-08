@@ -80,7 +80,7 @@ describe('deploy/prod-secrets.ts', () => {
       }
     }
     expect(kv(join(out, 'runner/env')).get('RUNNER_URL_SANDBOX_MANAGER')).toBe('http://10.10.0.5:8200');
-    expect(kv(join(out, 'agent/env')).get('AGENT_URL_MODELS')).toBe('http://models:8107');
+    expect(kv(join(out, 'agent/env')).get('AGENT_URL_MODELS')).toBe('http://apps-models:8107');
     expect(readFileSync(join(out, 'sandbox-manager/env'), 'utf8')).not.toMatch(/TOKEN/);
   });
 
@@ -106,7 +106,7 @@ describe('deploy/prod-secrets.ts', () => {
     const rule = (s: string) => acl.find((l) => l.startsWith(`user ${valkeyUser(s as never)} on `))!;
     for (const s of ['board', 'agent', 'connections']) {
       const mine = kv(join(out, s, 'env'));
-      expect(mine.get(envKey(s, 'URL_ACCOUNTS')), s).toBe('http://accounts:8101');
+      expect(mine.get(envKey(s, 'URL_ACCOUNTS')), s).toBe('http://apps-accounts:8101');
       expect(accounts).toContain(`${s}:${hashToken(mine.get(envKey(s, 'TOKEN_ACCOUNTS'))!)}`);
       expect(rule(s), s).toMatch(/ &events\.account\.deleted\b.* \+subscribe\b/);
       expect(first.printed).toMatch(new RegExp(`${s}/env .*${envKey(s, 'TOKEN_ACCOUNTS')} ${envKey(s, 'URL_ACCOUNTS')}`));
