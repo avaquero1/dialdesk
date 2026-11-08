@@ -229,6 +229,21 @@
   },
   {
     "service": "edge",
+    "name": "linkConnection",
+    "method": "PUT",
+    "path": "/api/widgets/:widget_id/connection",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "\"Your account\" shows this connected account (read only; numbers only with the user's consent)."
+  },
+  {
+    "service": "edge",
     "name": "addSource",
     "method": "POST",
     "path": "/api/widgets/:widget_id/sources",
@@ -684,6 +699,21 @@
   },
   {
     "service": "board",
+    "name": "setConnection",
+    "method": "PUT",
+    "path": "/widgets/:widget_id/connection",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "Link a connected account to a \"Your account\" (positions) display: board checks the widget and the connection (connections.list) are the account's, sets params.connection_id and asks for a numbers run. The user's consent still gates what runner may read (connections.numbers)."
+  },
+  {
+    "service": "board",
     "name": "addSource",
     "method": "POST",
     "path": "/widgets/:widget_id/sources",
@@ -954,11 +984,12 @@
     "method": "GET",
     "path": "/connections",
     "callers": [
-      "edge"
+      "edge",
+      "board"
     ],
     "status": 200,
     "errors": [],
-    "summary": "An account's connections."
+    "summary": "An account's connections (board: to check a display's link belongs to the account)."
   },
   {
     "service": "connections",

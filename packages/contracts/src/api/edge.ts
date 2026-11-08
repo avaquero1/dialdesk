@@ -3,7 +3,7 @@
  * edge fills `account_id` from the session, so browser bodies never carry it.
  */
 import { z } from 'zod';
-import { CandidateId, ConversationId, Domain, Ok, ProposalId, ReceiptId, RunId, WidgetId } from '../common.ts';
+import { CandidateId, ConnectionId, ConversationId, Domain, Ok, ProposalId, ReceiptId, RunId, WidgetId } from '../common.ts';
 import { DisplaySize, DisplayType } from '../catalog.ts';
 import { api } from '../endpoint.ts';
 import { Look } from '../look.ts';
@@ -150,6 +150,16 @@ export const EDGE = api('edge', {
     status: 202,
     errors: [404, 429],
     summary: 'Menu: Refresh now. `joined`: a run of the same kind was already asked for in this minute ("Updated just now").',
+  },
+  linkConnection: {
+    method: 'PUT',
+    path: '/api/widgets/:widget_id/connection',
+    callers: ['browser'],
+    params: wid,
+    body: z.object({ connection_id: ConnectionId }).strict(),
+    response: Widget,
+    errors: [400, 404],
+    summary: '"Your account" shows this connected account (read only; numbers only with the user\'s consent).',
   },
   addSource: {
     method: 'POST',

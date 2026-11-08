@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AccountId, CandidateId, Cents, Domain, Exchange, MarketId, Ok, ProposalId, ReceiptId, ResultId, RunId, Timestamp, WidgetId } from '../common.ts';
+import { AccountId, CandidateId, Cents, ConnectionId, Domain, Exchange, MarketId, Ok, ProposalId, ReceiptId, ResultId, RunId, Timestamp, WidgetId } from '../common.ts';
 import { DisplaySize } from '../catalog.ts';
 import { api } from '../endpoint.ts';
 import { RunTraceStep, WidgetResult } from '../result.ts';
@@ -193,6 +193,17 @@ export const BOARD = api('board', {
     status: 202,
     errors: [404, 429],
     summary: 'Refresh now: enqueue a run, or join the run of the same kind already asked for in this minute.',
+  },
+  setConnection: {
+    method: 'PUT',
+    path: '/widgets/:widget_id/connection',
+    callers: ['edge'],
+    params: wid,
+    body: z.object({ account_id: AccountId, connection_id: ConnectionId }).strict(),
+    response: Widget,
+    errors: [400, 404],
+    summary:
+      'Link a connected account to a "Your account" (positions) display: board checks the widget and the connection (connections.list) are the account\'s, sets params.connection_id and asks for a numbers run. The user\'s consent still gates what runner may read (connections.numbers).',
   },
   addSource: {
     method: 'POST',

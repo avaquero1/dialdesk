@@ -81,10 +81,10 @@ export const CONNECTIONS = api('connections', {
   list: {
     method: 'GET',
     path: '/connections',
-    callers: ['edge'],
+    callers: ['edge', 'board'],
     query: accQuery,
     response: z.object({ connections: z.array(Connection) }).strict(),
-    summary: "An account's connections.",
+    summary: "An account's connections (board: to check a display's link belongs to the account).",
   },
   setConsent: {
     method: 'PUT',
