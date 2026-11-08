@@ -5,13 +5,14 @@
 import type { Account, EventName, Look } from '@app/contracts';
 import { initActions, menuAction } from './actions.ts';
 import { $, finishAnimations, raf2, root, wait } from './dom.ts';
-import { ApiError, api, setApiHooks } from './api.ts';
+import { ApiError, OFFLINE, api, setApiHooks } from './api.ts';
 import { showAuth } from './auth.ts';
-import { EL, S, bindBoard, buildLens, desktopPlaces, isDragging, layoutAll, mount, reconcile, shimmer, updateRefraction } from './board.ts';
+import { EL, S, bindBoard, buildLens, desktopPlaces, isDragging, layoutAll, mount, reconcile as reconcileBoard, updateRefraction } from './board.ts';
 import { askAbout, closeChat, initChat } from './chat.ts';
 import { fillIcons } from './icons.ts';
 import { Live } from './live.ts';
 import { initLook, lookFromServer } from './look.ts';
+import { initMoment, onRunEvent, paintAll } from './moment.ts';
 import { closeSurface, initSurfaces, openApp, openFolder, openMenu, openNow, syncLook, toast } from './surfaces.ts';
 import { openHow } from './safety.ts';
 
@@ -27,12 +28,23 @@ let account: Account | null = null;
 let live: Live | null = null;
 let noticeT = 0;
 
-function notice(text: string) {
+/** `stay`: until hideNotice (offline). */
+function notice(text: string, stay = false) {
   const n = $('#notice');
   n.textContent = text;
   n.classList.add('on');
   clearTimeout(noticeT);
-  noticeT = window.setTimeout(() => n.classList.remove('on'), 5000);
+  if (!stay) noticeT = window.setTimeout(() => n.classList.remove('on'), 5000);
+}
+function hideNotice(text: string) {
+  const n = $('#notice');
+  if (n.textContent === text) n.classList.remove('on');
+}
+
+/** A fresh board on screen, with each tile's safety line. */
+function reconcile(widgets: Parameters<typeof reconcileBoard>[0]) {
+  reconcileBoard(widgets);
+  paintAll();
 }
 
 function setMotion() {
@@ -48,8 +60,15 @@ function setMotion() {
   root.dataset.refract = canRefract && pref.refract !== '0' && Q.get('refract') !== '0' ? '1' : '0';
 }
 
-/** The session ended (a 401, or /live closed with 4001 and /api/me agrees): back to the door. */
-function sessionLost() {
+/** The session ended (a 401, or /live closed with 4001 and /api/me agrees): back to the door, the board kept. */
+function sessionLost(elsewhere = true) {
+  if (elsewhere && account) {
+    try {
+      sessionStorage.setItem('signed-out', '1');
+    } catch {
+      /* no storage: the door shows without the line */
+    }
+  }
   live?.stop();
   live = null;
   location.reload();
@@ -92,17 +111,14 @@ function saveOrder(order: string[]) {
 }
 
 function onEvent(event: EventName, p: Record<string, unknown>) {
-  const wid = typeof p.widget_id === 'string' ? p.widget_id : null;
+  // The run's live line, the sealed boxes and the chip's counts (moment.ts).
+  onRunEvent(event, p);
   switch (event) {
     case 'look.changed':
       if (p.look && typeof p.look === 'object') lookFromServer(p.look as Look);
       break;
-    case 'run.started':
-      if (wid) shimmer(wid, true);
-      break;
     case 'run.failed':
     case 'run.poisoned':
-      if (wid) shimmer(wid, false);
       refetchSoon();
       break;
     case 'widget.updated':
@@ -111,7 +127,7 @@ function onEvent(event: EventName, p: Record<string, unknown>) {
       refetchSoon();
       break;
     default:
-      break; // run.step feeds the run trace (next build)
+      break; // run.started and run.step: moment.ts
   }
 }
 
@@ -151,6 +167,19 @@ async function start(a: Account) {
     },
   });
   initActions();
+  initMoment({
+    tile: (id) => EL.get(id),
+    widget: (id) => S.widgets.get(id),
+    widgets: () => S.widgets.values(),
+    // The chip opens the Safety app (the board's trust tile).
+    openSafety: () => {
+      const id = S.order.concat([...S.widgets.keys()]).find((k) => {
+        const s = S.widgets.get(k)?.spec;
+        return s?.kind === 'app' && s.app === 'trust';
+      });
+      if (id) openApp(id);
+    },
+  });
   initChat(a, { relayout: () => requestAnimationFrame(() => layoutAll()), pending: b.pending.map((p) => p.proposal_id), boardChanged: () => refetchSoon(0) });
   live = new Live({
     onEvent,
@@ -167,7 +196,11 @@ async function start(a: Account) {
         })
         .catch(() => {});
     },
-    onState: (s) => root.classList.toggle('is-offline', s === 'closed'),
+    onState: (s) => {
+      root.classList.toggle('is-offline', s === 'closed');
+      if (s === 'closed' && navigator.onLine === false) notice(OFFLINE, true);
+      if (s === 'open') hideNotice(OFFLINE);
+    },
   });
   live.start();
   await wait(root.dataset.motion === 'reduced' ? 300 : 2700);
@@ -187,7 +220,7 @@ async function logout() {
   try {
     await api.logout();
   } finally {
-    sessionLost();
+    sessionLost(false);
   }
 }
 
@@ -195,19 +228,29 @@ async function boot() {
   window.__ready = false;
   setMotion();
   fillIcons();
-  setApiHooks({ onSessionLost: sessionLost, onNotice: notice });
+  setApiHooks({ onSessionLost: () => sessionLost(), onNotice: (t) => notice(t) });
+  addEventListener('offline', () => notice(OFFLINE, true));
+  addEventListener('online', () => hideNotice(OFFLINE));
   let me: Account | null = null;
   try {
     me = await api.me({ auth: false });
   } catch (e) {
     if (!(e instanceof ApiError) || e.status !== 401) {
       // The server is down or busy: say so on the door.
-      notice(e instanceof ApiError && e.status === 429 ? 'Too many requests. Wait a moment, then reload.' : 'The board is not reachable right now.');
+      notice(e instanceof ApiError && e.status === 429 ? 'Slow down a little. Try again in a minute.' : navigator.onLine === false ? OFFLINE : 'The board isn’t answering right now. Try again in a minute.');
     }
   }
   if (me) await start(me);
   else {
     showAuth((a) => void start(a));
+    let out = false;
+    try {
+      out = sessionStorage.getItem('signed-out') === '1';
+      sessionStorage.removeItem('signed-out');
+    } catch {
+      /* no storage */
+    }
+    if (out) notice('You were signed out. Your board is saved: sign in to see it.', true);
     window.__ready = true;
   }
 }

@@ -159,3 +159,58 @@ html[data-layout="phone"] .undo-toast { bottom: 116px; }
 .how-kv dd { margin: 0; overflow-wrap: anywhere; color: var(--text-2); }
 .how-trace li { font-size: 11.5px; color: var(--text-3); overflow-wrap: anywhere; }
 .w--display .num { cursor: pointer; }
+/* ---- safety you can see (W1.4.1, design.md section 10) ----
+   The chip opens Safety. The live line sits on the tile's glass, beside .w-in, so new numbers never cut its motion.
+   Motion: transform and opacity only. Red only for a blocked page and for real errors. */
+button.chip--trust { border: 0; cursor: pointer; font: inherit; font: 500 12.5px/1 var(--font-ui); color: var(--text); min-width: 0; }
+html[data-layout="phone"] button.chip--trust { font-size: 12px; }
+.chip--trust .long, .chip--trust .short { overflow: hidden; text-overflow: ellipsis; }
+.chip--trust.is-new .long, .chip--trust.is-new .short { animation: chip-count 700ms ease 1 both; }
+@keyframes chip-count { from { opacity: .35; } to { opacity: 1; } }
+
+.w-live {
+  position: absolute; left: calc(var(--padu) * .6); right: calc(var(--padu) * .6); bottom: calc(var(--padu) * .6); z-index: 3;
+  display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 13px; pointer-events: none;
+  font: 500 calc(var(--u) * 11.5px)/1.3 var(--font-ui); color: var(--text-2);
+  background: var(--glass-chip-bg); box-shadow: inset 0 0 0 1px var(--glass-chip-rim), var(--glass-chip-shadow);
+  opacity: 0; transform: translateY(6px); transition: opacity 320ms ease, transform 420ms var(--ease-honey);
+}
+.w-live.on { opacity: 1; transform: none; }
+/* The tile's bottom rows step back while the line is there, so the words never sit on words. */
+.w > .w-in .w-foot, .w > .w-in .c-foot, .w > .w-in .c-ex { transition: opacity 240ms ease; }
+.w.has-live > .w-in .w-foot, .w.has-live > .w-in .c-foot, .w.has-live > .w-in .c-ex { opacity: 0; }
+.w-live .wl-icon { flex: none; width: 16px; height: 16px; display: grid; place-items: center; color: var(--ok); }
+.w-live .wl-icon:empty { display: none; }
+.w-live .wl-icon svg { width: 16px; height: 16px; }
+.w-live .wl-text { min-width: 0; transition: opacity 180ms ease; }
+.w-live .wl-text.is-swapping { opacity: 0; }
+.w-live[data-tone="blocked"], .w-live[data-tone="error"] { color: var(--danger); font-weight: 600;
+  background: color-mix(in oklch, var(--danger) 10%, var(--glass-chip-bg)); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--danger) 30%, transparent), var(--glass-chip-shadow); }
+.w-live[data-tone="blocked"] .wl-icon, .w-live[data-tone="error"] .wl-icon { color: var(--danger); }
+.w-live[data-tone="since"] { color: var(--text); }
+
+/* The sealed boxes: one small rounded square per article. Read ones settle to a quiet tick of colour; the one a page
+   tried to trick swells once, turns red and is gone (scale and opacity, one soft move: never a blink or a shake). */
+.wl-boxes { flex: none; display: inline-flex; gap: 4px; transition: opacity 380ms ease; }
+.wl-boxes:empty { display: none; }
+.wl-boxes.is-gone { opacity: 0; }
+.wl-box { width: 11px; height: 11px; border-radius: 3.5px; box-shadow: inset 0 0 0 1.5px var(--text-3); opacity: .8;
+  transition: opacity 300ms ease, transform 300ms var(--ease-honey), box-shadow 300ms ease, background-color 300ms ease; }
+.wl-box.is-reading { box-shadow: inset 0 0 0 1.5px var(--accent); opacity: 1; }
+.wl-box.is-done { background: color-mix(in oklch, var(--ok) 70%, transparent); box-shadow: none; opacity: .9; }
+.wl-box.is-failed { opacity: .3; }
+.wl-box.is-destroyed { background: var(--danger); box-shadow: none; animation: box-destroyed 900ms var(--ease-honey) 1 both; }
+@keyframes box-destroyed {
+  0% { transform: scale(1); opacity: 1; }
+  30% { transform: scale(1.45); opacity: 1; }
+  100% { transform: scale(0) rotate(35deg); opacity: 0; }
+}
+
+/* A run in progress: the calm shimmer passes over the glass again and again (never a spinner); the numbers stay still. */
+.w.is-running .w-shimmer { animation: shimmer 2600ms var(--ease-honey) infinite both; }
+.w.is-running > .w-in { animation: none; }
+
+html[data-motion="reduced"] .w.is-running .w-shimmer { animation: none; }
+html[data-motion="reduced"] .wl-box.is-destroyed { animation: box-gone-fade 300ms ease 1 both; }
+@keyframes box-gone-fade { to { opacity: 0; } }
+html[data-motion="reduced"] .w-live { transform: none; }

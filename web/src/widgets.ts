@@ -87,11 +87,27 @@ function asOf(w: Widget): { at: string; stale: boolean; from: 'result' | 'quotes
   const oldest = q.reduce((a, b) => (a.as_of < b.as_of ? a : b));
   return { at: oldest.as_of, stale: q.some((x) => x.stale), from: 'quotes' };
 }
-function stamp(w: Widget, cls = 'w-foot') {
+const EXCHANGE: Record<Quote['exchange'], string> = { kalshi: 'Kalshi', polymarket: 'Polymarket' };
+
+/**
+ * When the prices are from, in plain words (design.md section 11): "Prices as of 9:41", "Prices from 2 minutes ago",
+ * and when an exchange is down, "Kalshi isn't answering. Showing the last prices from 9:41."
+ */
+export function stampWords(w: Widget, now = Date.now()): string {
   const a = asOf(w);
-  if (!a) return `<div class="${cls} from-m">Waiting for the first prices.</div>`;
-  const what = a.from === 'result' ? 'From the last run' : 'Cached exchange prices';
-  return `<div class="${cls} from-m">${what} · as of <span class="num">${esc(fmtTime(a.at))}</span>${a.stale ? ' · <b>stale</b>' : ''}</div>`;
+  if (!a) return 'Waiting for the first prices.';
+  const t = fmtTime(a.at);
+  if (a.stale) {
+    const down = [...new Set(quotes(w).filter((q) => q.stale).map((q) => EXCHANGE[q.exchange] ?? q.exchange))];
+    const who = a.from === 'quotes' && down.length === 1 ? `${down[0]} isn’t answering` : 'An exchange isn’t answering';
+    return `${who}. Showing the last prices from ${t}.`;
+  }
+  const min = Math.floor((now - new Date(a.at).getTime()) / 60_000);
+  if (min >= 2 && min < 60) return `Prices from ${min} minutes ago · as of ${t}`;
+  return `Prices as of ${t}`;
+}
+function stamp(w: Widget, cls = 'w-foot') {
+  return `<div class="${cls} from-m">${esc(stampWords(w))}</div>`;
 }
 
 /**
@@ -181,7 +197,7 @@ function news(w: Widget, s: Display) {
   if (!r) {
     return (
       head(s.title, team ? `${team}` : undefined) +
-      `<div class="items"><div class="item"><div class="hl">Sources are read on the first research run.</div><div class="meta">Each one in a fresh sandbox, then closed.</div></div></div>`
+      `<div class="items"><div class="item"><div class="hl">Articles are read on the first research run.</div><div class="meta">Each one in its own sealed box, destroyed after.</div></div></div>`
     );
   }
   const src = new Map(r.sources.map((x) => [x.candidate_id, x]));
@@ -192,7 +208,8 @@ function news(w: Widget, s: Display) {
   });
   const blocked = r.blocked.map(
     (b) =>
-      `<div class="item item--blocked"><span class="x">${IC.blocked}</span><div class="hl"><b>Source blocked.</b> ${esc(b.note.replace(/^Source blocked\.\s*/, ''))} Its sandbox was killed at ${esc(fmtTime(b.killed_at))}.</div></div>`,
+      // Never the page's words: the plain line and the time (design.md section 10).
+      `<div class="item item--blocked"><span class="x">${IC.blocked}</span><div class="hl"><b>Blocked:</b> this page tried to trick the agent. Its sealed box was destroyed.<div class="meta num">${esc(fmtTime(b.killed_at))}</div></div></div>`,
   );
   const n = r.facts.length + r.blocked.length;
   return head(s.title, `${n} ${n === 1 ? 'item' : 'items'}`) + `<div class="items">${items.join('')}${blocked.join('')}</div>`;

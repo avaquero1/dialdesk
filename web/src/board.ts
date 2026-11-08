@@ -232,7 +232,7 @@ function refreshTile(id: string) {
   const el = EL.get(id);
   const w = S.widgets.get(id);
   if (!el || !w) return;
-  const keep = ['is-lifted', 'is-settling', 'is-new', 'is-hot', 'is-morph', 'is-out'].filter((c) => el.classList.contains(c));
+  const keep = ['is-lifted', 'is-settling', 'is-new', 'is-hot', 'is-morph', 'is-out', 'has-live', 'is-running'].filter((c) => el.classList.contains(c));
   if (w.spec.kind === 'display') {
     const inner = el.querySelector('.w-in');
     if (inner) setHtml(inner, displayHtml(w, renderCtx()));

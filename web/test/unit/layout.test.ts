@@ -76,10 +76,10 @@ describe('the grid', () => {
 
 describe('edge answers on any route', () => {
   it('turns 429, 413 and offline into words', () => {
-    expect(noticeFor(new ApiError(429, 'rate_limited', 'x'))).toMatch(/Too many requests/);
-    expect(noticeFor(new ApiError(429, 'rate_limited', 'x', 12))).toContain('12 s');
+    expect(noticeFor(new ApiError(429, 'rate_limited', 'x'))).toMatch(/^Slow down a little\. Try again in a minute\.$/);
+    expect(noticeFor(new ApiError(429, 'rate_limited', 'x', 12))).toContain('Try again in 12 seconds.');
     expect(noticeFor(new ApiError(413, 'too_large', 'x'))).toMatch(/too large/);
-    expect(noticeFor(new ApiError(0, 'offline', 'x'))).toMatch(/reach the server/);
+    expect(noticeFor(new ApiError(0, 'offline', 'x'))).toMatch(/reach the board/);
     expect(noticeFor(new ApiError(404, 'not_found', 'x'))).toBeNull();
   });
 });

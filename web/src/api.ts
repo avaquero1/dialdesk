@@ -31,11 +31,14 @@ export interface ApiHooks {
 const hooks: ApiHooks = {};
 export const setApiHooks = (h: ApiHooks) => Object.assign(hooks, h);
 
+/** design.md section 11: what happened and what to do, in plain words. */
+export const OFFLINE = "You're offline. Your board will catch up when you're back.";
+
 /** The words for a status edge may send on any route. */
 export function noticeFor(e: ApiError): string | null {
-  if (e.status === 429) return e.retryAfterS ? `Too many requests. Try again in ${e.retryAfterS} s.` : 'Too many requests. Wait a moment, then try again.';
+  if (e.status === 429) return e.retryAfterS && e.retryAfterS < 50 ? `Slow down a little. Try again in ${e.retryAfterS} seconds.` : 'Slow down a little. Try again in a minute.';
   if (e.status === 413) return 'That was too large to send.';
-  if (e.status === 0) return "Can't reach the server. Check your connection.";
+  if (e.status === 0) return navigator.onLine === false ? OFFLINE : "Can't reach the board right now. It will catch up soon.";
   return null;
 }
 
@@ -102,4 +105,6 @@ export const api = {
   trust: () => call<TrustPage>('GET', '/api/trust'),
   auditVerify: () => call<Verify>('GET', '/api/audit/verify'),
   trace: (id: string) => call<{ steps: RunTraceStep[] }>('GET', `/api/widgets/${encodeURIComponent(id)}/trace`),
+  // The top bar's chip: the same counts, quiet (it keeps its last words on a 429).
+  trustQuiet: () => call<TrustPage>('GET', '/api/trust', undefined, { quiet: true }),
 };
