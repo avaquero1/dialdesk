@@ -65,8 +65,10 @@ export function fake(_deps: FakeDeps = {}): Handlers<typeof MARKETS> {
         m.exchange === 'kalshi'
           ? kalshiPoints(KalshiCandles.parse(readFixture(`markets/kalshi/candlesticks-${m.market_id.slice(7)}.json`)))
           : fixtures.polyHistory(m.market_id.slice(11)).map((h) => ({ t: h.t, price_cents: Math.round(h.p * 100) }));
-      const last = raw.at(-1)?.t ?? 0;
-      return { market_id: m.market_id, points: raw.filter((p) => p.t >= last - query.window_s), as_of: asOf };
+      // The recorded candles, moved so the last lands at this fake's quote time: the line runs up to the quote, as a live one does.
+      const last = Math.floor(Date.parse(asOf) / 1000);
+      const shift = last - (raw.at(-1)?.t ?? last);
+      return { market_id: m.market_id, points: raw.map((p) => ({ ...p, t: p.t + shift })).filter((p) => p.t >= last - query.window_s), as_of: asOf };
     },
     event: ({ params }) => {
       const p = pairs.find((x) => x.event_key === params.event_key);

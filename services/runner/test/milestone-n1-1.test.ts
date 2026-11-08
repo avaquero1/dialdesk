@@ -50,12 +50,15 @@ const deps = (): RunnerDeps =>
     pollMs: 10,
   }) as unknown as RunnerDeps;
 
-/** The move the engine should find, computed here by hand from markets' own history: last minus the point a window back. */
+/** The move the engine should find, computed here by hand from markets' own history and live quote: the quote minus the point a window back. */
 async function moveOf(market_id: string, window_s: number) {
   const h = await runnerMarkets(MARKETS.history, { params: { market_id }, query: { window_s } });
-  const last = h.points.at(-1)!;
-  const start = h.points.find((p) => p.t >= last.t - window_s)!;
-  return { market_id, move: last.price_cents - start.price_cents, last: last.price_cents, as_of: h.as_of };
+  const q = await runnerMarkets(MARKETS.get, { params: { market_id } });
+  const t = Math.floor(Date.parse(q.as_of) / 1000);
+  const points = [...h.points.filter((p) => p.t < t), { t, price_cents: q.yes_price_cents }];
+  const last = points.at(-1)!;
+  const start = points.find((p) => p.t >= last.t - window_s)!;
+  return { market_id, move: last.price_cents - start.price_cents, last: last.price_cents, as_of: q.as_of };
 }
 
 beforeAll(async () => {

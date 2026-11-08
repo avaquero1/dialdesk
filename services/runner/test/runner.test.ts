@@ -182,8 +182,10 @@ describe.skipIf(!have)('runner', () => {
     const moves = await Promise.all(
       ids.map(async (market_id) => {
         const h = await via('runner', marketsApp)(MARKETS.history, { params: { market_id }, query: { window_s: 86400 } });
-        const last = h.points.at(-1)!;
-        return { market_id, move: last.price_cents - h.points.find((p) => p.t >= last.t - 86400)!.price_cents };
+        const q = await via('runner', marketsApp)(MARKETS.get, { params: { market_id } });
+        const t = Math.floor(Date.parse(q.as_of) / 1000);
+        const points = [...h.points.filter((p) => p.t < t), { t, price_cents: q.yes_price_cents }];
+        return { market_id, move: q.yes_price_cents - points.find((p) => p.t >= t - 86400)!.price_cents };
       }),
     );
     const best = moves.reduce((a, b) => (Math.abs(b.move) > Math.abs(a.move) ? b : a));

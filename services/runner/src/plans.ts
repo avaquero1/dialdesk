@@ -188,6 +188,16 @@ export interface MarketNumbers {
   notes?: string[];
 }
 
+/**
+ * The series the engine reads: the candles before the quote, then the live quote at its own time. Candles are cached and
+ * coarse, so without this a move and the line end on an older price than the card's. A candle at or after the quote's
+ * second gives way to it, so the series stays sorted and no moment counts twice.
+ */
+function endsAtQuote(points: { t: number; price_cents: number }[], m: Market) {
+  const t = Math.floor(Date.parse(m.as_of) / 1000);
+  return [...points.filter((p) => p.t < t).map((p) => ({ t: p.t, v: p.price_cents })), { t, v: m.yes_price_cents }];
+}
+
 /** Prices (and history, when the plan reads a series) from markets. A market that is down is left out. */
 export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: EnginePlan | null): Promise<MarketNumbers> {
   const want = plan ? planInputs(plan) : null;
@@ -235,9 +245,9 @@ export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: Engi
       if (!needSeries) return;
       try {
         const h = await markets(MARKETS.history, { params: { market_id }, query: { window_s: historyWindow } });
-        const series = h.points.map((p) => ({ t: p.t, v: p.price_cents }));
-        if (series.length) {
-          const from = { source: h.market_id, as_of: h.as_of };
+        if (h.points.length) {
+          const series = endsAtQuote(h.points, quotes[i]!);
+          const from = { source: quotes[i]!.market_id, as_of: quotes[i]!.as_of };
           put(`series_${k}`, series, 'history', from);
           if (firstOfExchange) put(`${ex}_series`, series, 'history', from);
         }
