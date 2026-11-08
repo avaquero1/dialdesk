@@ -314,8 +314,9 @@ describe('e2e on fakes', () => {
     expect(list.sandboxes.filter((x) => x.state === 'held')).toEqual([]);
     // The trust page counts the manager's own rows (JobStatus.trust_log), forwarded by runner once each.
     const trust = await browser(EDGE.trust, {});
-    expect(trust.counts.sandboxes_killed).toBe(1);
-    expect(trust.counts.runs_poisoned).toBe(1);
+    // A1.4.4: the first board's News reads the fixture site's poisoned page too, so sign-up adds one kill to the chat News's.
+    expect(trust.counts.sandboxes_killed).toBe(2);
+    expect(trust.counts.runs_poisoned).toBe(2);
     // Every sandbox runner started (browse and compute) was destroyed, the killed one too (killed, then destroyed).
     expect(trust.counts.sandboxes_created).toBeGreaterThan(1);
     expect(trust.counts.sandboxes_created).toBe(trust.counts.sandboxes_destroyed);
@@ -380,7 +381,9 @@ describe('e2e on fakes', () => {
     expect(poisonedStep.sandbox!.state).toBe('killed');
     expect(Date.parse(rows[1]!.at)).toBeGreaterThanOrEqual(Date.parse(readStep.at) - 1000);
     // The trust page's refused count is the manager's proxy.refused rows, summed.
-    const all = await Promise.all(run.steps.filter((x) => x.step === 'read' && x.source).map((x) => sandbox.getJob(`${run.run_id}:read:${x.source!.candidate_id}`)));
+    // Every research run so far: the chat's News and, since A1.4.4, the first board's.
+    const reads = s.runs!.filter((r) => r.kind === 'research').flatMap((r) => r.steps.filter((x) => x.step === 'read' && x.source).map((x) => `${r.run_id}:read:${x.source!.candidate_id}`));
+    const all = await Promise.all(reads.map((id) => sandbox.getJob(id)));
     const refusedAll = all.reduce((n, j) => n + j.proxy_log.filter((e) => !e.allowed).length, 0);
     expect((await browser(EDGE.trust, {})).counts.proxy_refused).toBe(refusedAll);
   });
@@ -416,8 +419,8 @@ describe('e2e on fakes', () => {
     expect(r.blocked.map((b) => [b.domain, b.note])).toEqual([['fanpost.fixture.test', POISONED_NOTE]]);
     expect(JSON.stringify(r)).not.toMatch(/ignore your previous instructions/i);
     const trust = await browser(EDGE.trust, {});
-    expect(trust.counts.sandboxes_killed).toBe(2);
-    expect(trust.counts.runs_poisoned).toBe(2);
+    expect(trust.counts.sandboxes_killed).toBe(3); // sign-up's News (A1.4.4), the chat News, this one
+    expect(trust.counts.runs_poisoned).toBe(3);
     expect(trust.counts.sandboxes_created).toBe(trust.counts.sandboxes_destroyed);
     if (!STUB) expect(liveSandboxes(topo!)).toEqual([]);
     expect((await sandbox.sandboxes()).sandboxes.filter((x) => x.state === 'held')).toEqual([]);

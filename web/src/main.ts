@@ -7,7 +7,8 @@ import { initActions, menuAction, refreshFolder } from './actions.ts';
 import { $, finishAnimations, raf2, root, wait } from './dom.ts';
 import { ApiError, OFFLINE, api, setApiHooks } from './api.ts';
 import { showAuth } from './auth.ts';
-import { EL, S, bindBoard, buildLens, desktopPlaces, isDragging, layoutAll, mount, reconcile as reconcileBoard, updateRefraction } from './board.ts';
+import { firstReadFailed, onFirstReadEnd } from './widgets.ts';
+import { EL, S, bindBoard, buildLens, desktopPlaces, isDragging, layoutAll, mount, reconcile as reconcileBoard, refreshTile, updateRefraction } from './board.ts';
 import { askAbout, closeChat, initChat } from './chat.ts';
 import { fillIcons } from './icons.ts';
 import { Live } from './live.ts';
@@ -122,6 +123,9 @@ function onEvent(event: EventName, p: Record<string, unknown>) {
       if (p.look && typeof p.look === 'object') lookFromServer(p.look as Look);
       break;
     case 'run.failed':
+      if (typeof p.widget_id === 'string') firstReadFailed(p.widget_id);
+      refetchSoon();
+      break;
     case 'run.poisoned':
       refetchSoon();
       break;
@@ -182,6 +186,7 @@ async function start(a: Account) {
     },
   });
   initActions();
+  onFirstReadEnd(refreshTile);
   initMoment({
     tile: (id) => EL.get(id),
     widget: (id) => S.widgets.get(id),

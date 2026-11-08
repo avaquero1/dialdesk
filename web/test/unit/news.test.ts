@@ -14,10 +14,11 @@ const W = await import('../../src/widgets.ts');
 const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 const spec = (widget_id: string, size: 'M' | 'L') =>
   ({ kind: 'display', type: 'news', size, title: 'Team news', market_ids: ['kalshi:KXNFLGAME-26NOV08KCBUF-BUF'], params: { team: 'Bills' }, widget_id, account_id: 'acc_x', place: { col: 0, row: 0 } }) as const;
-const widget = (r: WidgetResult | null, profile: Widget['profile'] = null, size: 'M' | 'L' = 'M'): Widget => {
+const cardOf = (r: WidgetResult | null, profile: Widget['profile'] = null, size: 'M' | 'L' = 'M'): Widget => {
   const s = spec(r?.widget_id ?? newId('wid'), size);
   return { spec: s as unknown as Widget['spec'], profile, state: 'normal', result: r, previous: null, updated_at: new Date().toISOString() };
 };
+const widget = cardOf;
 const ctx = { titles: new Map<string, string>(), events: new Map<string, string>() };
 const H = 3600_000;
 
@@ -111,6 +112,7 @@ describe('News', () => {
 
   it("before the first research run: what comes and about when (runner's next cadence window, or Refresh now)", () => {
     const now = Date.parse('2026-11-08T14:20:00Z');
+    const widget = (r: WidgetResult | null, profile: Widget['profile'] = null): Widget => ({ ...cardOf(r, profile), updated_at: '2026-11-08T10:00:00.000Z' });
     const t = W.firstNewsWords(widget(null), now);
     expect(t).toBe(`The first news comes at about ${W.fmtTime('2026-11-08T15:00:00.000Z')}. To get it sooner, tap ⋯ then Refresh now.`);
     expect(W.firstNewsWords(widget(null), Date.parse('2026-11-08T14:59:00Z'))).toBe('The first news comes in a minute or two. To get it sooner, tap ⋯ then Refresh now.');
@@ -118,5 +120,60 @@ describe('News', () => {
     expect(W.firstNewsWords(widget(null, off), now)).toBe('The news comes when you tap ⋯ then Refresh now.');
     const card = text(W.displayHtml(widget(null), ctx));
     expect(card).toContain('We read the latest articles about the Bills from Sports Wire, Weather Desk and Fan Post, each in its own sealed box, destroyed after.');
+  });
+
+  describe('a new card, its first read on the way (A1.4.4)', () => {
+    const READING = 'We’re reading the first articles now. It takes a minute or two.';
+    const PLAIN = /^The first news comes (at about .+|in a minute or two)\. To get it sooner, tap ⋯ then Refresh now\.$/;
+    const t0 = Date.parse('2026-11-08T14:20:00Z');
+    const fresh = (r: WidgetResult | null = null, profile: Widget['profile'] = null): Widget => ({ ...cardOf(r, profile), updated_at: new Date(t0).toISOString() });
+    const off = { widget_id: 'w', brief: '', source_ids: [], added_domains: [], cadence: { numbers_every_s: null, research_every_s: null }, feedback: [], last_math_plan: null };
+    const failedRead = (r: WidgetResult): WidgetResult => ({ ...r, facts: [], blocked: [], summary: null, sources: r.sources.map((x) => ({ ...x, status: 'failed' as const })) });
+
+    it('says it is reading, for the wait and no longer', () => {
+      expect(W.firstNewsWords(fresh(), t0 + 60_000)).toBe(READING);
+      expect(W.firstNewsWords(fresh(), t0 + 4 * 60_000)).toBe(READING);
+      expect(W.firstNewsWords(fresh(), t0 + 5 * 60_000)).toMatch(PLAIN);
+    });
+
+    it('does not contradict the live line', () => {
+      expect(READING).not.toMatch(/\d/);
+      expect(text(W.displayHtml(fresh(), ctx))).not.toContain('The first news comes');
+    });
+
+    it('a run that failed goes to the plain words at once, and the tile repaints', () => {
+      const w = fresh();
+      const painted: string[] = [];
+      W.onFirstReadEnd((id) => painted.push(id));
+      expect(W.firstNewsWords(w, t0 + 1000)).toBe(READING);
+      W.firstReadFailed(w.spec.widget_id);
+      expect(painted).toEqual([w.spec.widget_id]);
+      expect(W.firstNewsWords(w, t0 + 1000)).toMatch(PLAIN);
+      W.onFirstReadEnd(() => undefined);
+    });
+
+    it('with the schedule off, it never says reading', () => {
+      expect(W.firstNewsWords(fresh(null, off), t0 + 1000)).toBe('The news comes when you tap ⋯ then Refresh now.');
+    });
+
+    it('a numbers run lands first: the card is still waiting, not "no news"', () => {
+      const n: WidgetResult = { ...research(t0), kind: 'numbers', facts: [], sources: [], blocked: [], summary: null };
+      const card = text(W.displayHtml({ ...fresh(n), updated_at: new Date().toISOString() }, ctx));
+      expect(card).toContain(READING);
+      expect(card).not.toContain('No news in the articles');
+    });
+
+    it('a cap refused every read: the plain words, never an error and never "no news"', () => {
+      const card = text(W.displayHtml(fresh(failedRead(research(t0))), ctx));
+      expect(card).toMatch(/The first news comes .+ tap ⋯ then Refresh now\./);
+      expect(card).not.toContain(READING);
+      expect(card).not.toContain('No news in the articles');
+      expect(card).not.toMatch(/error|failed|refused|cap\b/i);
+    });
+
+    it('a later run that read nothing keeps saying "no news", not "first news"', () => {
+      const w = { ...fresh(failedRead(research(t0))), previous: research(t0) };
+      expect(text(W.displayHtml(w, ctx))).toContain('No news in the articles we read this time.');
+    });
   });
 });

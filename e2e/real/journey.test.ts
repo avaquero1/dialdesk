@@ -181,14 +181,15 @@ describe('e2e on the real services (only the model faked)', () => {
 
   it('5. the Safety numbers count it, and audit’s verify says ok', async () => {
     const trust = await until(
-      'the trust counts to include both poisoned runs',
+      'the trust counts to include all three poisoned runs',
       () => browser(EDGE.trust, {}),
-      (t) => t.counts.runs_poisoned >= 2 && t.counts.sandboxes_created === t.counts.sandboxes_destroyed,
+      (t) => t.counts.runs_poisoned >= 3 && t.counts.sandboxes_created === t.counts.sandboxes_destroyed,
       30_000,
       ['audit', 'runner'],
     );
-    expect(trust.counts.sandboxes_killed).toBe(2);
-    expect(trust.counts.runs_poisoned).toBe(2);
+    // A1.4.4: the first board's News reads the poisoned page at sign-up, before the chat's News and the refresh do.
+    expect(trust.counts.sandboxes_killed).toBe(3);
+    expect(trust.counts.runs_poisoned).toBe(3);
     expect(trust.counts.proxy_refused).toBeGreaterThan(0);
     expect(trust.counts.sandboxes_created).toBeGreaterThan(2);
     expect((await browser(EDGE.auditVerify, {})).ok).toBe(true);

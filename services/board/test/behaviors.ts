@@ -114,12 +114,28 @@ export function boardBehaviors(name: string, rig: () => Promise<Rig>) {
       }
       // Every display gets a numbers run at once.
       const jobs = r.jobs.slice(before);
-      expect(jobs.map((j) => j.kind)).toEqual(ds.map(() => 'numbers'));
+      expect(jobs.filter((j) => j.kind === 'numbers')).toHaveLength(ds.length);
+      expect(jobs.filter((j) => j.kind !== 'numbers').map((j) => j.kind)).toEqual(['research']); // News (A1.4.4)
       expect(new Set(jobs.map((j) => j.widget_id))).toEqual(new Set(ds.map((w) => w.spec.widget_id)));
       // The same board comes back on the next read.
       const again = await edge(BOARD.getBoard, { params: { account_id: a } });
       expect(again.widgets.map((w) => w.spec.widget_id)).toEqual(b.widgets.map((w) => w.spec.widget_id));
       expect(r.bus.events.filter((e) => e.event === 'widget.updated' && (e.payload as { account_id: string }).account_id === a)).toHaveLength(ds.length);
+    });
+
+    it("first runs (A1.4.4): one research run for News at once, none for displays that read nothing; a second sign-up doesn't double it", async () => {
+      const a = acc();
+      const before = r.jobs.length;
+      const b = await edge(BOARD.createDefaults, { params: { account_id: a }, body: { category: 'sports' } });
+      const jobs = r.jobs.slice(before);
+      const ds = displays(b);
+      const news = ds.filter((w) => w.spec.type === 'news');
+      expect(news).toHaveLength(1);
+      expect(jobs.filter((j) => j.kind === 'research').map((j) => [j.widget_id, j.reason])).toEqual([[news[0]!.spec.widget_id, 'accept']]);
+      expect(jobs.filter((j) => j.kind === 'numbers').map((j) => j.widget_id).sort()).toEqual(ds.map((w) => w.spec.widget_id).sort());
+      const n = r.jobs.length;
+      expect(await status(edge(BOARD.createDefaults, { params: { account_id: a }, body: { category: 'sports' } }))).toBe(409);
+      expect(r.jobs.length).toBe(n);
     });
 
     it('folders: children follow the layout; folders do not nest; removing a folder puts its tiles back on the grid', async () => {

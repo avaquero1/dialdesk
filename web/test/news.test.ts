@@ -136,11 +136,11 @@ describe('W1.2.2: News and Your account at phone size', () => {
       const newsTile = page.locator(`#board > .w[data-id="${news.widget_id}"]`);
       const posTile = page.locator(`#board > .w[data-id="${pos.widget_id}"]`);
 
-      // 1. Before the first research run: what will happen and about when, not an empty card.
+      // 1. A new board's first research run is on its way (A1.4.4): the card says so, not an empty card.
       await newsTile.scrollIntoViewIfNeeded();
       await settled(page);
       const before = await newsTile.innerText();
-      expect(before).toMatch(/The first news comes (at about \d{1,2}:\d\d(\s?[AP]M)?|in a minute or two)\. To get it sooner, tap ⋯ then Refresh now\./);
+      expect(before).toContain('We’re reading the first articles now. It takes a minute or two.');
       expect(before).toMatch(/We read the latest articles[^.]* from Sports Wire, Weather Desk and Fan Post, each in its own sealed box, destroyed after\./);
       await shot('news-before');
 

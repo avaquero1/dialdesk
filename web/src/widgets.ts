@@ -413,14 +413,46 @@ export function summaryWords(r: WidgetResult | null | undefined): string | null 
 export const factLine = (f: { claim: string; quote: string }) => (/[0-9]/.test(f.claim) ? f.quote : f.claim).trim();
 
 /**
- * When the first research run comes (design.md section 11: say what happens and when). runner's scheduler books a
- * display's research after its first numbers run, at the next window of its cadence (the hour, by default), and
- * "Refresh now" runs it at once.
+ * How long a new News card says its first read is on its way, from the card's last change: one run's own limit
+ * (RUN_RULES.timeoutsMs.run, 3 minutes) and room for the queue. board asks for that run when the card is made.
+ */
+const FIRST_READ_WAIT_MS = 5 * 60_000;
+/** Cards whose run failed while this page was open: they stop saying "reading" (run.failed reaches us only live). */
+const firstReadEnded = new Set<string>();
+const firstReadArmed = new Set<string>();
+let repaintFirstRead: (widget_id: string) => void = () => {};
+/** The board's tile repaint, for when a card stops waiting. */
+export const onFirstReadEnd = (fn: (widget_id: string) => void) => { repaintFirstRead = fn; };
+export function firstReadFailed(widget_id: string) {
+  firstReadEnded.add(widget_id);
+  repaintFirstRead(widget_id);
+}
+const researchEvery = (w: Widget) => (w.profile ? w.profile.cadence.research_every_s : displayEntry('news').default_cadence.research_every_s);
+// A research result means that run has ended, whatever it read.
+const firstReadLeft = (w: Widget, now: number) =>
+  researchEvery(w) && w.result?.kind !== 'research' && !firstReadEnded.has(w.spec.widget_id) ? Math.max(0, Date.parse(w.updated_at) + FIRST_READ_WAIT_MS - now) : 0;
+/** The card repaints when its wait is over, so it never says "reading" for a run that is gone. */
+function armFirstRead(w: Widget) {
+  const left = firstReadLeft(w, Date.now());
+  const id = w.spec.widget_id;
+  if (!left || firstReadArmed.has(id)) return;
+  firstReadArmed.add(id);
+  setTimeout(() => {
+    firstReadArmed.delete(id);
+    repaintFirstRead(id);
+  }, left + 50);
+}
+
+/**
+ * What a News card says before it has any articles (design.md section 11: say what happens and when). While its first
+ * run is on its way: that it is reading. If that run failed, was refused or never came: when runner's scheduler books
+ * the next one, at the next window of the cadence (the hour, by default), and that "Refresh now" runs it at once.
  */
 export function firstNewsWords(w: Widget, now = Date.now()): string {
   // A profile's own null means the user turned the schedule off.
-  const every = w.profile ? w.profile.cadence.research_every_s : displayEntry('news').default_cadence.research_every_s;
+  const every = researchEvery(w);
   if (!every) return 'The news comes when you tap ⋯ then Refresh now.';
+  if (firstReadLeft(w, now)) return 'We’re reading the first articles now. It takes a minute or two.';
   const next = (Math.floor(now / 1000 / every) + 1) * every * 1000;
   const when = next - now <= 2 * 60_000 ? 'in a minute or two' : `at about ${fmtTime(new Date(next).toISOString())}`;
   return `The first news comes ${when}. To get it sooner, tap ⋯ then Refresh now.`;
@@ -442,7 +474,9 @@ function news(w: Widget, s: Display) {
   const r = w.result;
   // "Bills news" already says whose news it is.
   const teamSub = team && !s.title.toLowerCase().includes(team.toLowerCase()) ? team : undefined;
-  if (!r) {
+  // No article read yet: a numbers run landed first, or every read failed (a spending cap refused the reader).
+  if (!r || (!r.facts.length && !r.blocked.length && r.sources.every((x) => x.status === 'failed') && !w.previous?.facts.length)) {
+    armFirstRead(w);
     return (
       head(s.title, teamSub) +
       `<div class="items news-wait"><div class="item"><div class="hl">${esc(firstNewsWords(w))}</div><div class="meta">${esc(readFromWords(w, team))}</div></div></div>`

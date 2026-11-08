@@ -9,7 +9,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BOARD, CONNECTIONS, MARKETS, MODELS, TRUST_ACTIONS, type EngineInput, type EngineResult, type SbxJobStatus, type Widget, type WidgetRunJob } from '@app/contracts';
-import { MemoryBus, RUN_RULES, SandboxBusy, createClient, hashToken, sandboxClient, type CallError, type SandboxClient } from '@app/service-kit';
+import { CallError, MemoryBus, RUN_RULES, SandboxBusy, createClient, hashToken, sandboxClient, type SandboxClient } from '@app/service-kit';
 import { fakeApp, TEST_TOKENS } from '@app/testkit';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createFakeAudit } from '../../audit/src/fake.ts';
@@ -362,6 +362,28 @@ describe.skipIf(!have)('runs fit the machine (stub sandbox-manager)', () => {
     console.info(`A1.4.1 sign-up: ${JSON.stringify({ runs_per_board: users[0]!.displays.length, boxes_per_board: per })}`);
     // Six worker slots: about one box per six runs of a board, never one per run.
     expect(Math.max(...per)).toBeLessThanOrEqual(Math.ceil(users[0]!.displays.length / 2));
+  }, 120_000);
+
+  it("sign-up with the model cap spent (A1.4.4): every display's numbers land, News's research run ends with nothing read, no failed run", async () => {
+    const boxes = new Map<string, number>();
+    const research = new Map<string, number>();
+    const { d, store } = deps(boxes, research);
+    d.models = (async () => {
+      throw new CallError(402, { error: 'account_usd_cap', message: 'a spending cap is reached' }, 'models.complete');
+    }) as unknown as RunnerDeps['models'];
+    const [u] = await boards(1, new Scheduler(new MemoryStore(), async () => undefined));
+    const news = u!.displays.filter((w) => w.spec.kind === 'display' && w.spec.type === 'news');
+    expect(news).toHaveLength(1);
+    const job = (w: Widget, kind: 'numbers' | 'research') => ({ job_id: `${w.spec.widget_id}:${kind}:1794096000`, widget_id: w.spec.widget_id, account_id: u!.account_id, kind, window_start: 1794096000, reason: 'accept' as const });
+    const { errors } = await drain(d, [...u!.displays.map((w) => job(w, 'numbers')), job(news[0]!, 'research')], RUN_RULES.sandboxSlots, new AccountBatches());
+    expect(errors).toEqual([]);
+    expect(numbersRuns(store).filter((r) => r.status !== 'done')).toEqual([]);
+    expect(numbersRuns(store)).toHaveLength(u!.displays.length);
+    const b = await edgeBoard(BOARD.getBoard, { params: { account_id: u!.account_id } });
+    const r = b.widgets.find((w) => w.spec.widget_id === news[0]!.spec.widget_id)!.result!;
+    expect(r.kind).toBe('research');
+    expect(r.facts).toEqual([]);
+    expect(r.sources.every((x) => x.status === 'failed')).toBe(true);
   }, 120_000);
 
   it('load: twenty users ticked together run with no timeouts, at most a few boxes per board per tick (was one per display)', async () => {

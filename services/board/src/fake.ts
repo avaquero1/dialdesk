@@ -209,6 +209,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
         if (t.kind === 'display') {
           const w = await addDisplay(account_id, t, place, 'normal', quotes);
           await enqueueRun(w.spec as DisplaySpec, 'numbers', 'accept');
+          if (displayEntry(t.type).research) await enqueueRun(w.spec as DisplaySpec, 'research', 'accept');
         } else if (t.kind === 'app') {
           tile(account_id, { widget_id: newId('wid'), account_id, kind: 'app', app: t.app, title: t.title, place });
         } else {
@@ -217,6 +218,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
           for (const [index, child] of t.children.entries()) {
             const w = await addDisplay(account_id, child, { folder_id, index }, 'normal', quotes);
             await enqueueRun(w.spec as DisplaySpec, 'numbers', 'accept');
+            if (displayEntry(child.type).research) await enqueueRun(w.spec as DisplaySpec, 'research', 'accept');
           }
         }
       }

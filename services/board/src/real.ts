@@ -294,6 +294,12 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
     return { job_id: job.job_id, joined: !r };
   }
 
+  /** A new board's display: its numbers now and, when its type reads sources, its first research run (as a card added through the chat). */
+  async function firstRuns(tx: Tx, o: Out, spec: DisplaySpec) {
+    await run(tx, o, spec, 'numbers', 'accept');
+    if (displayEntry(spec.type).research) await run(tx, o, spec, 'research', 'accept');
+  }
+
   async function addDisplay(tx: Tx, o: Out, account_id: string, d: DisplayTile, place: Widget['spec']['place'], state: Widget['state'], quotes: Map<string, Quote>) {
     validateDisplay(d);
     const widget_id = newId('wid');
@@ -377,14 +383,14 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
         for (const [i, t] of tiles.entries()) {
           const place = places[i]!;
           if (t.kind === 'display') {
-            await run(tx, o, await addDisplay(tx, o, account_id, t, place, 'normal', quotes), 'numbers', 'accept');
+            await firstRuns(tx, o, await addDisplay(tx, o, account_id, t, place, 'normal', quotes));
           } else if (t.kind === 'app') {
             await insertWidget(tx, { widget_id: newId('wid'), account_id, kind: 'app', app: t.app, title: t.title, place }, null, 'normal', null);
           } else {
             const folder_id = newId('wid');
             await insertWidget(tx, { widget_id: folder_id, account_id, kind: 'folder', title: t.title, children: [], place }, null, 'normal', null);
             for (const [index, child] of t.children.entries())
-              await run(tx, o, await addDisplay(tx, o, account_id, child, { folder_id, index }, 'normal', quotes), 'numbers', 'accept');
+              await firstRuns(tx, o, await addDisplay(tx, o, account_id, child, { folder_id, index }, 'normal', quotes));
           }
         }
       });
