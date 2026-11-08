@@ -101,8 +101,14 @@ beforeAll(async () => {
     if (m.type() === 'error') problems.push(`console: ${m.text()} @ ${m.location().url}`);
   });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
+  // A sign-up, not a guest: the web files share one address, and edge allows 5 guests an hour from it.
   await page.goto(URL0);
-  await page.getByRole('button', { name: 'Try it as a guest' }).tap();
+  const status = await page.evaluate(
+    (email) => fetch('/api/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'safety-test-pass-1' }) }).then((r) => r.status),
+    `safety-${Date.now()}@example.com`,
+  );
+  expect(status).toBe(201);
+  await page.reload();
   await ready(page);
   const { me, b } = await page.evaluate(async () => ({
     me: (await (await fetch('/api/me')).json()) as { account_id: string },
