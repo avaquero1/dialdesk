@@ -116,9 +116,13 @@ beforeAll(async () => {
   T.news = news.title;
   await seed(me.account_id, { gap: gap.widget_id, news: news.widget_id });
   // audit reads the log stream on its own clock: wait until it has counted the rows.
-  await expect
-    .poll(() => page.evaluate(() => fetch('/api/trust').then((r) => r.json() as Promise<{ counts: { sandboxes_created: number; proxy_refused: number } }>)).then((t) => t.counts.sandboxes_created + t.counts.proxy_refused), { timeout: 30_000 })
-    .toBe(7);
+  let seen = 0;
+  for (let t = 0; t < 60 && seen !== 7; t++) {
+    if (t) await page.waitForTimeout(500);
+    const tr = await page.evaluate(() => fetch('/api/trust').then((r) => r.json() as Promise<{ counts: { sandboxes_created: number; proxy_refused: number } }>));
+    seen = tr.counts.sandboxes_created + tr.counts.proxy_refused;
+  }
+  expect(seen, 'audit counted the seeded rows').toBe(7);
   await page.reload();
   await ready(page);
   await settled(page);
@@ -205,6 +209,7 @@ describe('Safety and How we got this at phone size', () => {
     await shot(page, 'how-blocked');
     await page.keyboard.press('Escape');
     await settled(page);
-    expect(problems).toEqual([]);
+    // /api/me's 401 for a signed-out visitor at boot is expected (Chromium logs it as a failed load).
+    expect(problems.filter((p) => !/status of 401 .* @ http:\/\/[^/]+\/api\/me$/.test(p))).toEqual([]);
   });
 });

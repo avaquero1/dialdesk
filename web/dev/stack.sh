@@ -83,6 +83,8 @@ case "${1:-}" in
     [ -f "$repo/.env" ] || { echo "run make dev-secrets first"; exit 1; }
     [ -f "$repo/web/dist/index.html" ] || { echo "run npx tsx web/build.ts first"; exit 1; }
     mkdir -p "$run"; stop_services
+    # Postgres is fresh each time (tmpfs), so its write-once signed heads must be too.
+    rm -rf "${run:?}/audit-heads"
     compose up -d --wait postgres valkey
     envs
     for s in $FAKE; do start "$s" 1; done

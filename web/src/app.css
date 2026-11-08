@@ -149,7 +149,7 @@ html[data-layout="phone"] .undo-toast { bottom: 116px; }
 .how-src.is-blocked { color: var(--text); }
 .how-src.is-blocked svg { color: var(--danger); }
 .how-math li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--text-2); }
-.how-math b { color: var(--text); font-weight: 600; }
+.how-math b { color: var(--text); font-weight: 600; white-space: nowrap; }
 .how-toggle { align-self: flex-start; min-height: 44px; }
 .how-details { display: grid; gap: 10px; }
 .how-details[hidden] { display: none; }
