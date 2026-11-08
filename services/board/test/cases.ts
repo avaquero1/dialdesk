@@ -1,6 +1,7 @@
-import { BOARD, MARKETS, newId } from '@app/contracts';
+import { BOARD, CONNECTIONS, MARKETS, newId } from '@app/contracts';
 import { createClient } from '@app/service-kit';
 import { fakeApp, sampleResult, TEST_TOKENS, type Case } from '@app/testkit';
+import { fake as connectionsFake } from '../../connections/src/fake.ts';
 import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { fake } from '../src/fake.ts';
 
@@ -10,7 +11,19 @@ export const marketsForBoard = () => {
   const app = fakeApp('markets', MARKETS, marketsFake());
   return createClient({ baseUrl: 'http://markets.internal', token: TEST_TOKENS.board, fetch: (r) => app.fetch(r) });
 };
-export const makeApp = () => fakeApp('board', BOARD, fake({ markets: marketsForBoard() }));
+/** One connections fake for every board in tests: board checks a "Your account" link against its list. */
+const connectionsApp = fakeApp('connections', CONNECTIONS, connectionsFake());
+export const connectionsForBoard = () =>
+  createClient({ baseUrl: 'http://connections.internal', token: TEST_TOKENS.board, fetch: (r) => connectionsApp.fetch(r) });
+/** Connects a read-only Kalshi key (fake) for an account, as edge would, and returns its id. */
+export async function connectFor(account_id: string): Promise<string> {
+  const asEdge = createClient({ baseUrl: 'http://connections.internal', token: TEST_TOKENS.edge, fetch: (r) => connectionsApp.fetch(r) });
+  const c = await asEdge(CONNECTIONS.connect, {
+    body: { account_id, exchange: 'kalshi', key_id: 'read-key-0001', key_type: 'ed25519', sealed_key: 'c2VhbGVkLWZha2Uta2V5LWJ5dGVz', env: 'demo' },
+  });
+  return c.connection_id;
+}
+export const makeApp = () => fakeApp('board', BOARD, fake({ markets: marketsForBoard(), connections: connectionsForBoard() }));
 
 /** A 1 x 1 PNG, for the screenshot cases. */
 export const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
@@ -25,7 +38,10 @@ export function makeCases(acc: string): Case[] {
   const cnd = newId('cnd');
   return [
     { endpoint: 'createDefaults', caller: 'edge', input: () => ({ params: { account_id: acc }, body: { category: 'sports' } }),
-      save: (o, c) => { c.wid = o.widgets.find((w: any) => w.spec.kind === 'display').spec.widget_id; } },
+      save: (o, c) => {
+        c.wid = o.widgets.find((w: any) => w.spec.kind === 'display').spec.widget_id;
+        c.pos = o.widgets.find((w: any) => w.spec.kind === 'display' && w.spec.type === 'positions').spec.widget_id;
+      } },
     { endpoint: 'createDefaults', caller: 'edge', input: () => ({ params: { account_id: acc }, body: { category: 'sports' } }), expect: 409 },
     { endpoint: 'getBoard', caller: 'agent', input: () => ({ params: { account_id: acc } }) },
     { endpoint: 'getBoard', caller: 'edge', input: () => ({ params: { account_id: 'acc_nobody000001' } }), expect: 404 },
@@ -40,6 +56,10 @@ export function makeCases(acc: string): Case[] {
     { endpoint: 'getWidget', caller: 'runner', input: (c) => ({ params: { widget_id: c.new }, query: { account_id: acc } }) },
     { endpoint: 'resize', caller: 'edge', input: (c) => ({ params: { widget_id: c.new }, body: { account_id: acc, size: 'M' } }) },
     { endpoint: 'resize', caller: 'edge', input: (c) => ({ params: { widget_id: c.new }, body: { account_id: acc, size: 'XL' } }), expect: 400, label: 'size not in catalog' },
+    { endpoint: 'setConnection', caller: 'edge', before: async (c) => { c.con = await connectFor(acc); c.otherCon = await connectFor(newId('acc')); },
+      input: (c) => ({ params: { widget_id: c.pos }, body: { account_id: acc, connection_id: c.con } }) },
+    { endpoint: 'setConnection', caller: 'edge', input: (c) => ({ params: { widget_id: c.new }, body: { account_id: acc, connection_id: c.con } }), expect: 400, label: 'not a "Your account" display' },
+    { endpoint: 'setConnection', caller: 'edge', input: (c) => ({ params: { widget_id: c.pos }, body: { account_id: acc, connection_id: c.otherCon } }), expect: 404, label: "another account's connection" },
     { endpoint: 'addSource', caller: 'edge', input: (c) => ({ params: { widget_id: c.new }, body: { account_id: acc, domain: 'sportswire.fixture.test' } }) },
     { endpoint: 'clear', caller: 'edge', input: (c) => ({ params: { widget_id: c.new }, body: { account_id: acc } }) },
     { endpoint: 'refresh', caller: 'edge', input: (c) => ({ params: { widget_id: c.new }, body: { account_id: acc } }) },

@@ -13,7 +13,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { connect, createReal, pgAccountData } from '../src/real.ts';
 import { MemoryObjectStore } from '../src/storage.ts';
 import { boardBehaviors } from './behaviors.ts';
-import { makeCases, marketsForBoard } from './cases.ts';
+import { connectionsForBoard, makeCases, marketsForBoard } from './cases.ts';
 
 function databaseUrl(): string | undefined {
   const env = process.env.BOARD_TEST_DATABASE_URL ?? process.env.BOARD_DATABASE_URL;
@@ -55,7 +55,7 @@ async function realApp() {
   pools.push(sql);
   const bus = new MemoryBus();
   const jobs: WidgetRunJob[] = [];
-  const handlers = createReal({ sql, bus, enqueue: async (_q, j) => void jobs.push(j), markets: marketsForBoard(), objects: new MemoryObjectStore() });
+  const handlers = createReal({ sql, bus, enqueue: async (_q, j) => void jobs.push(j), markets: marketsForBoard(), connections: connectionsForBoard(), objects: new MemoryObjectStore() });
   const app = buildApp({ service: 'board', mode: 'real', api: BOARD, handlers, callers: testCallers(), log });
   return { app, bus, jobs };
 }

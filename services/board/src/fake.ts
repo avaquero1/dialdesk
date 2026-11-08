@@ -31,6 +31,7 @@ import {
   validateDisplay,
   validateTune,
   view,
+  ownConnection,
   type DisplaySpec,
 } from './logic.ts';
 import { prescribedTiles } from './defaults.ts';
@@ -42,6 +43,8 @@ export interface FakeDeps {
   enqueue?: (queue: string, job: WidgetRunJob) => void | Promise<void>;
   /** markets, for first paint. Without it, new widgets have no quotes. */
   markets?: Call;
+  /** connections, to check a "Your account" link is the account's own connection. Without it, no link is accepted. */
+  connections?: Call;
   /** Screenshots. Default: in memory. */
   objects?: ObjectStore;
   /** Hands over the fake's per-account data, so a test can follow account deletes (followAccountDeletes). */
@@ -50,7 +53,11 @@ export interface FakeDeps {
 /** With `make fakes`, the board fake reads first-paint prices from the markets fake over HTTP. */
 export async function fakeDepsFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<FakeDeps> {
   const { token, url } = calleeConfig('board', 'markets', env);
-  return token ? { markets: createClient({ baseUrl: url, token }) } : {};
+  const c = calleeConfig('board', 'connections', env);
+  return {
+    ...(token ? { markets: createClient({ baseUrl: url, token }) } : {}),
+    ...(c.token ? { connections: createClient({ baseUrl: c.url, token: c.token }) } : {}),
+  };
 }
 
 /** Runs the fake enqueued, for tests to read (the real board uses BullMQ on QUEUES.widgetRuns). */
@@ -286,6 +293,15 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       const recent = [...requested.values()].filter((r) => r.widget_id === w.spec.widget_id && r.reason === 'refresh' && r.at > hour);
       if (recent.length >= REFRESH_PER_HOUR) throw new HttpError(429, 'too_many_refreshes', 'this widget was refreshed too often this hour');
       return enqueueRun(w.spec, refreshKind(w.spec), 'refresh');
+    },
+    setConnection: async ({ params, body }) => {
+      const w = widget(params.widget_id, body.account_id);
+      if (w.spec.kind !== 'display' || w.spec.type !== 'positions') throw new HttpError(400, 'not_positions', 'only a "Your account" display shows a connected account');
+      await ownConnection(deps.connections, body.account_id, body.connection_id);
+      w.spec = { ...w.spec, params: { ...w.spec.params, connection_id: body.connection_id } };
+      await enqueueRun(w.spec, 'numbers', 'accept');
+      await bus.emit('widget.updated', { account_id: body.account_id, at: now(), widget_id: params.widget_id, change: 'changed' });
+      return shown(w);
     },
     addSource: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);

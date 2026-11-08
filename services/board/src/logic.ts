@@ -4,6 +4,7 @@
  */
 import { createHash } from 'node:crypto';
 import {
+  CONNECTIONS,
   MARKETS,
   WidgetRunJob,
   displayEntry,
@@ -74,6 +75,16 @@ export function applyTune(c: Tune, spec: DisplaySpec): DisplaySpec {
       ...(c.threshold_pts !== undefined && { threshold_pts: c.threshold_pts }),
     },
   };
+}
+
+/**
+ * A "Your account" link: the connection must be one of this account's (connections.list, which holds no key and no
+ * numbers). 404 otherwise, the same answer as for a connection that does not exist. Without connections, no link.
+ */
+export async function ownConnection(connections: Call | undefined, account_id: string, connection_id: string): Promise<void> {
+  if (!connections) throw new HttpError(404, 'not_found', 'no such connection');
+  const { connections: list } = await connections(CONNECTIONS.list, { query: { account_id } });
+  if (!list.some((c) => c.connection_id === connection_id)) throw new HttpError(404, 'not_found', 'no such connection');
 }
 
 export function defaultProfile(widget_id: string, type: DisplayType, brief = ''): WidgetProfile {

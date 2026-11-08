@@ -58,6 +58,7 @@ import {
   validateDisplay,
   validateTune,
   view,
+  ownConnection,
   type DisplaySpec,
 } from './logic.ts';
 import { prescribedTiles } from './defaults.ts';
@@ -75,11 +76,13 @@ export interface RealDeps {
   enqueue: (queue: string, job: WidgetRunJob) => Promise<void>;
   /** markets, for first paint. */
   markets?: Call;
+  /** connections, to check a "Your account" link is the account's own connection. */
+  connections?: Call;
   objects: ObjectStore;
 }
 
 /**
- * From env: BOARD_DATABASE_URL, BOARD_VALKEY_URL, BOARD_TOKEN_MARKETS / BOARD_URL_MARKETS, and where screenshots go:
+ * From env: BOARD_DATABASE_URL, BOARD_VALKEY_URL, BOARD_TOKEN_MARKETS / BOARD_URL_MARKETS, BOARD_TOKEN_CONNECTIONS / BOARD_URL_CONNECTIONS, and where screenshots go:
  * BOARD_S3_BUCKET (+ _ENDPOINT, _REGION, _CREDENTIALS_FILE) for Object Storage, else BOARD_SCREENSHOT_DIR (dev, fallback).
  */
 export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeof BOARD>> {
@@ -101,6 +104,7 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
     bus,
     enqueue: async (_q, job) => void (await runs.enqueue(job)),
     markets: await clientFromEnv('board', 'markets'),
+    connections: await clientFromEnv('board', 'connections'),
     objects: s3 ?? new LocalDirObjectStore(dir),
   });
 }
@@ -512,6 +516,24 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
       });
       await flush(o);
       return r;
+    },
+
+    setConnection: async ({ params, body }) => {
+      await ownConnection(deps.connections, body.account_id, body.connection_id);
+      const o = outbox();
+      await sql.begin(async (tx) => {
+        const l = await lockSpec(tx, params.widget_id, body.account_id);
+        if (!l) throw new HttpError(404, 'not_found', 'no such widget');
+        if (l.spec.kind !== 'display' || l.spec.type !== 'positions')
+          throw new HttpError(400, 'not_positions', 'only a "Your account" display shows a connected account');
+        const spec: DisplaySpec = { ...l.spec, params: { ...l.spec.params, connection_id: body.connection_id } };
+        await tx`update widgets set spec = ${json(tx, stored(spec))}, updated_at = now()
+                 where widget_id = ${params.widget_id} and account_id = ${body.account_id}`;
+        await run(tx, o, spec, 'numbers', 'accept');
+        changed(o, body.account_id, params.widget_id, 'changed');
+      });
+      await flush(o);
+      return loadWidget(params.widget_id, body.account_id);
     },
 
     addSource: async ({ params, body }) => {

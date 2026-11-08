@@ -31,7 +31,8 @@ export function makeApp() {
  */
 export function wire(makeEdge: (deps: FakeDeps) => Hono, accountsApp: Hono = fakeApp('accounts', ACCOUNTS, accounts())) {
   const t = TEST_TOKENS.edge;
-  const boardApp = fakeApp('board', BOARD, board());
+  const connectionsApp = fakeApp('connections', CONNECTIONS, connections());
+  const boardApp = fakeApp('board', BOARD, board({ connections: createClient({ baseUrl: 'http://connections.internal', token: TEST_TOKENS.board, fetch: (r) => connectionsApp.fetch(r) }) }));
   boardAsRunner = createClient({ baseUrl: 'http://board.internal', token: TEST_TOKENS.runner, fetch: (r) => boardApp.fetch(r) });
   const agentApp = fakeApp('agent', AGENT, agent({ board: inProcess({ board: boardApp }, { board: TEST_TOKENS.agent }).board }));
   const deps = inProcess(
@@ -39,7 +40,7 @@ export function wire(makeEdge: (deps: FakeDeps) => Hono, accountsApp: Hono = fak
       accounts: accountsApp,
       board: boardApp,
       agent: agentApp,
-      connections: fakeApp('connections', CONNECTIONS, connections()),
+      connections: connectionsApp,
       audit: fakeApp('audit', AUDIT, createFakeAudit().handlers),
       models: fakeApp('models', MODELS, models()),
     },
@@ -54,7 +55,8 @@ export const cases: Case[] = [
   { endpoint: 'signup', caller: 'public', input: () => ({ body: { email: 'kim@example.test', password: 'correct horse battery' } }) },
   { endpoint: 'login', caller: 'public', input: () => ({ body: { email: 'kim@example.test', password: 'correct horse battery' } }) },
   { endpoint: 'me', caller: 'browser' },
-  { endpoint: 'board', caller: 'browser', save: (o, c) => { c.acc = o.account_id; c.wid = o.widgets.find((w: any) => w.spec.kind === 'display' && w.spec.type === 'gap').spec.widget_id; } },
+  { endpoint: 'board', caller: 'browser', save: (o, c) => { c.acc = o.account_id; c.wid = o.widgets.find((w: any) => w.spec.kind === 'display' && w.spec.type === 'gap').spec.widget_id;
+    c.pos = o.widgets.find((w: any) => w.spec.kind === 'display' && w.spec.type === 'positions').spec.widget_id; } },
   { endpoint: 'setLayout', caller: 'browser', input: (c) => ({ body: { places: [{ widget_id: c.wid, place: { col: 4, row: 0 } }] } }) },
   { endpoint: 'chat', caller: 'browser', input: () => ({ body: { conversation_id: null, widget_id: null, message: 'Chiefs, Bills, and the NBA tonight.' } }),
     save: (o, c) => { c.prp = o.turn.chips[0].proposal_id; c.cnv = o.conversation_id; } },
@@ -90,6 +92,9 @@ export const cases: Case[] = [
   { endpoint: 'connect', caller: 'browser', input: () => ({ body: { exchange: 'polymarket', wallet: '0x00000000000000000000000000000000000f1a7e' } }), save: (o, c) => { c.con = o.connection_id; } },
   { endpoint: 'connections', caller: 'browser' },
   { endpoint: 'consent', caller: 'browser', input: (c) => ({ params: { connection_id: c.con }, body: { share_numbers: true } }) },
+  { endpoint: 'linkConnection', caller: 'browser', input: (c) => ({ params: { widget_id: c.pos }, body: { connection_id: c.con } }) },
+  { endpoint: 'linkConnection', caller: 'browser', input: (c) => ({ params: { widget_id: c.wid }, body: { connection_id: c.con } }), expect: 400, label: 'not a "Your account" display' },
+  { endpoint: 'linkConnection', caller: 'browser', input: (c) => ({ params: { widget_id: c.pos }, body: { connection_id: 'con_nobody00000001' } }), expect: 404, label: 'not your connection' },
   { endpoint: 'disconnect', caller: 'browser', input: (c) => ({ params: { connection_id: c.con } }) },
   { endpoint: 'trust', caller: 'browser' },
   { endpoint: 'auditHead', caller: 'public' },

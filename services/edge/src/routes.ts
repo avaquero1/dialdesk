@@ -76,6 +76,7 @@ export function routes(deps: Deps, hooks: RouteHooks = {}): Handlers<typeof EDGE
     clear: ({ params }, ctx) => need('board')(BOARD.clear, { params, body: { account_id: acc(ctx) } }),
     remove: ({ params }, ctx) => need('board')(BOARD.remove, { params, query: { account_id: acc(ctx) } }),
     refresh: ({ params }, ctx) => need('board')(BOARD.refresh, { params, body: { account_id: acc(ctx) } }),
+    linkConnection: ({ params, body }, ctx) => need('board')(BOARD.setConnection, { params, body: { ...body, account_id: acc(ctx) } }),
     addSource: ({ params, body }, ctx) => need('board')(BOARD.addSource, { params, body: { ...body, account_id: acc(ctx) } }),
     trace: ({ params }, ctx) => need('board')(BOARD.getTrace, { params, query: { account_id: acc(ctx) } }),
     screenshot: ({ params }, ctx) => need('board')(BOARD.getScreenshot, { params, query: { account_id: acc(ctx) } }),
