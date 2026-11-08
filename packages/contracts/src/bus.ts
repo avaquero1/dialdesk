@@ -108,6 +108,11 @@ export const EVENTS = {
     from: 'accounts',
     schema: z.object({ ...evBase, look: Look }).strict(),
   },
+  /** The account is gone (the nightly guest sweep): board, agent and connections delete its rows. */
+  'account.deleted': {
+    from: 'accounts',
+    schema: z.object({ ...evBase, reason: z.enum(['guest_sweep']) }).strict(),
+  },
 } as const satisfies Record<string, { from: z.infer<typeof ServiceName>; schema: z.ZodType }>;
 
 export type EventName = keyof typeof EVENTS;
@@ -151,11 +156,11 @@ const pubs = (s: string) => (Object.keys(EVENTS) as EventName[]).filter((e) => E
 export const VALKEY_ACL: Record<z.infer<typeof ServiceName>, Acl> = {
   edge: { queues: [], publish: [], subscribe: 'all', logStream: 'append' },
   accounts: { queues: [], publish: pubs('accounts'), subscribe: [], logStream: 'append' },
-  board: { queues: [QUEUES.widgetRuns], publish: pubs('board'), subscribe: [], logStream: 'append' },
-  agent: { queues: [], publish: [], subscribe: [], logStream: 'append' },
+  board: { queues: [QUEUES.widgetRuns], publish: pubs('board'), subscribe: ['account.deleted'], logStream: 'append' },
+  agent: { queues: [], publish: [], subscribe: ['account.deleted'], logStream: 'append' },
   runner: { queues: [QUEUES.widgetRuns], publish: pubs('runner'), subscribe: [], logStream: 'append' },
   markets: { queues: [], publish: [], subscribe: [], logStream: 'append' },
-  connections: { queues: [QUEUES.accountRefresh], publish: [], subscribe: [], logStream: 'append' },
+  connections: { queues: [QUEUES.accountRefresh], publish: [], subscribe: ['account.deleted'], logStream: 'append' },
   models: { queues: [], publish: [], subscribe: [], logStream: 'append' },
   audit: { queues: [], publish: [], subscribe: [], logStream: 'read' },
 };

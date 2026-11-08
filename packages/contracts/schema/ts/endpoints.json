@@ -476,6 +476,20 @@
     "summary": "Save the look (validated again here). Emits look.changed."
   },
   {
+    "service": "accounts",
+    "name": "missing",
+    "method": "POST",
+    "path": "/accounts/missing",
+    "callers": [
+      "board",
+      "agent",
+      "connections"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "Which of these accounts no longer exist. The orphan sweeps ask it, so a service that missed account.deleted still deletes a gone account's rows."
+  },
+  {
     "service": "board",
     "name": "getBoard",
     "method": "GET",

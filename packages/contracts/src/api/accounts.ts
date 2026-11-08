@@ -107,4 +107,13 @@ export const ACCOUNTS = api('accounts', {
     errors: [400, 404],
     summary: 'Save the look (validated again here). Emits look.changed.',
   },
+  missing: {
+    method: 'POST',
+    path: '/accounts/missing',
+    callers: ['board', 'agent', 'connections'],
+    body: z.object({ account_ids: z.array(AccountId).min(1).max(500) }).strict(),
+    response: z.object({ missing: z.array(AccountId) }).strict(),
+    summary:
+      "Which of these accounts no longer exist. The orphan sweeps ask it, so a service that missed account.deleted still deletes a gone account's rows.",
+  },
 });
