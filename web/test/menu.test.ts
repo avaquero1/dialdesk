@@ -145,6 +145,16 @@ describe('the ⋯ menu at phone size', () => {
     expect((await refreshed).status()).toBe(202);
   });
 
+  it("past the account's cap on refreshes, Refresh now says design.md's plain line, once and with no code", async () => {
+    await page.route('**/api/widgets/*/refresh', (r) =>
+      r.fulfill({ status: 429, contentType: 'application/json', body: '{"error":"refresh_cap","message":"too many refreshes on this account this hour"}' }),
+    );
+    await openMenu(T.tonight);
+    await row('Refresh now').tap();
+    await expect.poll(() => page.locator('#toast.on').innerText().catch(() => '')).toBe('Slow down a little. Try again in a minute.');
+    await page.unroute('**/api/widgets/*/refresh');
+  });
+
   it('Remove takes the tile off at once; Undo brings it back and nothing is sent', async () => {
     const before = await boardState();
     await openMenu(T.gap);
@@ -235,7 +245,8 @@ describe('the ⋯ menu at phone size', () => {
   });
 
   it('had no console errors and no page errors', () => {
-    const expected = [/status of 401 .* @ http:\/\/[^/]+\/api\/me$/];
+    // The door's 401, and the refresh cap's 429 the cap test fakes with page.route.
+    const expected = [/status of 401 .* @ http:\/\/[^/]+\/api\/me$/, /status of 429 .* @ http:\/\/[^/]+\/api\/widgets\/[^/]+\/refresh$/];
     expect(problems.filter((p) => !(p.startsWith('console: Failed to load resource') && expected.some((e) => e.test(p))))).toEqual([]);
   });
 });

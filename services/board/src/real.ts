@@ -41,7 +41,7 @@ import {
 } from '@app/service-kit';
 import postgres from 'postgres';
 import {
-  REFRESH_PER_HOUR,
+  checkRefresh,
   checkWidgetCap,
   allMarketIds,
   applyTune,
@@ -546,10 +546,18 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
       const r = await sql.begin(async (tx) => {
         const l = await lockSpec(tx, params.widget_id, body.account_id);
         if (!l || l.spec.kind !== 'display') throw new HttpError(404, 'not_found', 'only displays refresh');
-        const [c] = await tx<{ n: number }[]>`select count(*)::int as n from run_requests
-                                             where widget_id = ${params.widget_id} and reason = 'refresh' and requested_at > now() - interval '1 hour'`;
-        if (c!.n >= REFRESH_PER_HOUR) throw new HttpError(429, 'too_many_refreshes', 'this widget was refreshed too often this hour');
-        return run(tx, o, l.spec, refreshKind(l.spec), 'refresh');
+        // A refresh that joins this minute's run costs nothing: it is never counted, nor refused.
+        const kind = refreshKind(l.spec);
+        const { job_id } = runJob(l.spec, kind, 'refresh');
+        const [had] = await tx`select 1 from run_requests where job_id = ${job_id}`;
+        if (had) return { job_id, joined: true };
+        // One account's refreshes count one at a time, so two widgets refreshed together can't both pass at 59.
+        await tx`select pg_advisory_xact_lock(hashtext(${'refresh:' + body.account_id}))`;
+        const [c] = await tx<{ widget: number; account: number }[]>`
+          select count(*) filter (where widget_id = ${params.widget_id})::int as widget, count(*)::int as account
+          from run_requests where account_id = ${body.account_id} and reason = 'refresh' and requested_at > now() - interval '1 hour'`;
+        checkRefresh(c!.widget, c!.account);
+        return run(tx, o, l.spec, kind, 'refresh');
       });
       await flush(o);
       return r;

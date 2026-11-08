@@ -16,7 +16,7 @@ import {
 } from '@app/contracts';
 import { HttpError, MemoryBus, calleeConfig, createClient, now, type AccountData, type Bus, type Call, type Handlers } from '@app/service-kit';
 import {
-  REFRESH_PER_HOUR,
+  checkRefresh,
   checkWidgetCap,
   allMarketIds,
   applyTune,
@@ -126,11 +126,11 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     return max + 1;
   };
   /** The same job id in the same minute collapses, as it does on the queue. */
-  const requested = new Map<string, { at: number; reason: WidgetRunJob['reason']; widget_id: string }>();
+  const requested = new Map<string, { at: number; reason: WidgetRunJob['reason']; widget_id: string; account_id: string }>();
   async function enqueueRun(spec: DisplaySpec, kind: RunKind, reason: WidgetRunJob['reason']) {
     const job = runJob(spec, kind, reason);
     if (requested.has(job.job_id)) return { job_id: job.job_id, joined: true };
-    requested.set(job.job_id, { at: Date.now(), reason, widget_id: spec.widget_id });
+    requested.set(job.job_id, { at: Date.now(), reason, widget_id: spec.widget_id, account_id: spec.account_id });
     await enqueue(QUEUES.widgetRuns, job);
     return { job_id: job.job_id, joined: false };
   }
@@ -320,10 +320,13 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     refresh: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
       if (w.spec.kind !== 'display') throw new HttpError(404, 'not_found', 'only displays refresh');
+      const kind = refreshKind(w.spec);
+      const job_id = runJob(w.spec, kind, 'refresh').job_id;
+      if (requested.has(job_id)) return { job_id, joined: true };
       const hour = Date.now() - 3600_000;
-      const recent = [...requested.values()].filter((r) => r.widget_id === w.spec.widget_id && r.reason === 'refresh' && r.at > hour);
-      if (recent.length >= REFRESH_PER_HOUR) throw new HttpError(429, 'too_many_refreshes', 'this widget was refreshed too often this hour');
-      return enqueueRun(w.spec, refreshKind(w.spec), 'refresh');
+      const recent = [...requested.values()].filter((r) => r.account_id === body.account_id && r.reason === 'refresh' && r.at > hour);
+      checkRefresh(recent.filter((r) => r.widget_id === w.spec.widget_id).length, recent.length);
+      return enqueueRun(w.spec, kind, 'refresh');
     },
     setConnection: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);

@@ -7,7 +7,7 @@ import { createClient, type Call, type MemoryBus } from '@app/service-kit';
 import { sampleResult, TEST_TOKENS } from '@app/testkit';
 import type { Hono } from 'hono';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { REFRESH_PER_HOUR } from '../src/logic.ts';
+import { REFRESH_PER_ACCOUNT_HOUR, REFRESH_PER_HOUR } from '../src/logic.ts';
 import { TINY_PNG, marketsForBoard } from './cases.ts';
 
 export interface Rig {
@@ -262,6 +262,34 @@ export function boardBehaviors(name: string, rig: () => Promise<Rig>) {
       }
       nextMinute();
       expect(await status(edge(BOARD.refresh, { params: { widget_id: wid }, body: { account_id: a } }))).toBe(429);
+    });
+
+    it("refresh: past 60 new runs an hour on one account, the 61st answers 429 refresh_cap; a joined refresh isn't counted", async () => {
+      const a = acc();
+      const other = acc();
+      const b = await edge(BOARD.createDefaults, { params: { account_id: a }, body: { category: 'sports' } });
+      const ob = await edge(BOARD.createDefaults, { params: { account_id: other }, body: { category: 'sports' } });
+      const ws = displays(b).map((x) => x.spec.widget_id);
+      const per = REFRESH_PER_HOUR;
+      const spread = REFRESH_PER_ACCOUNT_HOUR / per; // 5 widgets x 12, each under its own limit
+      expect(ws.length).toBeGreaterThan(spread);
+      const refresh = (widget_id: string, account_id = a) => edge(BOARD.refresh, { params: { widget_id }, body: { account_id } });
+      for (let m = 0; m < per; m++) {
+        nextMinute();
+        for (const w of ws.slice(0, spread)) {
+          expect((await refresh(w)).joined ?? false).toBe(false);
+          // The same tap again in this minute joins the run: answered, and not counted.
+          expect((await refresh(w)).joined).toBe(true);
+        }
+      }
+      // 60 counted: the 61st, on a widget not refreshed yet, is refused with the plain code.
+      const err = await refresh(ws[spread]!).then(() => null, (e: { status?: number; body?: { error?: string } }) => e);
+      expect(err?.status).toBe(429);
+      expect(err?.body?.error).toBe('refresh_cap');
+      // Past the cap, a refresh that joins this minute's run still answers: it costs nothing.
+      expect((await refresh(ws[0]!)).joined).toBe(true);
+      // Another account isn't held back.
+      expect((await refresh(displays(ob)[0]!.spec.widget_id, other)).joined ?? false).toBe(false);
     });
 
     it("screenshots round-trip through the object store, and one account can't read another's board", async () => {

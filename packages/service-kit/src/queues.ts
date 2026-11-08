@@ -21,6 +21,15 @@ export const RUN_RULES = {
   /** About 6 Chromium sandboxes fit on 8 GB. */
   sandboxSlots: 6,
   /**
+   * "Refresh now" at most this many times an hour per account (A1.4.2), on top of the per-widget limit (board's
+   * REFRESH_PER_HOUR, 12). A board may hold 80 widgets, so the per-widget limit alone lets one account ask for 960 runs
+   * an hour on a sandbox machine every demo user shares. 60 is one a minute: more than a person taps, less than a
+   * script. Only refreshes that put a new run on the queue count: the scheduler's runs don't, and neither does a
+   * refresh that joins the run already asked for in the same minute (it costs nothing). Past it, board answers 429
+   * `refresh_cap` and the widget says "Slow down a little. Try again in a minute."
+   */
+  refreshesPerAccountHour: 60,
+  /**
    * runner's scheduler (A1.4.1). The sandbox machine (a VX1, 2 vCPUs) is shared by every user of the public demo,
    * and one board has about 30 displays, so the cadence runs are rationed:
    */

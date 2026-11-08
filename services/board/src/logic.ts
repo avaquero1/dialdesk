@@ -23,15 +23,27 @@ import {
   type WidgetSpec,
 } from '@app/contracts';
 import { checkPublish } from '@app/guard';
-import { HttpError, type Call } from '@app/service-kit';
+import { HttpError, RUN_RULES, type Call } from '@app/service-kit';
 import type { z } from 'zod';
 
 export type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
 type Tune = Extract<z.infer<typeof ProposalChange>, { op: 'tune' }>;
 type DraftLike = Pick<WidgetDraft, 'type' | 'size' | 'market_ids' | 'params'>;
 
-/** "Refresh now" at most this many times per widget per hour (then 429). */
+/** "Refresh now" at most this many times per widget per hour (then 429 too_many_refreshes). */
 export const REFRESH_PER_HOUR = 12;
+
+/** "Refresh now" at most this many times per account per hour (then 429 refresh_cap). The reason is in RUN_RULES. */
+export const REFRESH_PER_ACCOUNT_HOUR = RUN_RULES.refreshesPerAccountHour;
+
+/**
+ * The refresh limits, on the refreshes of the last hour that put a new run on the queue (a joined refresh is never
+ * counted, nor refused). The account's cap comes first: past it, every widget answers the same plain "too fast".
+ */
+export function checkRefresh(widgetHour: number, accountHour: number): void {
+  if (accountHour >= REFRESH_PER_ACCOUNT_HOUR) throw new HttpError(429, 'refresh_cap', 'too many refreshes on this account this hour');
+  if (widgetHour >= REFRESH_PER_HOUR) throw new HttpError(429, 'too_many_refreshes', 'this widget was refreshed too often this hour');
+}
 
 /** The demo cap on one board's widgets, folders and their tiles counted. The prescribed board stays under it. */
 export const MAX_WIDGETS = 80;

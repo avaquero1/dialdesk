@@ -2,7 +2,7 @@
  * What the ⋯ menu's rows do, through edge's menu endpoints. Refresh, Size and Move to a folder are sent at once;
  * Remove and Clear all show at once and are sent when their Undo offer ends (undo.ts), so Undo needs no endpoint.
  */
-import { ApiError, api } from './api.ts';
+import { ApiError, api, noticeFor } from './api.ts';
 import { $, mk } from './dom.ts';
 import { S, hideTile, placesWithout, reconcile, refreshTile, saveLayout, shimmer, upsert } from './board.ts';
 import { closeSurface, toast } from './surfaces.ts';
@@ -74,7 +74,10 @@ export function menuAction(id: string, act: MenuAction, arg?: string) {
         }
       })
       .catch((e: unknown) => {
-        if (e instanceof ApiError && e.status === 429) toast(`${title(id)} was refreshed often this hour. Try again later.`);
+        // The call is quiet, so this is the one line: one widget refreshed often this hour, or else the account's cap
+        // on refreshes (or edge's limit), which gets design.md's plain "too fast".
+        if (e instanceof ApiError && e.status === 429 && e.code === 'too_many_refreshes') toast(`${title(id)} was refreshed often this hour. Try again later.`);
+        else if (e instanceof ApiError && e.status === 429) toast(noticeFor(e)!);
         else if (!(e instanceof ApiError) || e.status !== 401) toast('Couldn’t refresh it.');
       });
   } else if (act === 'size' && arg) {

@@ -9,9 +9,9 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BOARD, CONNECTIONS, MARKETS, MODELS, TRUST_ACTIONS, type EngineInput, type EngineResult, type SbxJobStatus, type Widget, type WidgetRunJob } from '@app/contracts';
-import { MemoryBus, RUN_RULES, SandboxBusy, createClient, hashToken, sandboxClient, type SandboxClient } from '@app/service-kit';
+import { MemoryBus, RUN_RULES, SandboxBusy, createClient, hashToken, sandboxClient, type CallError, type SandboxClient } from '@app/service-kit';
 import { fakeApp, TEST_TOKENS } from '@app/testkit';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createFakeAudit } from '../../audit/src/fake.ts';
 import { fake as boardFake } from '../../board/src/fake.ts';
 import { fake as connectionsFake } from '../../connections/src/fake.ts';
@@ -119,6 +119,29 @@ describe('schedule (A1.4.1)', () => {
     const again = await edgeBoard(BOARD.refresh, r);
     // createDefaults asked for this minute's numbers run already: the first refresh joins it too.
     expect(again).toEqual({ job_id: first.job_id, joined: true });
+  });
+
+  it('past the cap on manual refreshes (A1.4.2), the scheduled runs of that board still run', async () => {
+    const { account_id, displays } = await freshBoard();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      // 5 widgets x 12 minutes: 60 refreshes, each under its widget's limit. The 61st is refused.
+      for (let m = 1; m <= 12; m++) {
+        vi.setSystemTime(vi.getRealSystemTime() + m * 60_000);
+        for (const w of displays.slice(0, 5)) await edgeBoard(BOARD.refresh, { params: { widget_id: w.spec.widget_id }, body: { account_id } });
+      }
+      const refused = await edgeBoard(BOARD.refresh, { params: { widget_id: displays[5]!.spec.widget_id }, body: { account_id } }).catch((e: CallError) => e);
+      expect(refused).toMatchObject({ status: 429, body: { error: 'refresh_cap' } });
+    } finally {
+      vi.useRealTimers();
+    }
+    const store = new MemoryStore();
+    const q: WidgetRunJob[] = [];
+    const s = new Scheduler(store, async (j) => void q.push(j), () => t, opened({ [account_id]: t - 60_000 }));
+    for (const w of displays.slice(0, 6)) await store.schedule.put(row(w.spec.widget_id, account_id));
+    const jobs = await s.tick();
+    expect(jobs).toHaveLength(1); // one numbers job for the board's six due widgets (A1.4.1)
+    expect(jobs[0]).toMatchObject({ account_id, reason: 'schedule' });
   });
 });
 
