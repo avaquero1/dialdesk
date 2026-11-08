@@ -3,7 +3,7 @@
  * web/test/unit/moment.test.ts. Words come from step names, statuses and counts only, never from a page or a note's text
  * (the planner's note gives only its number of sources).
  */
-import type { RunTraceStep, WidgetResult } from '@app/contracts';
+import type { RunTraceStep, WidgetSince } from '@app/contracts';
 
 /** The two counts the chip reads from audit's trust page (TrustCounts; tricks are boxes killed, as the Safety sheet counts them). */
 export interface ChipCounts {
@@ -137,20 +137,16 @@ export function failedWords(reason: string, at: string | null): { text: string; 
   }
 }
 
-const probs = (r: WidgetResult) => r.numbers.filter((n) => n.op === 'implied_probability' && n.unit === 'probability');
-
-/** "Since you last looked": what changed from the previous result to this one, or null when nothing did. */
-export function sinceWords(prev: WidgetResult | null, cur: WidgetResult | null): string | null {
-  if (!prev || !cur || prev.result_id === cur.result_id) return null;
-  const b = probs(cur)[0];
-  const a = b && (probs(prev).find((n) => n.id === b.id) ?? probs(prev)[0]);
-  if (a && b) {
-    const d = Math.round(b.value * 100) - Math.round(a.value * 100);
-    if (d) return `Since you last looked: ${d > 0 ? 'up' : 'down'} ${plural(Math.abs(d), 'point', 'points')}`;
-  }
-  const seen = new Set(prev.facts.map((f) => f.claim));
-  const fresh = cur.facts.filter((f) => !seen.has(f.claim)).length;
-  if (fresh) return `Since you last looked: ${plural(fresh, 'new item', 'new items')}`;
+/**
+ * "Since you last looked", from board (Widget.since): the engine's move of the main chance since the owner's previous
+ * visit, on any device, else how many items are new. null when nothing changed.
+ */
+export function sinceWords(s: WidgetSince | null | undefined): string | null {
+  if (!s) return null;
+  // The first move is the first chance's: a gap op in points, with its receipt (both prices, both times).
+  const n = s.numbers[0];
+  const d = n ? Math.round(n.value) : 0;
+  if (d) return `Since you last looked: ${d > 0 ? 'up' : 'down'} ${plural(Math.abs(d), 'point', 'points')}`;
+  if (s.new_items) return `Since you last looked: ${plural(s.new_items, 'new item', 'new items')}`;
   return null;
 }
-

@@ -25,28 +25,6 @@ let H: Hooks;
 const runs = new Map<string, RunView>();
 const failed = new Map<string, { text: string; tone: 'calm' | 'error'; until: number }>();
 const endT = new Map<string, number>();
-let seenAtBoot: Record<string, string> = {};
-const bootAt = Date.now();
-
-const SEEN_KEY = 'seen-results';
-function loadSeen(): Record<string, string> {
-  try {
-    const v = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '{}') as unknown;
-    return v && typeof v === 'object' ? (v as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
-}
-function saveSeen() {
-  const out: Record<string, string> = {};
-  for (const w of H.widgets()) if (w.result) out[w.spec.widget_id] = w.result.result_id;
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(out));
-  } catch {
-    /* storage off: the strip just won't show next time */
-  }
-}
-
 /** What the tile's line says now: a run, then a recent failure, then a kept block, then what changed. */
 function restLine(w: Widget): { text: string; tone: 'calm' | 'blocked' | 'error' | 'since' } | null {
   const id = w.spec.widget_id;
@@ -56,13 +34,9 @@ function restLine(w: Widget): { text: string; tone: 'calm' | 'blocked' | 'error'
   if (f && f.until > Date.now()) return f;
   // News lists its blocked page among its items (widgets.ts); the other displays say it here.
   if (w.result?.blocked.length && !(w.spec.kind === 'display' && w.spec.type === 'news')) return { text: BLOCKED_LINE, tone: 'blocked' };
-  const seen = seenAtBoot[id];
-  // Only what arrived while the user was away: a result landing now is the user watching, not "since".
-  if (seen && w.result && seen !== w.result.result_id && Date.parse(w.result.created_at) <= bootAt) {
-    const t = sinceWords(w.previous, w.result);
-    if (t) return { text: t, tone: 'since' };
-  }
-  return null;
+  // What changed since the owner's previous visit: board keeps the visits, the engine measured the move.
+  const t = sinceWords(w.since);
+  return t ? { text: t, tone: 'since' } : null;
 }
 
 function boxesHtml(r: RunView | undefined) {
@@ -256,15 +230,8 @@ export function onRunEvent(event: EventName, p: Record<string, unknown>) {
 
 export function initMoment(h: Hooks) {
   H = h;
-  seenAtBoot = loadSeen();
   const chip = $('#safety-chip');
   chip?.addEventListener('click', () => H.openSafety());
   void loadChip();
-  addEventListener('pagehide', saveSeen);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') saveSeen();
-  });
-  // First visit: remember what was on screen, so the next visit can say what changed.
-  if (!Object.keys(seenAtBoot).length) saveSeen();
   paintAll();
 }

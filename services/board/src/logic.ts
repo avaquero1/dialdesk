@@ -19,6 +19,7 @@ import {
   type WidgetDraft,
   type WidgetProfile,
   type WidgetResult,
+  type WidgetSince,
   type WidgetSpec,
 } from '@app/contracts';
 import { checkPublish } from '@app/guard';
@@ -130,17 +131,67 @@ export function checkResult(body: PutResultBody, spec: WidgetSpec): void {
   if (body.result.widget_id !== spec.widget_id) throw new HttpError(400, 'wrong_widget', 'result is for another widget');
   if (body.trace.some((s) => s.widget_id !== spec.widget_id || s.run_id !== body.result.run_id))
     throw new HttpError(400, 'wrong_trace', 'trace steps must belong to this widget and run');
+  checkSince(body.result);
 }
 
-/** A movement widget whose result moved past its threshold raises movement.flagged (in points). */
+/**
+ * A movement widget whose result moved past its threshold raises movement.flagged (in points), on the game of the
+ * published move: its receipt's provenance (Biggest move picks one game of many), else the widget's only market.
+ */
 export function movementFlag(spec: WidgetSpec, result: WidgetResult): { market_id: string; move_pts: number; threshold_pts: number } | null {
-  if (spec.kind !== 'display' || spec.type !== 'movement' || !spec.market_ids[0]) return null;
+  if (spec.kind !== 'display' || spec.type !== 'movement') return null;
   const threshold_pts = spec.params.threshold_pts;
   if (threshold_pts === undefined) return null;
   const move = result.numbers.find((n) => n.op === 'movement');
   if (!move) return null;
+  const receipt = result.receipts.find((r) => r.id === move.receipt_id);
+  const market_id = receipt?.provenance?.series?.source ?? (spec.market_ids.length === 1 ? spec.market_ids[0] : undefined);
+  if (!market_id) return null;
   const move_pts = move.unit === 'probability' ? move.value * 100 : move.value;
-  return Math.abs(move_pts) >= threshold_pts ? { market_id: spec.market_ids[0], move_pts, threshold_pts } : null;
+  return Math.abs(move_pts) >= threshold_pts ? { market_id, move_pts, threshold_pts } : null;
+}
+
+// ---------- "since you last looked" (N1.2.1) ----------
+
+/**
+ * A visit: the owner's board reads (edge's getBoard) less than this far apart. A read after a longer gap starts a new
+ * visit, and the strip then compares with what the owner saw at the end of the last one. BOARD_VISIT_GAP_S overrides it.
+ */
+export const VISIT_GAP_S = 30 * 60;
+
+/** True when a read now would start a new visit: never opened, or the last read is older than the gap. */
+export const isAway = (lastOpenedAt: string | Date | null | undefined, gapS: number, nowMs = Date.now()) =>
+  !lastOpenedAt || nowMs - new Date(lastOpenedAt).getTime() > gapS * 1000;
+
+/**
+ * The result the move is measured from. Board keeps two per widget: `seen`, current at the owner's last read, and
+ * `baseline`, what `seen` was when this visit began (the previous visit's). While the owner is away, the next visit's
+ * previous visit is the last read, so a run compares with `seen`; during a visit, with `baseline`.
+ */
+export const baselineOf = (away: boolean, seen: WidgetResult | null | undefined, baseline: WidgetResult | null | undefined) =>
+  (away ? seen : baseline) ?? null;
+
+/**
+ * The strip's data: the current result's engine moves, when runner measured them from this baseline, and how many of
+ * its items are new. null when there is nothing to compare with, or nothing changed.
+ */
+export function sinceOf(cur: WidgetResult | null, base: WidgetResult | null): WidgetSince | null {
+  if (!cur || !base || cur.result_id === base.result_id) return null;
+  const s = cur.since?.from_result_id === base.result_id ? cur.since : null;
+  const had = new Set(base.facts.map((f) => f.claim));
+  const new_items = cur.facts.filter((f) => !had.has(f.claim)).length;
+  if (!s?.numbers.length && !new_items) return null;
+  return { from_result_id: base.result_id, from_at: base.created_at, numbers: s?.numbers ?? [], receipts: s?.receipts ?? [], new_items };
+}
+
+/** Every since number has its receipt, with the same value (board shows no number without one). */
+export function checkSince(result: WidgetResult): void {
+  const s = result.since;
+  if (!s) return;
+  for (const n of s.numbers) {
+    const r = s.receipts.find((x) => x.id === n.receipt_id);
+    if (!r || r.value !== n.value || n.op !== 'gap') throw new HttpError(400, 'bad_since', 'a since number needs its gap receipt');
+  }
 }
 
 /** First paint: cached prices from markets for every market id, fetched once each. A market that fails is left out. */

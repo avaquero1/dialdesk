@@ -33,6 +33,7 @@ import {
   type SbxJobStatus,
   type Verdict,
   type Widget,
+  type ResultSince,
   type WidgetResult,
   type WidgetRunJob,
   type WidgetSpec,
@@ -52,7 +53,7 @@ import {
   type SandboxClient,
 } from '@app/service-kit';
 import { z } from 'zod';
-import { allowedOps, biggestMoveNumbers, isBiggestMove, defaultPlan, gapNumbers, marketNumbers, numberKeys, pickBiggest, planProblem, positionNumbers, runnablePlan, type MarketNumbers } from './plans.ts';
+import { allowedOps, biggestMoveNumbers, isBiggestMove, defaultPlan, gapNumbers, marketNumbers, numberKeys, pickBiggest, planProblem, positionNumbers, runnablePlan, sinceInputs, splitSince, type MarketNumbers } from './plans.ts';
 import { toRunState, type RunRecord, type Store } from './store.ts';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
@@ -68,7 +69,7 @@ export interface BatchSlot {
 }
 type Draft = Pick<WidgetResult, 'summary' | 'facts' | 'receipts' | 'numbers' | 'sources'>;
 /** A result's notes (a base rate not shown, in words), only when there are some. */
-const notesOf = (m: { notes: string[] }) => (m.notes.length ? { notes: m.notes } : {});
+const notesOf = (m: { notes: string[]; since?: ResultSince }) => ({ ...(m.notes.length ? { notes: m.notes } : {}), ...(m.since ? { since: m.since } : {}) });
 
 const NO_NUMBERS = 'the engine computed no numbers';
 
@@ -204,7 +205,8 @@ interface Outputs {
   sources?: { candidates: Candidate[]; quotes: MarketNumbers['quotes'] };
   plan?: { plan: EnginePlan; candidate_ids: string[]; from: 'planner' | 'default' };
   reads?: Record<string, ReadOutcome>;
-  math?: { result: EngineResult; as_of: string; stale: boolean; notes: string[] };
+  /** since: the engine's moves from the owner's previous visit (N1.2.1), kept out of the widget's own numbers. */
+  math?: { result: EngineResult; as_of: string; stale: boolean; notes: string[]; since?: ResultSince };
   summary?: { template: string } | null;
   /** How many of each sandbox job's trust_log rows are in the audit log already (so a retry never logs one twice). */
   trust?: Record<string, number>;
@@ -337,8 +339,11 @@ class Run {
 
   // ---------- math (both kinds) ----------
 
-  /** Step 4: the plan on markets numbers in a compute sandbox. Returns null when nothing can be computed. */
-  async math(spec: DisplaySpec, plan: EnginePlan, job = 'math'): Promise<Outputs['math'] | null> {
+  /**
+   * Step 4: the plan on markets numbers in a compute sandbox. Returns null when nothing can be computed. With the
+   * result the owner saw at the previous visit (`baseline`), the same box also computes each chance's move since then.
+   */
+  async math(spec: DisplaySpec, plan: EnginePlan, baseline: WidgetResult | null = null, job = 'math'): Promise<Outputs['math'] | null> {
     if (this.out.math) return this.out.math;
     const t0 = Date.now();
     let use = plan;
@@ -377,7 +382,14 @@ class Run {
       await this.step({ step: 'math', status: 'skipped', note: 'no numbers to compute' }, t0);
       return null;
     }
-    const input: EngineInput = { plan: p, numbers: mn.numbers, origins: mn.origins, ...(mn.provenance ? { provenance: mn.provenance } : {}) };
+    const sv = sinceInputs(baseline, p, mn);
+    const provenance = { ...mn.provenance, ...sv.provenance };
+    const input: EngineInput = {
+      plan: sv.ops.length ? { ...p, ops: [...p.ops, ...sv.ops] } : p,
+      numbers: { ...mn.numbers, ...sv.numbers },
+      origins: { ...mn.origins, ...sv.origins },
+      ...(Object.keys(provenance).length ? { provenance } : {}),
+    };
     // In a board's numbers batch, the input goes in the batch's one compute box.
     const j = this.d.batch && job === 'math' ? await this.d.batch.compute(this, spec, input) : await this.computeOne(spec, input, job);
     if (!j) {
@@ -386,7 +398,10 @@ class Run {
     }
     const parsed = j.state === 'done' ? EngineResult.safeParse(j.compute_result) : null;
     // Biggest move keeps the game with the largest move: the engine's own numbers and receipts, unchanged.
-    const er = parsed?.success && isBiggestMove(spec) ? { success: true as const, data: pickBiggest(parsed.data) ?? parsed.data } : parsed;
+    // (pickBiggest keeps the since move of the game it keeps: its receipt reads that game's price.)
+    const picked = parsed?.success && isBiggestMove(spec) ? { success: true as const, data: pickBiggest(parsed.data) ?? parsed.data } : parsed;
+    const split = picked?.success ? splitSince(picked.data, baseline?.result_id) : null;
+    const er = split ? { success: true as const, data: split.er } : picked;
     if (!er?.success) {
       await this.step({ step: 'math', status: 'failed', sandbox: { sandbox_id: j.sandbox_id, state: 'destroyed' }, note: `compute ${j.state}` }, t0);
       throw new Error(`compute job ended ${j.state}`);
@@ -394,9 +409,9 @@ class Run {
     const note = [mn.down.length ? `${mn.down.length} market(s) down` : '', mn.stale ? 'cached price, as of the stamp' : '', er.data.errors.length ? `${er.data.errors.length} op error(s)` : '']
       .filter(Boolean)
       .join('; ');
-    this.out.math = { result: er.data, as_of: mn.as_of, stale: mn.stale || mn.down.length > 0, notes: mn.notes ?? [] };
+    this.out.math = { result: er.data, as_of: mn.as_of, stale: mn.stale || mn.down.length > 0, notes: mn.notes ?? [], ...(split?.since ? { since: split.since } : {}) };
     await this.step(
-      { step: 'math', status: er.data.numbers.length ? 'ok' : 'failed', sandbox: { sandbox_id: j.sandbox_id, state: 'destroyed' }, receipt_ids: er.data.receipts.map((r) => r.id), note: note || null },
+      { step: 'math', status: er.data.numbers.length ? 'ok' : 'failed', sandbox: { sandbox_id: j.sandbox_id, state: 'destroyed' }, receipt_ids: [...er.data.receipts, ...(split?.since?.receipts ?? [])].map((r) => r.id), note: note || null },
       t0,
     );
     if (!er.data.numbers.length) {
@@ -423,7 +438,7 @@ class Run {
 
   // ---------- guard + publish (both kinds) ----------
 
-  async publish(draft: Draft, extra: Pick<WidgetResult, 'blocked' | 'as_of' | 'stale' | 'notes'>, phase: 'numbers' | 'summary') {
+  async publish(draft: Draft, extra: Pick<WidgetResult, 'blocked' | 'as_of' | 'stale' | 'notes' | 'since'>, phase: 'numbers' | 'summary') {
     const guard = this.guard;
     const t0 = Date.now();
     let verdict = await guard.publish(draft, this.account_id);
@@ -474,7 +489,7 @@ class Run {
 
   async numbers(w: Widget, spec: DisplaySpec) {
     const plan = w.profile && w.profile.last_math_plan && !planProblem(spec, w.profile.last_math_plan) ? w.profile.last_math_plan : defaultPlan(spec);
-    const m = await this.math(spec, plan);
+    const m = await this.math(spec, plan, w.baseline);
     if (!m) {
       // A game that isn't paired says so on the widget, in words: no number, no gap.
       const why = this.out.unpaired;
@@ -782,9 +797,9 @@ class Run {
     await this.reads(spec, chosen);
     // A planner plan the check passed but the engine can't run (an arg name it doesn't know, a missing arg: the real
     // planner wrote {"price": ...} for {"price_cents": ...}) computes nothing: the default plan, in code, once.
-    const m = await this.math(spec, plan.plan).catch((e) => {
+    const m = await this.math(spec, plan.plan, w.baseline).catch((e) => {
       if (plan.from !== 'planner' || !(e instanceof NoRetry) || e.message !== NO_NUMBERS) throw e;
-      return this.math(spec, defaultPlan(spec), 'math-default');
+      return this.math(spec, defaultPlan(spec), w.baseline, 'math-default');
     });
     if (!m) return;
 

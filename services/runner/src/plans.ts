@@ -3,7 +3,7 @@
  * own spec (user_probability, window_s). A plan from the planner is checked against the widget's catalog entry; one
  * that fails is refused whole and the default plan for the type runs instead.
  */
-import { CONNECTIONS, EnginePlan, MARKETS, displayEntry, type DisplayType, type EngineInput, type EngineResult, type Market, type WidgetSpec } from '@app/contracts';
+import { CONNECTIONS, EnginePlan, MARKETS, displayEntry, type DisplayType, type EngineInput, type EngineResult, type Market, type ResultSince, type WidgetResult, type WidgetSpec } from '@app/contracts';
 import { CallError, type Call } from '@app/service-kit';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
@@ -462,4 +462,62 @@ export async function positionNumbers(
   if (!ops.length) return { skip: pos.positions.length ? 'no position has a price' : 'no balance and no open positions' };
   const as_of = [pos.as_of, ...quotes.map((q) => q.as_of)].sort()[0]!;
   return { plan: { plan_version: 1, ops }, mn: { numbers, origins, provenance, quotes, as_of, stale: quotes.some((q) => q.stale), down } };
+}
+
+// ---------- "since you last looked" (N1.2.1) ----------
+
+/** Moves per widget, at most (ResultSince's limit). */
+export const MAX_SINCE = 12;
+const SINCE_OP = /^since_\d+$/;
+
+/**
+ * "Since you last looked": for each price the plan turns into a chance, the engine's move from the baseline's price of
+ * the same market, a `gap` op (b_cents now minus a_cents then, in points). The baseline is the result the owner saw at
+ * the previous visit (board's getWidget). Its price is the one on its own receipt, tagged market, with that receipt's
+ * market and quote time, so the new receipt holds both prices and both times. Nothing when there is no baseline.
+ */
+export function sinceInputs(
+  baseline: WidgetResult | null | undefined,
+  plan: EnginePlan,
+  input: Pick<EngineInput, 'numbers' | 'provenance'>,
+): { ops: Op[]; numbers: Record<string, number>; origins: Origins; provenance: Provenance } {
+  const out = { ops: [] as Op[], numbers: {} as Record<string, number>, origins: {} as Origins, provenance: {} as Provenance };
+  if (!baseline) return out;
+  const taken = new Set([...plan.ops.map((o) => o.id), ...Object.keys(input.numbers)]);
+  const done = new Set<string>();
+  for (const op of plan.ops) {
+    if (op.op !== 'implied_probability' || out.ops.length >= MAX_SINCE) continue;
+    const key = op.args.price_cents;
+    const now = key ? input.provenance?.[key] : undefined;
+    if (!key || !now || typeof input.numbers[key] !== 'number' || done.has(now.source)) continue;
+    const then = baseline.receipts.find((r) => r.op === 'implied_probability' && r.provenance?.price_cents?.source === now.source);
+    const was = then?.args.price_cents;
+    if (!then || typeof was !== 'number') continue;
+    const k = out.ops.length + 1;
+    const id = `since_${k}`;
+    const from = `since_from_${k}`;
+    if (taken.has(id) || taken.has(from)) break;
+    done.add(now.source);
+    out.numbers[from] = was;
+    out.origins[from] = 'market';
+    out.provenance[from] = then.provenance!.price_cents!;
+    out.ops.push({ id, op: 'gap', args: { a_cents: from, b_cents: key } });
+  }
+  return out;
+}
+
+/** The since moves out of an engine result (the widget's own numbers stay as they were), as the result's `since`. */
+export function splitSince(er: EngineResult, from_result_id: string | undefined): { er: EngineResult; since: ResultSince | null } {
+  const mine = er.numbers.filter((n) => SINCE_OP.test(n.id));
+  if (!mine.length && !er.errors.some((e) => SINCE_OP.test(e.op_id))) return { er, since: null };
+  const ids = new Set(mine.map((n) => n.receipt_id));
+  const rest = {
+    ...er,
+    numbers: er.numbers.filter((n) => !SINCE_OP.test(n.id)),
+    receipts: er.receipts.filter((r) => !ids.has(r.id)),
+    errors: er.errors.filter((e) => !SINCE_OP.test(e.op_id)),
+  };
+  rest.ok = rest.errors.length === 0;
+  const since = from_result_id && mine.length ? { from_result_id, numbers: mine, receipts: er.receipts.filter((r) => ids.has(r.id)) } : null;
+  return { er: rest, since };
 }

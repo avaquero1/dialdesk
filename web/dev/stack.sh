@@ -51,6 +51,8 @@ envs() {
   done
   export EDGE_ALLOWED_ORIGINS="http://localhost:$WEB_PORT" EDGE_TRUST_PROXY=1 EDGE_HOST=127.0.0.1
   export BOARD_SCREENSHOT_DIR="$run/screenshots" AUDIT_HEADS_DIR="$run/audit-heads"
+  # "Since you last looked": a visit ends after 3 s without a board read, so a browser test can be away for a moment.
+  export BOARD_VISIT_GAP_S=3
 }
 
 start() {

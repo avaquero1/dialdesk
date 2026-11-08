@@ -49,6 +49,10 @@ import {
   defaultProfile,
   fetchQuotes,
   movementFlag,
+  baselineOf,
+  isAway,
+  sinceOf,
+  VISIT_GAP_S,
   packPlaces,
   quotesFor,
   refreshKind,
@@ -79,11 +83,14 @@ export interface RealDeps {
   /** connections, to check a "Your account" link is the account's own connection. */
   connections?: Call;
   objects: ObjectStore;
+  /** A visit's gap, in seconds (default VISIT_GAP_S; BOARD_VISIT_GAP_S). */
+  visitGapS?: number;
 }
 
 /**
  * From env: BOARD_DATABASE_URL, BOARD_VALKEY_URL, BOARD_TOKEN_MARKETS / BOARD_URL_MARKETS, BOARD_TOKEN_CONNECTIONS / BOARD_URL_CONNECTIONS, and where screenshots go:
  * BOARD_S3_BUCKET (+ _ENDPOINT, _REGION, _CREDENTIALS_FILE) for Object Storage, else BOARD_SCREENSHOT_DIR (dev, fallback).
+ * BOARD_VISIT_GAP_S (optional): the gap between reads that starts a new visit, for "since you last looked".
  */
 export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeof BOARD>> {
   const url = cfg.DATABASE_URL;
@@ -106,6 +113,7 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
     markets: await clientFromEnv('board', 'markets'),
     connections: await clientFromEnv('board', 'connections'),
     objects: s3 ?? new LocalDirObjectStore(dir),
+    ...(Number(cfg.VISIT_GAP_S) > 0 ? { visitGapS: Number(cfg.VISIT_GAP_S) } : {}),
   });
 }
 
@@ -143,7 +151,7 @@ type WidgetRow = {
   folder_id: string | null;
   idx: number | null;
 };
-type ResultRow = { widget_id: string; slot: 'current' | 'previous'; result: WidgetResult };
+type ResultRow = { widget_id: string; slot: 'current' | 'previous' | 'seen' | 'baseline'; result: WidgetResult };
 type ProposalRow = { proposal_id: string; account_id: string; status: Proposal['status']; changes: Proposal['changes']; created_at: Date };
 type DisplayTile = Pick<WidgetDraft, 'type' | 'size' | 'title' | 'market_ids' | 'params'> & { brief?: string };
 type Size = keyof typeof SIZE_CELLS;
@@ -154,9 +162,12 @@ const placeOf = (r: WidgetRow): Widget['spec']['place'] =>
 const toProposal = (r: ProposalRow): Proposal => ({ proposal_id: r.proposal_id, account_id: r.account_id, status: r.status, changes: r.changes, created_at: iso(r.created_at) });
 const cellsOf = (kind: string, spec: Record<string, unknown>) => (kind === 'display' ? SIZE_CELLS[spec.size as Size] : ([1, 1] as const));
 
-/** Postgres rows -> the contract's Widget. Children of a folder come from the layout, in slot order. */
-function assemble(rows: WidgetRow[], results: ResultRow[]): Widget[] {
-  const byWidget = new Map<string, { current?: WidgetResult; previous?: WidgetResult }>();
+/**
+ * Postgres rows -> the contract's Widget. Children of a folder come from the layout, in slot order. `away` (getWidget
+ * only): whether the owner is between visits, which picks the baseline runner measures the since moves from.
+ */
+function assemble(rows: WidgetRow[], results: ResultRow[], away?: boolean): Widget[] {
+  const byWidget = new Map<string, Partial<Record<ResultRow['slot'], WidgetResult>>>();
   for (const r of results) {
     const e = byWidget.get(r.widget_id) ?? {};
     e[r.slot] = r.result;
@@ -167,7 +178,9 @@ function assemble(rows: WidgetRow[], results: ResultRow[]): Widget[] {
     const children = rows.filter((c) => c.folder_id === r.widget_id).sort((a, b) => a.idx! - b.idx!).map((c) => c.widget_id);
     const spec = WidgetSpec.parse(r.kind === 'folder' ? { ...base, children } : base);
     const res = byWidget.get(r.widget_id);
-    const w: Widget = { spec, profile: r.profile, state: r.state, result: res?.current ?? null, previous: res?.previous ?? null, updated_at: iso(r.updated_at) };
+    const result = res?.current ?? null;
+    const w: Widget = { spec, profile: r.profile, state: r.state, result, previous: res?.previous ?? null, since: sinceOf(result, res?.baseline ?? null), updated_at: iso(r.updated_at) };
+    if (away !== undefined) w.baseline = baselineOf(away, res?.seen, res?.baseline);
     if (r.quotes?.length) w.quotes = r.quotes;
     return view(w);
   });
@@ -175,6 +188,7 @@ function assemble(rows: WidgetRow[], results: ResultRow[]): Widget[] {
 
 export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
   const { sql, bus, objects } = deps;
+  const visitGapS = deps.visitGapS ?? VISIT_GAP_S;
 
   // ---------- reads ----------
   const widgetRows = (q: Q, account_id: string) =>
@@ -194,14 +208,19 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
     return { account_id, widgets: assemble(rows, results), pending: pending.map(toProposal) };
   }
 
-  async function loadWidget(widget_id: string, account_id: string, q: Q = sql): Promise<Widget> {
+  async function loadWidget(widget_id: string, account_id: string, q: Q = sql, withBaseline = false): Promise<Widget> {
     const rows = await q<WidgetRow[]>`select w.widget_id, w.account_id, w.kind, w.spec, w.profile, w.state, w.quotes, w.updated_at,
                                              l.col, l."row", l.folder_id, l.idx
                                       from widgets w join layout l using (widget_id)
                                       where w.account_id = ${account_id} and (w.widget_id = ${widget_id} or l.folder_id = ${widget_id})`;
     if (!rows.some((r) => r.widget_id === widget_id)) throw new HttpError(404, 'not_found', 'no such widget');
     const results = await q<ResultRow[]>`select widget_id, slot, result from results where widget_id = ${widget_id} and account_id = ${account_id}`;
-    return assemble(rows, results).find((w) => w.spec.widget_id === widget_id)!;
+    let away: boolean | undefined;
+    if (withBaseline) {
+      const [b] = await q<{ last_opened_at: Date | null }[]>`select last_opened_at from boards where account_id = ${account_id}`;
+      away = isAway(b?.last_opened_at, visitGapS);
+    }
+    return assemble(rows, results, away).find((w) => w.spec.widget_id === widget_id)!;
   }
 
   /** The spec as stored, locked for update inside a transaction. */
@@ -300,17 +319,35 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
     changed(o, account_id, widget_id, 'removed');
   }
 
+  /**
+   * The owner read the board: `seen` becomes what is current now. A read after the visit gap starts a new visit, and the
+   * last visit's `seen` becomes the `baseline` the strip compares with.
+   */
+  async function opened(account_id: string) {
+    await sql.begin(async (tx) => {
+      // board's own clock (as in isAway), so a visit's gap and the minute between writes are measured the same way.
+      const at = Date.now();
+      const [b] = await tx<{ last_opened_at: Date | null }[]>`select last_opened_at from boards where account_id = ${account_id} for update`;
+      if (!b || (b.last_opened_at && at - b.last_opened_at.getTime() < Math.min(60, visitGapS) * 1000)) return;
+      if (isAway(b.last_opened_at, visitGapS, at)) {
+        await tx`delete from results where account_id = ${account_id} and slot = 'baseline'`;
+        await tx`update results set slot = 'baseline' where account_id = ${account_id} and slot = 'seen'`;
+      } else await tx`delete from results where account_id = ${account_id} and slot = 'seen'`;
+      await tx`insert into results (widget_id, account_id, slot, result_id, run_id, kind, phase, result, verdict, trace, stored_at)
+               select widget_id, account_id, 'seen', result_id, run_id, kind, phase, result, verdict, trace, stored_at
+               from results where account_id = ${account_id} and slot = 'current'`;
+      await tx`update boards set last_opened_at = ${new Date(at)} where account_id = ${account_id}`;
+    });
+  }
+
   const audit = (action: string, rest: Parameters<typeof logEntry>[2]) => bus.log(logEntry('board', action, rest)).catch(() => {});
 
   return {
     getBoard: async ({ params }, ctx) => {
-      const b = await loadBoard(params.account_id);
-      // Read by its owner (edge serves only the session's own board): runner's scheduler keeps this board's runs going.
-      // At most one write a minute per board.
-      if (ctx.caller === 'edge')
-        await sql`update boards set last_opened_at = now()
-                  where account_id = ${params.account_id} and (last_opened_at is null or last_opened_at < now() - interval '1 minute')`;
-      return b;
+      // Read by its owner (edge serves only the session's own board): runner's scheduler keeps this board's runs going,
+      // and "since you last looked" keeps its visits. At most one write a minute per board.
+      if (ctx.caller === 'edge') await opened(params.account_id);
+      return loadBoard(params.account_id);
     },
 
     lastOpened: async ({ body }) => {
@@ -459,7 +496,7 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
       throw new HttpError(409, 'not_pending', `proposal is ${p.status}`);
     },
 
-    getWidget: ({ params, query }) => loadWidget(params.widget_id, query.account_id),
+    getWidget: ({ params, query }) => loadWidget(params.widget_id, query.account_id, sql, true),
 
     resize: async ({ params, body }) => {
       const o = outbox();
@@ -633,11 +670,13 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
     },
 
     getReceipt: async ({ params, query }) => {
+      const want = json(sql, [{ id: params.receipt_id }]);
       const rows = await sql<ResultRow[]>`select widget_id, slot, result from results
-                                          where account_id = ${query.account_id} and result -> 'receipts' @> ${json(sql, [{ id: params.receipt_id }])}
+                                          where account_id = ${query.account_id}
+                                            and (result -> 'receipts' @> ${want} or result -> 'since' -> 'receipts' @> ${want})
                                           order by slot`;
       for (const r of rows) {
-        const found = r.result.receipts.find((x) => x.id === params.receipt_id);
+        const found = [...r.result.receipts, ...(r.result.since?.receipts ?? [])].find((x) => x.id === params.receipt_id);
         if (found) return found;
       }
       throw new HttpError(404, 'not_found', 'no such receipt on this board');

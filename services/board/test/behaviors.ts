@@ -22,14 +22,21 @@ const acc = () => newId('acc');
 const displays = (b: Board) => b.widgets.filter((w) => w.spec.kind === 'display') as (Widget & { spec: { kind: 'display' } })[];
 const status = async (p: Promise<unknown>) => p.then(() => 200, (e: { status?: number }) => e.status ?? 0);
 
-function movementResult(widget_id: string, account_id: string, move: number) {
+function movementResult(widget_id: string, account_id: string, move: number, market?: string) {
   const body: Omit<ReturnType<typeof sampleResult>, 'phase'> & { phase: 'numbers' | 'summary' } = sampleResult(widget_id, account_id, 'pass');
   body.result.kind = 'numbers';
   body.result.summary = null;
   body.result.facts = [];
   body.result.sources = [];
   body.result.numbers = [{ id: 'n1', op: 'movement', value: move, unit: 'points', receipt_id: 'r-0a1b2c3d' }];
-  body.result.receipts = [{ ...body.result.receipts[0]!, op: 'movement', op_id: 'n1', value: move, unit: 'points', formula: 'move = now_cents - then_cents' }];
+  body.result.receipts = [
+    {
+      ...body.result.receipts[0]!,
+      op: 'movement', op_id: 'n1', value: move, unit: 'points', formula: 'move = now_cents - then_cents',
+      // The game the move is of (Biggest move publishes one game of many).
+      ...(market ? { provenance: { series: { source: market, as_of: body.result.as_of } } } : {}),
+    },
+  ];
   body.phase = 'numbers';
   body.trace = body.trace.map((s) => ({ ...s, run_id: body.result.run_id }));
   return body;
@@ -177,6 +184,67 @@ export function boardBehaviors(name: string, rig: () => Promise<Rig>) {
       expect(flagged().map((e) => e.payload)).toMatchObject([{ widget_id: mv.spec.widget_id, market_id: market, move_pts: -7, threshold_pts: 5 }]);
       const research = r.jobs.slice(before).filter((j) => j.reason === 'movement');
       expect(research.map((j) => [j.widget_id, j.kind])).toEqual([[news.spec.widget_id, 'research']]);
+    });
+
+    it('Biggest move flags the game of its published move (its receipt), not its first market', async () => {
+      const a = acc();
+      await edge(BOARD.createDefaults, { params: { account_id: a }, body: { category: 'sports' } });
+      const ids = (await markets(MARKETS.list, { query: { category: 'sports' } })).markets.map((m) => m.market_id).slice(0, 3);
+      const p = await agent(BOARD.propose, {
+        params: { account_id: a },
+        body: { changes: [{ op: 'add', widget: { kind: 'display', type: 'movement', title: 'Biggest move', market_ids: ids, params: { threshold_pts: 5 } } }] },
+      });
+      const mv = (await edge(BOARD.accept, { params: { proposal_id: p.proposal_id }, body: { account_id: a } })).widgets[0]!;
+      await runner(BOARD.putResult, { params: { widget_id: mv.spec.widget_id }, body: movementResult(mv.spec.widget_id, a, 8, ids[2]) });
+      const flagged = r.bus.events.filter((e) => e.event === 'movement.flagged' && (e.payload as { widget_id: string }).widget_id === mv.spec.widget_id);
+      expect(flagged.map((e) => (e.payload as { market_id: string }).market_id)).toEqual([ids[2]]);
+    });
+
+    it('since you last looked: the moves against what the owner saw at the previous visit, the same on every device', async () => {
+      const later = (ms: number) => {
+        shift += ms;
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(vi.getRealSystemTime() + shift);
+      };
+      const a = acc();
+      const b = await edge(BOARD.createDefaults, { params: { account_id: a }, body: { category: 'sports' } });
+      const wid = displays(b).find((x) => x.spec.type === 'probability')!.spec.widget_id;
+      const read = async () => (await edge(BOARD.getBoard, { params: { account_id: a } })).widgets.find((w) => w.spec.widget_id === wid)!;
+      const forRunner = () => runner(BOARD.getWidget, { params: { widget_id: wid }, query: { account_id: a } });
+      expect((await read()).since ?? null).toBeNull(); // the first visit opens: nothing to compare with yet
+      const r1 = sampleResult(wid, a, 'pass');
+      await runner(BOARD.putResult, { params: { widget_id: wid }, body: r1 });
+      later(2 * 60_000);
+      expect((await read()).since ?? null).toBeNull(); // the same visit: the owner watched it land
+      expect((await forRunner()).baseline ?? null).toBeNull(); // during a visit, runner measures from the previous visit
+      later(40 * 60_000); // the owner went away
+      expect((await forRunner()).baseline?.result_id).toBe(r1.result.result_id); // what the next visit will compare with
+
+      // runner's next run: its since moves, measured from r1 (the engine's gap, with its receipt).
+      const t1 = r1.result.as_of;
+      const t2 = new Date().toISOString();
+      const r2 = sampleResult(wid, a, 'pass');
+      const receipt = {
+        ...r2.result.receipts[1]!, id: 'r-5e5e5e5e', op_id: 'since_1', value: 4, args: { a_cents: 61, b_cents: 65 }, refs: { a_cents: 'since_from_1', b_cents: 'price_1' },
+        provenance: { a_cents: { source: 'kalshi:KXTEST-1', as_of: t1 }, b_cents: { source: 'kalshi:KXTEST-1', as_of: t2 } },
+      };
+      const number = { id: 'since_1', op: 'gap' as const, unit: 'points' as const, value: 4, receipt_id: receipt.id };
+      const bad = structuredClone(r2);
+      bad.result.since = { from_result_id: r1.result.result_id, numbers: [{ ...number, value: 9 }], receipts: [receipt] };
+      expect(await status(runner(BOARD.putResult, { params: { widget_id: wid }, body: bad }))).toBe(400); // no number without its receipt
+      r2.result.since = { from_result_id: r1.result.result_id, numbers: [number], receipts: [receipt] };
+      await runner(BOARD.putResult, { params: { widget_id: wid }, body: r2 });
+
+      // A second device opens the board: a new visit, and the strip has the move, its receipt and r1's time.
+      const want = { from_result_id: r1.result.result_id, from_at: r1.result.created_at, numbers: [number], receipts: [receipt], new_items: 0 };
+      expect((await read()).since).toEqual(want);
+      expect(await edge(BOARD.getReceipt, { params: { receipt_id: receipt.id }, query: { account_id: a } })).toEqual(receipt);
+      // The first device a few minutes later: the same visit, the same strip.
+      later(3 * 60_000);
+      expect((await read()).since).toEqual(want);
+      // The next visit compares with r2, which is still current: nothing new.
+      later(40 * 60_000);
+      expect((await read()).since ?? null).toBeNull();
     });
 
     it('refresh: one job per minute window, and too many runs in an hour answer 429', async () => {

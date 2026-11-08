@@ -78,7 +78,10 @@ describe('board: the prescribed first board from this week’s games', () => {
     expect(by('probability').params.user_probability).toBeUndefined();
     expect(by('gap').market_ids).toEqual(by('probability').market_ids);
     expect(by('news')).toMatchObject({ title: 'Chiefs news', params: { team: 'Chiefs' } });
-    expect(by('movement').params.event_keys).toEqual(['nba-2026-11-07-nyk-cle']);
+    // Biggest move compares the board's games: the NBA's most traded first, then the rest of Tonight's.
+    expect(by('movement').params.event_keys).toEqual(['nba-2026-11-07-nyk-cle', 'nba-2026-11-07-bkn-atl', 'nfl-2026-11-08-nyj-kc', 'nfl-2026-11-08-tb-chi', 'nfl-2026-11-09-buf-min']);
+    expect(by('movement').market_ids).toHaveLength(5);
+    expect(by('movement').market_ids[0]).toMatch(/NYKCLE|nyk-cle/);
     const folders = tiles.filter((t) => t.kind === 'folder');
     expect(folders.map((f) => f.children.map((c) => c.title))).toEqual([
       ['Jets at Chiefs', 'Buccaneers at Bears', 'Bills at Vikings'],

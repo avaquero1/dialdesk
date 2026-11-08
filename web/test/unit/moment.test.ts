@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newId, type RunTraceStep, type WidgetResult } from '@app/contracts';
-import { sampleResult } from '@app/testkit';
+import { newId, type RunTraceStep, type WidgetSince } from '@app/contracts';
 import { BLOCKED_LINE, BUSY_LINE, chipWords, failedWords, newRun, runLine, sinceWords, stepRun, type RunView } from '../../src/moment-state.ts';
 
 const wid = newId('wid');
@@ -75,28 +74,23 @@ describe('plain messages (design.md section 11)', () => {
 });
 
 describe('since you last looked', () => {
-  const pair = () => {
-    const acc = newId('acc');
-    const prev = sampleResult(wid, acc, 'pass').result as WidgetResult;
-    const cur = structuredClone(prev);
-    cur.result_id = newId('res');
-    return { prev, cur };
-  };
-  it('names the move of the main number in points', () => {
-    const { prev, cur } = pair();
-    prev.numbers = [{ id: 'n1', op: 'implied_probability', unit: 'probability', value: 0.58, receipt_id: 'r1' }];
-    cur.numbers = [{ id: 'n1', op: 'implied_probability', unit: 'probability', value: 0.62, receipt_id: 'r2' }];
-    expect(sinceWords(prev, cur)).toBe('Since you last looked: up 4 points');
-    cur.numbers[0]!.value = 0.57;
-    expect(sinceWords(prev, cur)).toBe('Since you last looked: down 1 point');
+  const since = (value: number | null, new_items = 0): WidgetSince => ({
+    from_result_id: newId('res'),
+    from_at: new Date().toISOString(),
+    numbers: value === null ? [] : [{ id: 'since_1', op: 'gap', unit: 'points', value, receipt_id: 'r-0000aaaa' }],
+    receipts: [],
+    new_items,
   });
-  it('counts new news items; nothing when nothing changed', () => {
-    const { prev, cur } = pair();
-    prev.numbers = cur.numbers = [];
-    expect(sinceWords(prev, cur)).toBeNull();
-    cur.facts = [...cur.facts, { fact_id: 'f9', candidate_id: newId('cnd'), claim: 'A new line', quote: 'q' } as WidgetResult['facts'][number]];
-    expect(sinceWords(prev, cur)).toBe('Since you last looked: 1 new item');
-    expect(sinceWords(null, cur)).toBeNull();
-    expect(sinceWords(cur, cur)).toBeNull();
+  it('names the engine’s move of the main chance in points', () => {
+    expect(sinceWords(since(4))).toBe('Since you last looked: up 4 points');
+    expect(sinceWords(since(-1))).toBe('Since you last looked: down 1 point');
+    expect(sinceWords(since(2.5))).toBe('Since you last looked: up 3 points');
+  });
+  it('counts new news items; nothing when nothing changed or there was no earlier visit', () => {
+    expect(sinceWords(since(null, 1))).toBe('Since you last looked: 1 new item');
+    expect(sinceWords(since(0.2, 2))).toBe('Since you last looked: 2 new items');
+    expect(sinceWords(since(null))).toBeNull();
+    expect(sinceWords(null)).toBeNull();
+    expect(sinceWords(undefined)).toBeNull();
   });
 });

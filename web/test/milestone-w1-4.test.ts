@@ -221,7 +221,10 @@ describe('Milestone W1.4: the containment moment on screen (phone)', () => {
   });
 
   it('since you last looked: a result that came while the user was away says what changed', async () => {
-    await page.goto('about:blank'); // leaving saves what was on screen
+    await page.goto('about:blank');
+    await wait(3500); // away for longer than the stack's visit gap (BOARD_VISIT_GAP_S=3)
+    // What runner measures from: the result the owner saw at the last read (board keeps the visits).
+    const base = (await board(BOARD.getWidget, { params: { widget_id: T.widget_id }, query: { account_id: T.account_id } })).baseline!;
     const next = structuredClone(clean);
     next.result.result_id = newId('res');
     next.result.run_id = newId('run');
@@ -229,6 +232,9 @@ describe('Milestone W1.4: the containment moment on screen (phone)', () => {
     next.result.created_at = at();
     next.result.as_of = at();
     next.trace = next.trace.map((s) => ({ ...s, run_id: next.result.run_id }));
+    // The engine's move since then, as runner's run sends it (a gap op with its receipt).
+    const gap = { ...next.result.receipts[0]!, id: 'r-5e5e5e5e', op_id: 'since_1', op: 'gap' as const, unit: 'points' as const, value: 4, args: { a_cents: 62, b_cents: 66 }, formula: 'gap = b_cents - a_cents' };
+    next.result.since = { from_result_id: base.result_id, numbers: [{ id: 'since_1', op: 'gap', unit: 'points', value: 4, receipt_id: gap.id }], receipts: [gap] };
     await board(BOARD.putResult, { params: { widget_id: T.widget_id }, body: next });
     await page.goto(URL0 + '/');
     await ready(page);

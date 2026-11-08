@@ -99,7 +99,8 @@ export function nbaNight(games: Game[], today: string): { date: string; games: G
 /**
  * The catalog's default board with this week's games in it, or null when there are no NFL and no NBA games ahead.
  * Tonight: the three most traded games of the NBA's next night and of the NFL week, by start. The market, Two prices and
- * News follow the NFL week's most traded game (the NBA's when there is no NFL week); Biggest move, the NBA's.
+ * News follow the NFL week's most traded game (the NBA's when there is no NFL week). Biggest move compares the NBA's most
+ * traded game and Tonight's games.
  */
 export function weekBoard(markets: Market[], now: number, catalog: DefaultTile[] = WIDGET_CATALOG.default_board.tiles): DefaultTile[] | null {
   const today = etDate(now);
@@ -137,8 +138,11 @@ export function weekBoard(markets: Market[], now: number, catalog: DefaultTile[]
         return { ...t, market_ids: ids(featured), params: { ...params, event_keys: [featured.event_key] } };
       case 'news':
         return { ...t, title: `${featured.home} news`, market_ids: ids(featured), params: { ...params, team: featured.home, event_keys: [featured.event_key] } };
-      case 'movement':
-        return { ...t, market_ids: [mover.kalshi ?? mover.polymarket!], params: { ...params, event_keys: [mover.event_key] } };
+      case 'movement': {
+        // Biggest move compares the board's games: the NBA's most traded first, then Tonight's (one market per game).
+        const games = [mover, ...tonight.filter((g) => g.event_key !== mover.event_key)];
+        return { ...t, market_ids: games.map((g) => g.kalshi ?? g.polymarket!), params: { ...params, event_keys: games.map((g) => g.event_key) } };
+      }
       default:
         return t;
     }

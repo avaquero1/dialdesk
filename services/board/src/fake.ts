@@ -11,6 +11,7 @@ import {
   type RunTraceStep,
   type Widget,
   type WidgetDraft,
+  type WidgetResult,
   type WidgetRunJob,
 } from '@app/contracts';
 import { HttpError, MemoryBus, calleeConfig, createClient, now, type AccountData, type Bus, type Call, type Handlers } from '@app/service-kit';
@@ -19,6 +20,10 @@ import {
   checkWidgetCap,
   allMarketIds,
   applyTune,
+  baselineOf,
+  isAway,
+  sinceOf,
+  VISIT_GAP_S,
   checkResult,
   defaultProfile,
   fetchQuotes,
@@ -49,6 +54,8 @@ export interface FakeDeps {
   objects?: ObjectStore;
   /** Hands over the fake's per-account data, so a test can follow account deletes (followAccountDeletes). */
   accountData?: (d: AccountData) => void;
+  /** A visit's gap, in seconds (default VISIT_GAP_S). A test shortens it to stand for an owner who went away. */
+  visitGapS?: number;
 }
 /** With `make fakes`, the board fake reads first-paint prices from the markets fake over HTTP. */
 export async function fakeDepsFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<FakeDeps> {
@@ -76,6 +83,11 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
   const traces = new Map<string, RunTraceStep[]>();
   /** When each board was last read by its owner (edge), for runner's scheduler. */
   const opened = new Map<string, string>();
+  const visitGapS = deps.visitGapS ?? VISIT_GAP_S;
+  /** "Since you last looked": per widget, the result current at the owner's last read, and at the previous visit's. */
+  const seen = new Map<string, WidgetResult>();
+  const baseline = new Map<string, WidgetResult>();
+  const withSince = (w: Widget): Widget => ({ ...w, since: sinceOf(w.result, baseline.get(w.spec.widget_id) ?? null) });
 
   /** Folder children follow the places: a display whose place names a folder is in it. */
   const withChildren = (w: Widget, ids: string[]): Widget => {
@@ -92,7 +104,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     if (!b) throw new HttpError(404, 'not_found', 'no board for this account');
     return {
       account_id,
-      widgets: b.widgets.map((id) => widgets.get(id)!).filter(Boolean).map((w) => view(withChildren(w, b.widgets))),
+      widgets: b.widgets.map((id) => widgets.get(id)!).filter(Boolean).map((w) => view(withSince(withChildren(w, b.widgets)))),
       pending: b.pending.map((id) => proposals.get(id)!).filter((p) => p.status === 'pending'),
     };
   };
@@ -101,7 +113,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     if (!w || w.spec.account_id !== account_id) throw new HttpError(404, 'not_found', 'no such widget');
     return w;
   };
-  const shown = (w: Widget) => view(withChildren(w, boards.get(w.spec.account_id)?.widgets ?? []));
+  const shown = (w: Widget) => view(withSince(withChildren(w, boards.get(w.spec.account_id)?.widgets ?? [])));
   const nextRow = (account_id: string) => {
     let max = -1;
     for (const id of boards.get(account_id)!.widgets) {
@@ -159,9 +171,24 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
 
   return {
     getBoard: ({ params }, ctx) => {
-      const b = board(params.account_id);
-      if (ctx.caller === 'edge') opened.set(params.account_id, now());
-      return b;
+      board(params.account_id);
+      // Read by its owner: a read after the gap starts a new visit, whose baseline is what the last visit saw.
+      if (ctx.caller === 'edge') {
+        const ids = boards.get(params.account_id)!.widgets;
+        if (isAway(opened.get(params.account_id), visitGapS))
+          for (const id of ids) {
+            const s = seen.get(id);
+            if (s) baseline.set(id, s);
+            else baseline.delete(id);
+          }
+        for (const id of ids) {
+          const r = widgets.get(id)?.result;
+          if (r) seen.set(id, r);
+          else seen.delete(id);
+        }
+        opened.set(params.account_id, now());
+      }
+      return board(params.account_id);
     },
     lastOpened: ({ body }) => ({
       boards: [...new Set(body.account_ids)].filter((a) => boards.has(a)).map((account_id) => ({ account_id, last_opened_at: opened.get(account_id) ?? null })),
@@ -262,7 +289,11 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       p.status = 'rejected';
       return p;
     },
-    getWidget: ({ params, query }) => shown(widget(params.widget_id, query.account_id)),
+    getWidget: ({ params, query }) => {
+      const w = widget(params.widget_id, query.account_id);
+      const away = isAway(opened.get(query.account_id), visitGapS);
+      return { ...shown(w), baseline: baselineOf(away, seen.get(w.spec.widget_id), baseline.get(w.spec.widget_id)) };
+    },
     resize: async ({ params, body }) => {
       const w = widget(params.widget_id, body.account_id);
       if (w.spec.kind !== 'display' || !displayEntry(w.spec.type).sizes.includes(body.size))
@@ -357,7 +388,9 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     getReceipt: ({ params, query }) => {
       for (const id of boards.get(query.account_id)?.widgets ?? []) {
         const w = widgets.get(id);
-        const r = w?.result?.receipts.find((x) => x.id === params.receipt_id) ?? w?.previous?.receipts.find((x) => x.id === params.receipt_id);
+        const r = [w?.result, w?.previous, w?.result?.since]
+          .flatMap((x) => x?.receipts ?? [])
+          .find((x) => x.id === params.receipt_id);
         if (r) return r;
       }
       throw new HttpError(404, 'not_found', 'no such receipt on this board');
@@ -370,6 +403,8 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     const w = widgets.get(widget_id);
     b.widgets = b.widgets.filter((id) => id !== widget_id);
     widgets.delete(widget_id);
+    seen.delete(widget_id);
+    baseline.delete(widget_id);
     if (w?.spec.kind !== 'folder') return;
     const kids = b.widgets.map((id) => widgets.get(id)!).filter((c) => 'folder_id' in c.spec.place && c.spec.place.folder_id === widget_id);
     const places = packPlaces(kids.map((c) => (c.spec.kind === 'display' ? SIZE_CELLS[c.spec.size] : [1, 1])), nextRow(account_id));
