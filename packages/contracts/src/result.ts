@@ -108,6 +108,20 @@ export const BlockedItem = z
   })
   .strict();
 
+/**
+ * "Since you last looked" (N1.2.1): for each price the widget shows, the engine's move from the result the owner saw
+ * at the previous visit to this one. Each number is a `gap` op (b_cents now minus a_cents then, in points); its receipt
+ * holds both prices, and its provenance both quote times and the market.
+ */
+export const ResultSince = z
+  .object({
+    from_result_id: ResultId.describe("the result current at the owner's previous visit"),
+    numbers: z.array(EngineNumber).max(12),
+    receipts: z.array(EngineReceipt).max(12),
+  })
+  .strict();
+export type ResultSince = z.infer<typeof ResultSince>;
+
 /** A widget's result. board stores it only with a passing publish verdict. */
 export const WidgetResult = z
   .object({
@@ -129,6 +143,7 @@ export const WidgetResult = z
       .max(8)
       .optional()
       .describe('plain words, no digits, for a number the widget would show and does not (e.g. a base rate whose sample is too small)'),
+    since: ResultSince.optional().describe('the move since the previous visit, when the run had that result to compare with'),
     verdict_id: VerdictId,
   })
   .strict();

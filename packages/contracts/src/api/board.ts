@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { AccountId, CandidateId, Cents, ConnectionId, Domain, Exchange, MarketId, Ok, ProposalId, ReceiptId, ResultId, RunId, Timestamp, WidgetId } from '../common.ts';
 import { DisplaySize } from '../catalog.ts';
 import { api } from '../endpoint.ts';
-import { RunTraceStep, WidgetResult } from '../result.ts';
+import { ResultSince, RunTraceStep, WidgetResult } from '../result.ts';
 import { EngineReceipt } from '../rust.ts';
 import { Verdict } from '../verdict.ts';
 import { Place, WidgetDraft, WidgetProfile, WidgetSpec, WidgetState } from '../widget.ts';
@@ -23,13 +23,25 @@ export const Quote = z
   .strict();
 export type Quote = z.infer<typeof Quote>;
 
+/**
+ * The strip "since you last looked" (getBoard): the current result's engine moves against the result the owner saw at
+ * the previous visit, and how many of its items are new. null when nothing changed or there was no earlier visit.
+ */
+export const WidgetSince = ResultSince.extend({
+  from_at: Timestamp.describe("when that result was made (the owner's previous visit saw it)"),
+  new_items: z.number().int().min(0).describe('facts in the current result that the earlier one did not have'),
+}).strict();
+export type WidgetSince = z.infer<typeof WidgetSince>;
+
 export const Widget = z
   .object({
     spec: WidgetSpec,
     profile: WidgetProfile.nullable().describe('null for apps and folders'),
     state: WidgetState,
     result: WidgetResult.nullable(),
-    previous: WidgetResult.nullable().describe('for "since you last looked"'),
+    previous: WidgetResult.nullable().describe('the run before the latest'),
+    baseline: WidgetResult.nullable().optional().describe("getWidget: the result the owner saw at the previous visit, what runner's since moves compare with"),
+    since: WidgetSince.nullable().optional().describe('getBoard: what changed since the owner\'s previous visit'),
     quotes: z.array(Quote).max(12).optional().describe('first paint: cached prices for the spec\'s markets, until the first result'),
     updated_at: Timestamp,
   })
