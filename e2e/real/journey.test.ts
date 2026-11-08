@@ -128,7 +128,10 @@ describe('e2e on the real services (only the model faked)', () => {
     expect(receipt.id).toBe(gap.result!.numbers[0]!.receipt_id);
     expect(receipt.formula.length).toBeGreaterThan(0);
     const ev = priced(b, 'probability')!;
-    expect(ev.result!.numbers.find((n) => n.op === 'expected_value')).toBeDefined();
+    // The week board's probability has the market's own number, and no EV: a new trader has given no probability yet
+    // (board/defaults.ts drops user_probability; the fakes' catalog board keeps one, so e2e/flow.test.ts sees an EV).
+    expect(ev.result!.numbers.map((n) => n.op)).toContain('implied_probability');
+    expect(ev.result!.numbers.find((n) => n.op === 'expected_value')).toBeUndefined();
   });
 
   it('4. the research run reads the clean pages and the poisoned one: that box is killed, the widget keeps the clean numbers, blocked', async () => {
@@ -166,12 +169,15 @@ describe('e2e on the real services (only the model faked)', () => {
 
   it('4e. a refresh reads the pages again: the poisoned box is destroyed again, and the widget keeps its last clean numbers', async () => {
     const before = (await widget(s.widget_id!)).result!;
+    // A run's job id is widget:kind:minute, so a refresh in the minute of the last run collapses into it (on BullMQ and in
+    // run_requests). Refresh in the next minute.
+    await sleep(60_000 - (Date.now() % 60_000) + 1000);
     await browser(EDGE.refresh, { params: { widget_id: s.widget_id! }, body: {} });
     const w = await until('the refreshed research result', () => widget(s.widget_id!), (w) => w.result?.kind === 'research' && w.result.run_id !== before.run_id);
     expect(w.state).toBe('blocked');
     expect(w.result!.numbers.map((n) => [n.op, n.value])).toEqual(before.numbers.map((n) => [n.op, n.value]));
     expect(w.result!.blocked.map((b) => b.domain)).toEqual(['fanpost.fixture.test']);
-  });
+  }, 240_000);
 
   it('5. the Safety numbers count it, and audit’s verify says ok', async () => {
     const trust = await until(
