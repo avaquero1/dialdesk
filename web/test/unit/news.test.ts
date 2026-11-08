@@ -138,7 +138,13 @@ describe('News', () => {
 
     it('does not contradict the live line', () => {
       expect(READING).not.toMatch(/\d/);
-      expect(text(W.displayHtml(fresh(), ctx))).not.toContain('The first news comes');
+      // fresh() is dated t0 and displayHtml reads the clock: keep the clock inside the card's first-read wait.
+      vi.setSystemTime(t0 + 60_000);
+      try {
+        expect(text(W.displayHtml(fresh(), ctx))).not.toContain('The first news comes');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('a run that failed goes to the plain words at once, and the tile repaints', () => {
