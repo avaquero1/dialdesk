@@ -115,8 +115,8 @@ describe.skipIf(!on)('audit on Postgres and Valkey', () => {
     const accounts = new ValkeyBus(e.ACCOUNTS_VALKEY_URL!, 'accounts');
     closers.push(() => runner.close(), () => conns.close(), () => accounts.close());
     const r = (action: string, rest = {}) => runner.log(logEntry('runner', action, { account_id: acc, ...rest }));
-    await r('sandbox.created', { subject_id: 'sbx_one' });
-    await r('sandbox.created', { subject_id: 'sbx_two' });
+    await r('sandbox.created', { subject_id: 'sbx_one', ids: { kind: 'compute' } });
+    await r('sandbox.created', { subject_id: 'sbx_two', ids: { kind: 'browse' } });
     await r('sandbox.destroyed', { subject_id: 'sbx_one' });
     await r('proxy.refused', { outcome: 'refused', subject_id: 'run_abcdefgh01', sizes: { requests: 3 } });
     await r('proxy.refused', { outcome: 'refused', subject_id: 'run_abcdefgh02' });
@@ -140,6 +140,7 @@ describe.skipIf(!on)('audit on Postgres and Valkey', () => {
     const t = await call.trust(acc);
     expect(t).toMatchObject({
       sandboxes_created: 2,
+      articles_read: 1,
       sandboxes_destroyed: 1,
       sandboxes_killed: 1,
       proxy_refused: 4,

@@ -156,6 +156,21 @@
   },
   {
     "service": "edge",
+    "name": "addWidget",
+    "method": "POST",
+    "path": "/api/widgets",
+    "callers": [
+      "browser"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "The Add app: one widget of this type with the catalog's prescribed defaults (defaultDraft), proposed and accepted at once."
+  },
+  {
+    "service": "edge",
     "name": "resize",
     "method": "PATCH",
     "path": "/api/widgets/:widget_id/size",
@@ -240,6 +255,20 @@
       404
     ],
     "summary": "Menu: Sources and receipts."
+  },
+  {
+    "service": "edge",
+    "name": "screenshot",
+    "method": "GET",
+    "path": "/api/widgets/:widget_id/screenshots/:run_id/:candidate_id",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      404
+    ],
+    "summary": "How we got this: a clean page's screenshot, the widget owner's only (board.getScreenshot). Blocked reads have none."
   },
   {
     "service": "edge",
@@ -539,14 +568,15 @@
     "method": "POST",
     "path": "/boards/:account_id/proposals",
     "callers": [
-      "agent"
+      "agent",
+      "edge"
     ],
     "status": 201,
     "errors": [
       400,
       404
     ],
-    "summary": "The agent's proposal, stored pending. Each add is validated against the widget catalog."
+    "summary": "The agent's proposal, stored pending. Each add is validated against the widget catalog. edge: the Add app's hand-added widget (then accepted at once)."
   },
   {
     "service": "board",

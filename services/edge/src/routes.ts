@@ -1,4 +1,4 @@
-import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, EDGE, MODELS, SESSION_COOKIE, type ServiceName } from '@app/contracts';
+import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, defaultDraft, EDGE, MODELS, SESSION_COOKIE, type ServiceName } from '@app/contracts';
 import { ContractError, HttpError, type Call, type Handlers } from '@app/service-kit';
 
 export type Upstream = Extract<ServiceName, 'accounts' | 'board' | 'agent' | 'connections' | 'audit' | 'models'>;
@@ -66,12 +66,19 @@ export function routes(deps: Deps, hooks: RouteHooks = {}): Handlers<typeof EDGE
     conversation: ({ params }, ctx) => need('agent')(AGENT.getConversation, { params, query: { account_id: acc(ctx) } }),
     accept: ({ params }, ctx) => need('board')(BOARD.accept, { params, body: { account_id: acc(ctx) } }),
     reject: ({ params }, ctx) => need('board')(BOARD.reject, { params, body: { account_id: acc(ctx) } }),
+    addWidget: async ({ body }, ctx) => {
+      // The Add app: the type's prescribed defaults, proposed and accepted at once, so it pours in like an accepted proposal.
+      const account_id = acc(ctx);
+      const p = await need('board')(BOARD.propose, { params: { account_id }, body: { changes: [{ op: 'add', widget: defaultDraft(body.type) }] } });
+      return need('board')(BOARD.accept, { params: { proposal_id: p.proposal_id }, body: { account_id } });
+    },
     resize: ({ params, body }, ctx) => need('board')(BOARD.resize, { params, body: { ...body, account_id: acc(ctx) } }),
     clear: ({ params }, ctx) => need('board')(BOARD.clear, { params, body: { account_id: acc(ctx) } }),
     remove: ({ params }, ctx) => need('board')(BOARD.remove, { params, query: { account_id: acc(ctx) } }),
     refresh: ({ params }, ctx) => need('board')(BOARD.refresh, { params, body: { account_id: acc(ctx) } }),
     addSource: ({ params, body }, ctx) => need('board')(BOARD.addSource, { params, body: { ...body, account_id: acc(ctx) } }),
     trace: ({ params }, ctx) => need('board')(BOARD.getTrace, { params, query: { account_id: acc(ctx) } }),
+    screenshot: ({ params }, ctx) => need('board')(BOARD.getScreenshot, { params, query: { account_id: acc(ctx) } }),
     receipt: ({ params }, ctx) => need('board')(BOARD.getReceipt, { params, query: { account_id: acc(ctx) } }),
     setLook: ({ body }, ctx) => need('accounts')(ACCOUNTS.setLook, { params: { account_id: acc(ctx) }, body }),
     connectionsKey: () => need('connections')(CONNECTIONS.publicKey, {}),

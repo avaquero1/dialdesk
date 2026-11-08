@@ -115,13 +115,13 @@ export const BOARD = api('board', {
   propose: {
     method: 'POST',
     path: '/boards/:account_id/proposals',
-    callers: ['agent'],
+    callers: ['agent', 'edge'],
     params: acc,
     body: z.object({ changes: z.array(ProposalChange).min(1).max(6) }).strict(),
     response: Proposal,
     status: 201,
     errors: [400, 404],
-    summary: "The agent's proposal, stored pending. Each add is validated against the widget catalog.",
+    summary: "The agent's proposal, stored pending. Each add is validated against the widget catalog. edge: the Add app's hand-added widget (then accepted at once).",
   },
   accept: {
     method: 'POST',

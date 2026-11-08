@@ -287,3 +287,21 @@ export function displayEntry(type: DisplayType) {
   if (!e) throw new Error(`no catalog entry for ${type}`);
   return e;
 }
+
+/**
+ * A display type's prescribed defaults for the Add app (adding a widget by hand): the default board's first tile of
+ * that type (its title, markets and params) at the catalog's default size.
+ */
+export function defaultDraft(type: DisplayType) {
+  const e = displayEntry(type);
+  const t = WIDGET_CATALOG.default_board.tiles.find((x) => x.kind === 'display' && x.type === type);
+  const d = t && t.kind === 'display' ? t : null;
+  return {
+    kind: 'display' as const,
+    type,
+    size: e.default_size,
+    title: d?.title ?? e.title,
+    market_ids: [...(d?.market_ids ?? [])],
+    params: { ...(d?.params ?? {}) },
+  };
+}

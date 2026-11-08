@@ -77,6 +77,12 @@ export const TrustCounts = z
   .object({
     day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     sandboxes_created: z.number().int().min(0),
+    articles_read: z
+      .number()
+      .int()
+      .min(0)
+      .default(0)
+      .describe("browse boxes only: sandbox.created rows whose ids.kind is 'browse' (the math step's compute boxes aren't articles)"),
     sandboxes_destroyed: z.number().int().min(0),
     sandboxes_killed: z.number().int().min(0),
     proxy_refused: z.number().int().min(0),

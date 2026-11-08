@@ -7,7 +7,8 @@ export const api = AUDIT;
 const acc = 'acc_contract0001';
 export const makeApp = () => {
   const a = createFakeAudit();
-  a.append(logEntry('runner', 'sandbox.created', { account_id: acc }));
+  a.append(logEntry('runner', 'sandbox.created', { account_id: acc, ids: { kind: 'browse' } }));
+  a.append(logEntry('runner', 'sandbox.created', { account_id: acc, ids: { kind: 'compute' } }));
   a.append(logEntry('runner', 'sandbox.killed', { account_id: acc, outcome: 'killed' }));
   a.append(logEntry('runner', 'proxy.refused', { account_id: acc, outcome: 'refused', sizes: { requests: 2 } }));
   a.append(logEntry('connections', 'connection.scope_checked', { account_id: acc, subject_id: 'con_contract0001', outcome: 'ok', ids: { exchange: 'kalshi', scope: 'read' } }));

@@ -128,8 +128,9 @@ export class PgAuditStore {
   async trust(accountId: string, day: string) {
     const counted = [A.sandboxCreated, A.sandboxDestroyed, A.sandboxKilled, A.proxyRefused, A.runPoisoned];
     const next = new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString();
-    const rows = await this.sql<{ action: string; n: number; requests: number }[]>`
+    const rows = await this.sql<{ action: string; n: number; requests: number; browse: number }[]>`
       select entry->>'action' as action, count(*)::int as n,
+             sum(case when entry->'ids'->>'kind' = 'browse' then 1 else 0 end)::int as browse,
              sum(case when jsonb_typeof(entry->'sizes'->'requests') = 'number' then (entry->'sizes'->>'requests')::bigint else 1 end)::int as requests
       from chain
       where entry->>'account_id' = ${accountId} and entry->>'action' = any(${counted})
@@ -161,6 +162,7 @@ export class PgAuditStore {
     return {
       day,
       sandboxes_created: n(A.sandboxCreated),
+      articles_read: rows.find((r) => r.action === A.sandboxCreated)?.browse ?? 0,
       sandboxes_destroyed: n(A.sandboxDestroyed),
       sandboxes_killed: n(A.sandboxKilled),
       proxy_refused: rows.find((r) => r.action === A.proxyRefused)?.requests ?? 0,

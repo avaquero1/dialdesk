@@ -1,4 +1,4 @@
-import { EDGE, ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, MODELS } from '@app/contracts';
+import { EDGE, ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, MODELS, newId } from '@app/contracts';
 import { createClient } from '@app/service-kit';
 import { fakeApp, sampleResult, TEST_TOKENS, type Case } from '@app/testkit';
 import { fake as accounts } from '../../accounts/src/fake.ts';
@@ -9,6 +9,10 @@ import { fake as connections } from '../../connections/src/fake.ts';
 import { fake as models } from '../../models/src/fake.ts';
 import type { Hono } from 'hono';
 import { createFakeEdge, inProcess, type FakeDeps } from '../src/fake.ts';
+
+const run = newId('run');
+const cnd = newId('cnd');
+const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 export const api = EDGE;
 let boardAsRunner: ReturnType<typeof createClient>;
@@ -59,11 +63,20 @@ export const cases: Case[] = [
   { endpoint: 'accept', caller: 'browser', input: (c) => ({ params: { proposal_id: c.prp }, body: {} }), save: (o, c) => { c.new = o.widgets[0].spec.widget_id; } },
   { endpoint: 'chat', caller: 'browser', input: () => ({ body: { conversation_id: null, widget_id: null, message: 'NFL too' } }), save: (o, c) => { c.prp2 = o.turn.chips[0].proposal_id; } },
   { endpoint: 'reject', caller: 'browser', input: (c) => ({ params: { proposal_id: c.prp2 }, body: {} }) },
+  { endpoint: 'addWidget', caller: 'browser', input: () => ({ body: { type: 'gap' } }), save: (o, c) => { c.added = o.widgets[0].spec.widget_id; } },
   { endpoint: 'resize', caller: 'browser', input: (c) => ({ params: { widget_id: c.new }, body: { size: 'L' } }) },
   { endpoint: 'addSource', caller: 'browser', input: (c) => ({ params: { widget_id: c.new }, body: { domain: 'weatherdesk.fixture.test' } }) },
   { endpoint: 'clear', caller: 'browser', input: (c) => ({ params: { widget_id: c.new }, body: {} }) },
   { endpoint: 'refresh', caller: 'browser', input: (c) => ({ params: { widget_id: c.new }, body: {} }) },
   { endpoint: 'trace', caller: 'browser', input: (c) => ({ params: { widget_id: c.new } }) },
+  {
+    endpoint: 'screenshot',
+    caller: 'browser',
+    before: async (c) =>
+      void (await boardAsRunner(BOARD.putScreenshot, { params: { widget_id: c.new as string, run_id: run, candidate_id: cnd }, body: { account_id: c.acc as string, png_base64: TINY_PNG } })),
+    input: (c) => ({ params: { widget_id: c.new, run_id: run, candidate_id: cnd } }),
+  },
+  { endpoint: 'screenshot', caller: 'browser', input: (c) => ({ params: { widget_id: c.new, run_id: newId('run'), candidate_id: cnd } }), expect: 404, label: 'no such screenshot' },
   { endpoint: 'receipt', caller: 'browser', input: () => ({ params: { receipt_id: 'r-00000000' } }), expect: 404, label: 'not on this board' },
   {
     endpoint: 'receipt',

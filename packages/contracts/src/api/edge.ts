@@ -3,8 +3,8 @@
  * edge fills `account_id` from the session, so browser bodies never carry it.
  */
 import { z } from 'zod';
-import { ConversationId, Domain, Ok, ProposalId, ReceiptId, WidgetId } from '../common.ts';
-import { DisplaySize } from '../catalog.ts';
+import { CandidateId, ConversationId, Domain, Ok, ProposalId, ReceiptId, RunId, WidgetId } from '../common.ts';
+import { DisplaySize, DisplayType } from '../catalog.ts';
 import { api } from '../endpoint.ts';
 import { Look } from '../look.ts';
 import { Place } from '../widget.ts';
@@ -109,6 +109,16 @@ export const EDGE = api('edge', {
     errors: [404, 409],
     summary: 'No thanks.',
   },
+  addWidget: {
+    method: 'POST',
+    path: '/api/widgets',
+    callers: ['browser'],
+    body: z.object({ type: DisplayType }).strict(),
+    response: z.object({ proposal: Proposal, widgets: z.array(Widget) }).strict(),
+    status: 201,
+    errors: [400, 404],
+    summary: "The Add app: one widget of this type with the catalog's prescribed defaults (defaultDraft), proposed and accepted at once.",
+  },
   resize: {
     method: 'PATCH',
     path: '/api/widgets/:widget_id/size',
@@ -159,6 +169,15 @@ export const EDGE = api('edge', {
     response: z.object({ steps: z.array(RunTraceStep) }).strict(),
     errors: [404],
     summary: 'Menu: Sources and receipts.',
+  },
+  screenshot: {
+    method: 'GET',
+    path: '/api/widgets/:widget_id/screenshots/:run_id/:candidate_id',
+    callers: ['browser'],
+    params: z.object({ widget_id: WidgetId, run_id: RunId, candidate_id: CandidateId }),
+    response: z.object({ screenshot_key: z.string(), content_type: z.literal('image/png'), png_base64: z.string() }).strict(),
+    errors: [404],
+    summary: "How we got this: a clean page's screenshot, the widget owner's only (board.getScreenshot). Blocked reads have none.",
   },
   receipt: {
     method: 'GET',

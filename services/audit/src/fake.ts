@@ -66,6 +66,7 @@ export function createFakeAudit() {
     trust: ({ query }) => ({
       day: now().slice(0, 10),
       sandboxes_created: count(A.sandboxCreated, query.account_id),
+      articles_read: today(query.account_id).filter((r) => r.entry.action === A.sandboxCreated && r.entry.ids.kind === 'browse').length,
       sandboxes_destroyed: count(A.sandboxDestroyed, query.account_id),
       sandboxes_killed: count(A.sandboxKilled, query.account_id),
       proxy_refused: refused(query.account_id),
