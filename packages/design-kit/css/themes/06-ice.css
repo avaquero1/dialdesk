@@ -152,7 +152,7 @@
 
   --text: oklch(.975 .012 var(--hue));
   --text-2: oklch(.87 .025 var(--hue));
-  --text-3: oklch(.77 .035 var(--hue));
+  --text-3: oklch(.86 .03 var(--hue));
   --text-on-accent: oklch(.17 .05 var(--hue));
 
   --accent: oklch(.82 .11 var(--hue));
@@ -325,3 +325,7 @@
   [data-theme="ice"] .wallpaper-fx > .fx2,
   [data-theme="ice"] .wallpaper-fx > .fx3 { animation: none; will-change: auto; }
 }
+
+/* the widget's top corner is the brightest frost: its small label reads in the full text color there */
+[data-theme="ice"][data-mode="dark"][data-layout="phone"] .w-sub { color: var(--text); }
+[data-theme="ice"][data-mode="dark"] .a-label { background: rgb(0 0 0 / .46); box-shadow: 0 0 0 3px rgb(0 0 0 / .46); border-radius: 4px; } /* the label sits on the bright streaks */

@@ -29,7 +29,7 @@
   --ok: oklch(.45 .12 158);
   --up: oklch(.24 .02 var(--hue));
   --down: oklch(.46 .02 var(--hue));
-  --flat: oklch(.56 .012 var(--hue));
+  --flat: oklch(.45 .012 var(--hue));
   --ink-1: oklch(.52 .17 var(--hue));
   --ink-2: oklch(.30 .02 var(--hue));
   --ink-3: oklch(.50 .02 var(--hue));
@@ -113,7 +113,7 @@
 
   --text: oklch(.975 .005 var(--hue));
   --text-2: oklch(.84 .01 var(--hue));
-  --text-3: oklch(.72 .012 var(--hue));
+  --text-3: oklch(.78 .012 var(--hue));
   --text-on-accent: oklch(.18 .03 var(--hue));
   --accent: oklch(.80 .13 var(--hue));
   --attention: oklch(.82 .15 78);
@@ -121,7 +121,7 @@
   --ok: oklch(.84 .12 160);
   --up: oklch(.95 .02 var(--hue));
   --down: oklch(.74 .02 var(--hue));
-  --flat: oklch(.66 .012 var(--hue));
+  --flat: oklch(.78 .012 var(--hue));
   --ink-1: oklch(.82 .13 var(--hue));
   --ink-2: oklch(.92 .012 var(--hue));
   --ink-3: oklch(.70 .02 var(--hue));
@@ -129,7 +129,7 @@
   --ink-5: oklch(.9 .05 var(--hue));
   --ink-6: oklch(.56 .01 var(--hue));
 
-  --glass-widget-bg: linear-gradient(162deg, oklch(.32 .013 var(--hue) / .66), oklch(.17 .008 var(--hue) / .78));
+  --glass-widget-bg: linear-gradient(162deg, oklch(.29 .013 var(--hue) / .74), oklch(.17 .008 var(--hue) / .8));
   --glass-widget-blur: 16px;
   --glass-widget-sat: 125%;
   --glass-widget-rim: rgba(0,0,0,.5);
@@ -196,7 +196,7 @@
 [data-theme="mercury"] .btn--look .dropmark { background: var(--bead-accent); border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
 [data-theme="mercury"] .chip .shield { color: var(--accent); }
 [data-theme="mercury"] .seg { background: var(--field); box-shadow: inset 0 0 0 1px var(--glass-chip-rim), inset 0 1px 3px rgba(0,0,0,.25); }
-[data-theme="mercury"] .seg button[aria-pressed="true"] { background: var(--bead-accent); box-shadow: 0 2px 6px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.5); color: var(--text-on-accent); }
+[data-theme="mercury"] .seg button[aria-pressed="true"] { background: var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.5); color: var(--text-on-accent); }
 [data-theme="mercury"] .btn--accent { background: var(--bead-accent); box-shadow: 0 6px 14px -4px color-mix(in oklch, var(--accent) 60%, transparent), inset 0 1px 0 rgba(255,255,255,.55); }
 [data-theme="mercury"] .big { background: linear-gradient(180deg, var(--text) 0%, color-mix(in oklch, var(--text) 78%, var(--text-3)) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 [data-theme="mercury"][data-mode="dark"] .big { background: linear-gradient(180deg, #ffffff 10%, #aeb5c3 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -218,3 +218,9 @@
 @supports not (transition-timing-function: linear(0, 1)) {
   [data-theme="mercury"] { --ease-water: cubic-bezier(.3, 1.4, .5, 1); --ease-pour: cubic-bezier(.28, 1.24, .46, 1); }
 }
+
+/* the footnote sits on the bright chrome, so its chip needs a dark ground to stay readable */
+[data-theme="mercury"][data-mode="dark"] .foot span { background: oklch(.22 .008 var(--hue) / .84); }
+/* a label sits straight on the chrome: a small ground keeps it readable */
+[data-theme="mercury"] .a-label { background: rgb(255 255 255 / .74); box-shadow: 0 0 0 3px rgb(255 255 255 / .74); border-radius: 4px; }
+[data-theme="mercury"][data-mode="dark"] .a-label { background: rgb(0 0 0 / .55); box-shadow: 0 0 0 3px rgb(0 0 0 / .55); }

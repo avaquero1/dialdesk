@@ -230,7 +230,7 @@ button { background: none; border: 0; padding: 0; cursor: pointer; text-align: i
 .spark .ln { fill: none; stroke: url(#sg); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .spark .ar { fill: url(#sa); stroke: none; }
 .spark .l1, .spark .l2 { fill: none; stroke-width: 1.3; vector-effect: non-scaling-stroke; stroke-linecap: round; }
-.spark .l1 { stroke: var(--ink-2); opacity: .8; } .spark .l2 { stroke: var(--ink-3); opacity: .85; stroke-dasharray: 3 4; }
+.spark .l1 { stroke: var(--ink-2); opacity: .8; } .spark .l2 { stroke: var(--text-2); opacity: .85; stroke-dasharray: 3 4; }
 .spark .end { position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--bead-accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 26%, transparent), 0 0 12px color-mix(in oklch, var(--accent) 65%, transparent); }
 
 /* sizes decide which parts show: from-m shows at m and up, only-s at s only */
@@ -462,7 +462,7 @@ html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-
 @media (pointer: coarse), (max-width: 720px) { .needs i, .needs-dot { animation: none; } }
 html[data-motion="reduced"] .wallpaper-fx > i, html[data-motion="reduced"] .wallpaper-fx::after { animation: none !important; }
 html[data-motion="reduced"] .w-spot, html[data-motion="reduced"] .w-shimmer { animation: none !important; display: none; }
-html[data-motion="reduced"] .surface .rz { opacity: 1; }
+html[data-motion="reduced"] .surface .rz, html[data-motion="reduced"] .surface.is-open .rz { opacity: 1; animation: none; }
 html[data-motion="reduced"] .w { transition-property: opacity !important; }
 html[data-motion="reduced"] .w.is-new { animation: none !important; }
 html[data-motion="reduced"] .w--display.is-new, html[data-motion="reduced"] .is-new > .f-tile, html[data-motion="reduced"] .is-new > .a-tile { animation: fade-in 200ms linear backwards !important; }
@@ -537,3 +537,48 @@ html[data-layout="phone"] .chat:not(.is-open) .chat-form { cursor: text; }
   -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%); }
 html[data-layout="phone"] .w--m .c-left .lbl { display: none; }
 .theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ---- access on a phone (design.md section 12): what a person reads is at least 16 px, a tile's small label at least 12 px,
+   every control is at least 44 px (its own box, or a transparent hit area where the bar or a row has no room) ---- */
+html[data-layout="phone"] :is(.w-sub, .lbl, .w-foot, .item .meta, .pillnote, .okline, .c-span, .mv, .mv .mv-a, .g-lab, .c-ex, .c-foot, .w--m .c-foot, .c-detail .row, .formula, .who, .pos-meta, .pos-list, .pos-mvs .mv, .w--m .c-mv .mv, .a-label, .mini, .mini s, .g-game, .w--s .game .g-n, .stat .k, .sh-sec > h4, .wchip, .tool-chip, .needs) { font-size: 12px; }
+html[data-layout="phone"] .w-sub { color: var(--text-2); }
+html[data-layout="phone"] .w--folder > .f-tile > .w-menu-btn { top: -14px; right: -14px; } /* off the top right small tile's % */
+html[data-layout="phone"] .mini s { opacity: 1; }
+html[data-layout="phone"] .mini { box-shadow: none; } /* the bright rim touches the % at this size */
+html[data-layout="phone"][data-mode="dark"] .mini { background: rgb(0 0 0 / .3); }
+html[data-layout="phone"] .f-grid { inset: 9%; gap: 4%; } /* a folder's small tiles hold 12 px numbers and their % */
+html[data-layout="phone"] .pos-list, html[data-layout="phone"] .w--m .pos-list { line-height: 1.1; gap: 1px; margin-top: 0; } /* 12 px rows, in the room the 11 px rows had */
+html[data-layout="phone"] .pos-mvs { row-gap: 0; }
+html[data-layout="phone"] .c-foot .ev { font-size: 16px; line-height: 1.25; white-space: normal; overflow: visible; text-overflow: clip; }
+html[data-layout="phone"] :is(.w-title, .game .g-n) { font-size: max(12.5px, calc(var(--u) * 13px)); }
+html[data-layout="phone"] :is(.w-note, .w--m .c-base .w-note, .w-empty, .item .hl, .item--blocked .hl) { font-size: 16px; line-height: 1.3; }
+html[data-layout="phone"] :is(.w--s .w-note, .w--s .w-empty, .w--s .item--blocked .hl) { font-size: 12.5px; }
+html[data-layout="phone"] :is(.w--s .c-left .big, .w--s .mvt .big) { font-size: calc(var(--u) * 35px); } /* room for the small tile's move at 12 px */
+html[data-layout="phone"] .w--s .w-in { gap: 4px; }
+html[data-layout="phone"] :is(.w--s .c-left, .w--s .c-main, .w--s .mvt) { gap: 1px; }
+html[data-layout="phone"] .w--s .c-chart { min-height: calc(var(--u) * 42px); }
+html[data-layout="phone"] :is(.w--s .w-empty, .w--s .item--blocked .hl) { font-size: 12px; line-height: 1.18; margin-top: 3px; } /* the small tile's whole sentence still fits */
+html[data-layout="phone"] :is(.w--m .item .hl, .w--m .item--blocked .hl, .w--m .w-note, .w--m .c-base .w-note) { font-size: 12.5px; line-height: 1.25; } /* a medium tile can't fit these at 16 px */
+html[data-layout="phone"] .foot { font-size: 12.5px; }
+html[data-layout="phone"] :is(.sh-sub, .sh-note, .rowitem .t, .rowitem .s, .mi, .mi--confirm p, .toast, .hash) { font-size: 16px; line-height: 1.35; }
+html[data-layout="phone"] .toast { white-space: normal; max-width: calc(100vw - 32px); text-align: center; line-height: 1.25; }
+html[data-layout="phone"] .btn, html[data-layout="phone"] .btn--sm, html[data-layout="phone"] .mi--confirm .btn { height: 44px; padding: 0 18px; font-size: 16px; }
+html[data-layout="phone"] .bar { padding: 0 6px 0 12px; gap: 6px; }
+html[data-layout="phone"] .bar .btn { height: 38px; padding: 0 10px; }
+html[data-layout="phone"] .bar .btn::after { content: ""; position: absolute; inset: -3px 0; }
+html[data-layout="phone"] .chip::after { content: ""; position: absolute; inset: -6px 0; }
+html[data-layout="phone"] .avatar::before { content: ""; position: absolute; inset: -5px; } /* ::before: a theme may paint ::after */
+html[data-layout="phone"] .iconbtn { width: 44px; height: 44px; }
+html[data-layout="phone"] :is(.w--app, .w--folder) > * > .w-menu-btn::after { inset: -20px -20px 0 0; } /* 44 px, all of it up and out from the corner: anything nearer the centre pulls a centre tap to the menu */
+html[data-layout="phone"] .seg button { height: 44px; min-width: 44px; font-size: 16px; }
+html[data-layout="phone"] .mi { height: 44px; }
+html[data-layout="phone"] .mi--confirm { height: auto; }
+html[data-layout="phone"] .mi--size { height: auto; min-height: 52px; }
+html[data-layout="phone"] .mi--size .seg button { height: 44px; min-width: 44px; font-size: 16px; }
+html[data-layout="phone"] .theme-chip { height: 44px; padding: 0 8px 0 5px; gap: 7px; font: 500 16px/1 var(--font-ui); letter-spacing: -.01em; }
+html[data-layout="phone"] .theme-chip .tc-sw { width: 30px; }
+html[data-layout="phone"] .hue-range { height: 44px; }
+html[data-layout="phone"] .hue-sws { gap: 14px; }
+html[data-layout="phone"] .hue-sw::after { content: ""; position: absolute; inset: -7px; }
+html[data-layout="phone"] .toggle::before { content: ""; position: absolute; inset: -8px 0; }
+html[data-layout="phone"] .chat-quick button { height: 44px; padding: 0 16px; border-radius: 22px; font-size: 16px; }

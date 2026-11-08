@@ -134,7 +134,7 @@
 
   --text: oklch(.99 .002 var(--hue));
   --text-2: oklch(.88 .008 var(--hue));
-  --text-3: oklch(.72 .012 var(--hue));
+  --text-3: oklch(.78 .012 var(--hue));
   --text-on-accent: oklch(.13 .02 var(--hue));
 
   --accent: oklch(.79 .15 var(--hue));

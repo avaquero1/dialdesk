@@ -28,7 +28,7 @@
 
   --text: oklch(.235 .035 var(--hue));
   --text-2: oklch(.235 .035 var(--hue) / .76);
-  --text-3: oklch(.235 .035 var(--hue) / .58);
+  --text-3: oklch(.235 .035 var(--hue) / .72);
   --text-on-accent: #fff;
 
   --accent: oklch(.5 .17 var(--hue));
@@ -36,8 +36,8 @@
   --danger: #D63B3B;
   --ok: #0E8F7B;
   --up: #1672B8;
-  --down: #C0431B;
-  --flat: oklch(.235 .035 var(--hue) / .5);
+  --down: oklch(.46 .15 320);
+  --flat: oklch(.235 .035 var(--hue) / .72);
 
   --ink-1: #5B5BE0;   /* Indigo: Kalshi */
   --ink-2: #0FA58C;   /* Teal: Polymarket */
@@ -124,7 +124,7 @@
   --danger: #FF6B6B;
   --ok: #34D7BC;
   --up: #5BC0FF;
-  --down: #FF8D6B;
+  --down: oklch(.8 .12 320);
   --flat: oklch(.965 .008 var(--hue) / .5);
 
   --ink-1: #8B8BFF;

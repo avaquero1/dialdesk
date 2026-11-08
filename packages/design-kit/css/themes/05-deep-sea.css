@@ -52,7 +52,7 @@
   --danger: oklch(.5 .21 26);
   --ok: oklch(.44 .13 155);
   --up: oklch(.42 .1 205);
-  --down: oklch(.5 .19 350);
+  --down: oklch(.5 .19 330);
   --flat: oklch(.43 .06 calc(var(--hue) + 16));
 
   --ink-1: oklch(.5 .17 258);    /* plankton blue: Kalshi */
@@ -161,7 +161,7 @@
   --danger: oklch(.73 .19 24);
   --ok: oklch(.82 .19 150);
   --up: oklch(.88 .15 188);
-  --down: oklch(.78 .19 350);
+  --down: oklch(.78 .19 330);
   --flat: oklch(.8 .04 calc(var(--hue) - 4));
 
   --ink-1: oklch(.78 .15 255);
@@ -370,3 +370,6 @@
   [data-theme="deep-sea"] .wallpaper-fx .fx2::before,
   [data-theme="deep-sea"] .wallpaper-fx .fx2::after { animation: none; will-change: auto; }
 }
+
+/* the Look button sits on the brightest water in the bar: a darker ground keeps its word readable */
+[data-theme="deep-sea"][data-mode="dark"] .bar .btn { background: oklch(.3 .06 calc(var(--hue) + 10) / .55); }
