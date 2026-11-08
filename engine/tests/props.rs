@@ -265,6 +265,54 @@ proptest! {
         prop_assert_eq!(m, 0.0);
     }
 
+    // 5b. price_at: a point of a line. It is always one of the series' own prices, the last at ago 0, the first once
+    // ago covers the span; and a move over a window is the line's last point minus its point that far back.
+    #[test]
+    fn price_at_is_a_point_of_the_series_and_movement_is_a_difference_of_two(s in series(1), ago in 0.0f64..20_000.0, w in 1.0f64..20_000.0) {
+        let at = |a: f64| one("price_at", &[("series", "s"), ("ago_s", "a")], vec![("s", Value::Series(s.clone())), ("a", num(a))]).unwrap();
+        let v = at(ago);
+        prop_assert!(s.iter().any(|p| (p.v - v).abs() <= TOL), "price_at {v} is not a point of the series");
+        prop_assert!((at(0.0) - s[s.len() - 1].v).abs() <= TOL);
+        let span = (s[s.len() - 1].t - s[0].t) as f64;
+        if ago >= span && ago > 0.0 {
+            prop_assert!((v - s[0].v).abs() <= TOL);
+        }
+        let m = one("movement", &[("series", "s"), ("window_s", "w")], vec![("s", Value::Series(s.clone())), ("w", num(w))]).unwrap();
+        prop_assert!((m - (at(0.0) - at(w))).abs() <= TOL);
+    }
+
+    #[test]
+    fn price_at_moves_back_in_time_with_ago(s in series(1), a in 0.0f64..10_000.0, b in 0.0f64..10_000.0) {
+        // A larger ago never reads a later point.
+        let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+        let last_t = s[s.len() - 1].t as f64;
+        let t_of = |ago: f64| s.iter().find(|p| p.t as f64 >= last_t - ago).map(|p| p.t).unwrap_or(s[s.len() - 1].t);
+        prop_assert!(t_of(hi) <= t_of(lo));
+        let refused = one("price_at", &[("series", "s"), ("ago_s", "a")], vec![("s", Value::Series(s)), ("a", num(-1.0 - lo))]);
+        prop_assert_eq!(refused.unwrap_err(), "out_of_range");
+    }
+
+    // 5c. Moves with a receipt: every series and price carries where and when it was read, and the receipt shows it.
+    #[test]
+    fn move_and_line_receipts_carry_the_series_provenance(s in series(2), secs in 0u32..86_400) {
+        let ops = vec![
+            call("n1", "movement", &[("series", "series_1"), ("window_s", "day_s")]),
+            call("n2", "price_at", &[("series", "series_1"), ("ago_s", "ago_1")]),
+        ];
+        let mut inp = input(ops, vec![("series_1", Value::Series(s.clone())), ("day_s", num(86_400.0)), ("ago_1", num(0.0))], &[("series_1", Origin::History)]);
+        let prov = Provenance { source: "kalshi:KXNBAGAME-26NOV07LALBOS-LAL".into(), as_of: format!("2026-11-07T{:02}:{:02}:{:02}Z", secs / 3600, secs / 60 % 60, secs % 60) };
+        inp.provenance.insert("series_1".into(), prov.clone());
+        let res = run(&inp);
+        prop_assert!(res.ok);
+        for r in &res.receipts {
+            prop_assert_eq!(&r.provenance["series"], &prov);
+            prop_assert_eq!(&r.refs["series"], "series_1");
+            prop_assert_eq!(&r.origins, &vec![Origin::History]);
+            prop_assert_eq!(&r.input_hash, &res.input_hash);
+        }
+        prop_assert!((res.numbers[1].value - s[s.len() - 1].v).abs() <= TOL);
+    }
+
     // 6. volatility
     #[test]
     fn volatility_is_bounded_and_ignores_level(s in series(2), shift in -50.0f64..50.0) {

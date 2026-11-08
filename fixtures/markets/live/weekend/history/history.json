@@ -1,0 +1,294 @@
+{
+  "recorded_at": "2026-11-08T00:25:28.049Z",
+  "window_s": 604800,
+  "files": [
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08CINATL-CIN",
+      "file": "kalshi-KXNFLGAME-26NOV08CINATL-CIN.json"
+    },
+    {
+      "market_id": "polymarket:nfl-cin-atl-2026-11-08",
+      "file": "polymarket-nfl-cin-atl-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08CLENO-CLE",
+      "file": "kalshi-KXNFLGAME-26NOV08CLENO-CLE.json"
+    },
+    {
+      "market_id": "polymarket:nfl-cle-no-2026-11-08",
+      "file": "polymarket-nfl-cle-no-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08DALIND-DAL",
+      "file": "kalshi-KXNFLGAME-26NOV08DALIND-DAL.json"
+    },
+    {
+      "market_id": "polymarket:nfl-dal-ind-2026-11-08",
+      "file": "polymarket-nfl-dal-ind-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08DENCAR-DEN",
+      "file": "kalshi-KXNFLGAME-26NOV08DENCAR-DEN.json"
+    },
+    {
+      "market_id": "polymarket:nfl-den-car-2026-11-08",
+      "file": "polymarket-nfl-den-car-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08DETMIA-DET",
+      "file": "kalshi-KXNFLGAME-26NOV08DETMIA-DET.json"
+    },
+    {
+      "market_id": "polymarket:nfl-det-mia-2026-11-08",
+      "file": "polymarket-nfl-det-mia-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08LARWAS-LAR",
+      "file": "kalshi-KXNFLGAME-26NOV08LARWAS-LAR.json"
+    },
+    {
+      "market_id": "polymarket:nfl-la-was-2026-11-08",
+      "file": "polymarket-nfl-la-was-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08NYGPHI-NYG",
+      "file": "kalshi-KXNFLGAME-26NOV08NYGPHI-NYG.json"
+    },
+    {
+      "market_id": "polymarket:nfl-nyg-phi-2026-11-08",
+      "file": "polymarket-nfl-nyg-phi-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08NYJKC-NYJ",
+      "file": "kalshi-KXNFLGAME-26NOV08NYJKC-NYJ.json"
+    },
+    {
+      "market_id": "polymarket:nfl-nyj-kc-2026-11-08",
+      "file": "polymarket-nfl-nyj-kc-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08HOULAC-HOU",
+      "file": "kalshi-KXNFLGAME-26NOV08HOULAC-HOU.json"
+    },
+    {
+      "market_id": "polymarket:nfl-hou-lac-2026-11-08",
+      "file": "polymarket-nfl-hou-lac-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08ARISEA-ARI",
+      "file": "kalshi-KXNFLGAME-26NOV08ARISEA-ARI.json"
+    },
+    {
+      "market_id": "polymarket:nfl-ari-sea-2026-11-08",
+      "file": "polymarket-nfl-ari-sea-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08GBNE-GB",
+      "file": "kalshi-KXNFLGAME-26NOV08GBNE-GB.json"
+    },
+    {
+      "market_id": "polymarket:nfl-gb-ne-2026-11-08",
+      "file": "polymarket-nfl-gb-ne-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08LVSF-LV",
+      "file": "kalshi-KXNFLGAME-26NOV08LVSF-LV.json"
+    },
+    {
+      "market_id": "polymarket:nfl-lv-sf-2026-11-08",
+      "file": "polymarket-nfl-lv-sf-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV08TBCHI-TB",
+      "file": "kalshi-KXNFLGAME-26NOV08TBCHI-TB.json"
+    },
+    {
+      "market_id": "polymarket:nfl-tb-chi-2026-11-09",
+      "file": "polymarket-nfl-tb-chi-2026-11-09.json"
+    },
+    {
+      "market_id": "kalshi:KXNFLGAME-26NOV09BUFMIN-BUF",
+      "file": "kalshi-KXNFLGAME-26NOV09BUFMIN-BUF.json"
+    },
+    {
+      "market_id": "polymarket:nfl-buf-min-2026-11-10",
+      "file": "polymarket-nfl-buf-min-2026-11-10.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV07DENIND-DEN",
+      "file": "kalshi-KXNBAGAME-26NOV07DENIND-DEN.json"
+    },
+    {
+      "market_id": "polymarket:nba-den-ind-2026-11-07",
+      "file": "polymarket-nba-den-ind-2026-11-07.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV07BKNATL-BKN",
+      "file": "kalshi-KXNBAGAME-26NOV07BKNATL-BKN.json"
+    },
+    {
+      "market_id": "polymarket:nba-bkn-atl-2026-11-07",
+      "file": "polymarket-nba-bkn-atl-2026-11-07.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV07NYKCLE-NYK",
+      "file": "kalshi-KXNBAGAME-26NOV07NYKCLE-NYK.json"
+    },
+    {
+      "market_id": "polymarket:nba-nyk-cle-2026-11-07",
+      "file": "polymarket-nba-nyk-cle-2026-11-07.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV07WASOKC-WAS",
+      "file": "kalshi-KXNBAGAME-26NOV07WASOKC-WAS.json"
+    },
+    {
+      "market_id": "polymarket:nba-was-okc-2026-11-07",
+      "file": "polymarket-nba-was-okc-2026-11-07.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV07ORLGSW-ORL",
+      "file": "kalshi-KXNBAGAME-26NOV07ORLGSW-ORL.json"
+    },
+    {
+      "market_id": "polymarket:nba-orl-gsw-2026-11-07",
+      "file": "polymarket-nba-orl-gsw-2026-11-07.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV07HOUPHX-HOU",
+      "file": "kalshi-KXNBAGAME-26NOV07HOUPHX-HOU.json"
+    },
+    {
+      "market_id": "polymarket:nba-hou-phx-2026-11-07",
+      "file": "polymarket-nba-hou-phx-2026-11-07.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV07SASPOR-SAS",
+      "file": "kalshi-KXNBAGAME-26NOV07SASPOR-SAS.json"
+    },
+    {
+      "market_id": "polymarket:nba-sas-por-2026-11-07",
+      "file": "polymarket-nba-sas-por-2026-11-07.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV08PHICHI-PHI",
+      "file": "kalshi-KXNBAGAME-26NOV08PHICHI-PHI.json"
+    },
+    {
+      "market_id": "polymarket:nba-phi-chi-2026-11-08",
+      "file": "polymarket-nba-phi-chi-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV08LALDET-LAL",
+      "file": "kalshi-KXNBAGAME-26NOV08LALDET-LAL.json"
+    },
+    {
+      "market_id": "polymarket:nba-lal-det-2026-11-08",
+      "file": "polymarket-nba-lal-det-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV08UTAMIN-UTA",
+      "file": "kalshi-KXNBAGAME-26NOV08UTAMIN-UTA.json"
+    },
+    {
+      "market_id": "polymarket:nba-uta-min-2026-11-08",
+      "file": "polymarket-nba-uta-min-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV08BKNDAL-BKN",
+      "file": "kalshi-KXNBAGAME-26NOV08BKNDAL-BKN.json"
+    },
+    {
+      "market_id": "polymarket:nba-bkn-dal-2026-11-08",
+      "file": "polymarket-nba-bkn-dal-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV08BOSMIL-BOS",
+      "file": "kalshi-KXNBAGAME-26NOV08BOSMIL-BOS.json"
+    },
+    {
+      "market_id": "polymarket:nba-bos-mil-2026-11-08",
+      "file": "polymarket-nba-bos-mil-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV08MIASAC-MIA",
+      "file": "kalshi-KXNBAGAME-26NOV08MIASAC-MIA.json"
+    },
+    {
+      "market_id": "polymarket:nba-mia-sac-2026-11-08",
+      "file": "polymarket-nba-mia-sac-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV08NOPLAC-NOP",
+      "file": "kalshi-KXNBAGAME-26NOV08NOPLAC-NOP.json"
+    },
+    {
+      "market_id": "polymarket:nba-nop-lac-2026-11-08",
+      "file": "polymarket-nba-nop-lac-2026-11-08.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV09CLECHA-CLE",
+      "file": "kalshi-KXNBAGAME-26NOV09CLECHA-CLE.json"
+    },
+    {
+      "market_id": "polymarket:nba-cle-cha-2026-11-09",
+      "file": "polymarket-nba-cle-cha-2026-11-09.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV09LALATL-LAL",
+      "file": "kalshi-KXNBAGAME-26NOV09LALATL-LAL.json"
+    },
+    {
+      "market_id": "polymarket:nba-lal-atl-2026-11-09",
+      "file": "polymarket-nba-lal-atl-2026-11-09.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV09WASDET-WAS",
+      "file": "kalshi-KXNBAGAME-26NOV09WASDET-WAS.json"
+    },
+    {
+      "market_id": "polymarket:nba-was-det-2026-11-09",
+      "file": "polymarket-nba-was-det-2026-11-09.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV09MEMTOR-MEM",
+      "file": "kalshi-KXNBAGAME-26NOV09MEMTOR-MEM.json"
+    },
+    {
+      "market_id": "polymarket:nba-mem-tor-2026-11-09",
+      "file": "polymarket-nba-mem-tor-2026-11-09.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV09INDDAL-IND",
+      "file": "kalshi-KXNBAGAME-26NOV09INDDAL-IND.json"
+    },
+    {
+      "market_id": "polymarket:nba-ind-dal-2026-11-09",
+      "file": "polymarket-nba-ind-dal-2026-11-09.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV09DENHOU-DEN",
+      "file": "kalshi-KXNBAGAME-26NOV09DENHOU-DEN.json"
+    },
+    {
+      "market_id": "polymarket:nba-den-hou-2026-11-09",
+      "file": "polymarket-nba-den-hou-2026-11-09.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV09SASPHX-SAS",
+      "file": "kalshi-KXNBAGAME-26NOV09SASPHX-SAS.json"
+    },
+    {
+      "market_id": "polymarket:nba-sas-phx-2026-11-09",
+      "file": "polymarket-nba-sas-phx-2026-11-09.json"
+    },
+    {
+      "market_id": "kalshi:KXNBAGAME-26NOV09NOPGSW-NOP",
+      "file": "kalshi-KXNBAGAME-26NOV09NOPGSW-NOP.json"
+    },
+    {
+      "market_id": "polymarket:nba-nop-gsw-2026-11-09",
+      "file": "polymarket-nba-nop-gsw-2026-11-09.json"
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { MARKETS } from '@app/contracts';
 import { buildApp, createLogger, type Logger } from '@app/service-kit';
 import { FIXTURES_DIR, testCallers } from '@app/testkit';
+import { PolyMarketRaw } from '../src/polymarket.ts';
 import { real, type RealDeps } from '../src/real.ts';
 
 /** When fixtures/markets/live was recorded (scripts/record-live.ts). Tests pin the clock here. */
@@ -75,7 +76,17 @@ export const WEEKEND = JSON.parse(live('weekend/recorded.json')) as {
   games: { event_key: string; kalshi: string; polymarket: string | null }[];
 };
 
-/** A fetch for markets' list on the weekend recording: Kalshi's open games and Polymarket's moneylines. 404 otherwise. */
+/** When weekend/history was recorded (scripts/record-weekend-history.ts): 7 days for each game's two markets. */
+export const WEEKEND_HISTORY = JSON.parse(live('weekend/history/history.json')) as {
+  recorded_at: string;
+  window_s: number;
+  files: { market_id: string; file: string }[];
+};
+
+/**
+ * A fetch for markets on the weekend recording: Kalshi's open games and Polymarket's moneylines, and each game's 7-day
+ * history (Kalshi candlesticks, CLOB prices-history by token). 404 otherwise.
+ */
 export function weekendFetch() {
   const calls: string[] = [];
   const f = (async (input: string | URL | Request) => {
@@ -92,6 +103,12 @@ export function weekendFetch() {
       const ev = page.events.find((e) => e.event_ticker === `${evPath[1]}-${evPath[2]}`);
       return ev ? json(JSON.stringify({ event: ev, markets: ev.markets ?? [] })) : new Response('{"error":"not found"}', { status: 404 });
     }
+    const mkPath = /^\/trade-api\/v2\/markets\/(KXN[A-Z]+GAME)-([A-Z0-9-]+)$/.exec(u.pathname);
+    if (u.hostname === 'api.elections.kalshi.com' && mkPath) {
+      const page = JSON.parse(live(`weekend/events-${mkPath[1]}.json`)) as { events: { markets?: { ticker: string }[] }[] };
+      const m = page.events.flatMap((e) => e.markets ?? []).find((x) => x.ticker === `${mkPath[1]}-${mkPath[2]}`);
+      return m ? json(JSON.stringify({ market: m })) : new Response('{"error":"not found"}', { status: 404 });
+    }
     if (u.hostname === 'gamma-api.polymarket.com' && u.pathname.startsWith('/markets/slug/')) {
       const all = JSON.parse(live('weekend/markets-by-slug.json')) as { slug: string }[];
       const m = all.find((x) => x.slug === decodeURIComponent(u.pathname.slice('/markets/slug/'.length)));
@@ -101,6 +118,17 @@ export function weekendFetch() {
       const want = new Set(u.searchParams.getAll('slug'));
       const all = JSON.parse(live('weekend/markets-by-slug.json')) as { slug: string }[];
       return json(JSON.stringify(all.filter((m) => want.has(m.slug))));
+    }
+    const candles = /^\/trade-api\/v2\/series\/[A-Z]+\/markets\/([A-Z0-9-]+)\/candlesticks$/.exec(u.pathname);
+    if (u.hostname === 'api.elections.kalshi.com' && candles) {
+      const file = WEEKEND_HISTORY.files.find((x) => x.market_id === `kalshi:${candles[1]}`)?.file;
+      if (file) return json(live(`weekend/history/${file}`));
+    }
+    if (u.hostname === 'clob.polymarket.com' && u.pathname === '/prices-history') {
+      const all = (JSON.parse(live('weekend/markets-by-slug.json')) as unknown[]).map((m) => PolyMarketRaw.parse(m));
+      const slug = all.find((m) => m.clobTokenIds?.[0] === u.searchParams.get('market'))?.slug;
+      const file = WEEKEND_HISTORY.files.find((x) => x.market_id === `polymarket:${slug}`)?.file;
+      if (file) return json(live(`weekend/history/${file}`));
     }
     return new Response('{"error":"not found"}', { status: 404 });
   }) as typeof fetch;

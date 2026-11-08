@@ -17,6 +17,7 @@ import { fake as connectionsFake } from '../../connections/src/fake.ts';
 import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { fake as modelsFake } from '../../models/src/fake.ts';
 import { getRunHandlers } from '../src/real.ts';
+import { LINE_POINTS, defaultPlan, isBiggestMove, lineAgo, moverIds } from '../src/plans.ts';
 import { handleRun, type RunnerDeps } from '../src/run.ts';
 import { ACTIVE_FOR_MS, Scheduler } from '../src/scheduler.ts';
 import { MemoryStore } from '../src/store.ts';
@@ -117,10 +118,20 @@ describe.skipIf(!have)('runner', () => {
     ]);
     expect(seen).toEqual([]);
     const r = (await current(w)).result!;
-    expect(r.numbers.map((n) => n.op)).toEqual(['implied_probability', 'implied_probability', 'expected_value', 'movement']);
+    expect(r.numbers.map((n) => n.op)).toEqual(['implied_probability', 'implied_probability', 'expected_value', 'movement', ...Array(LINE_POINTS).fill('price_at')]);
     const ev = r.receipts.find((x) => x.op === 'expected_value')!;
     expect([...ev.origins!].sort()).toEqual(['market', 'user']);
     expect(r.receipts.find((x) => x.op === 'movement')!.origins).toContain('history');
+    // Every price and series carries its market and time; the move is since yesterday, the line spans the 7 days.
+    const spec = w.spec.kind === 'display' ? w.spec : null;
+    const quote = await via('runner', marketsApp)(MARKETS.get, { params: { market_id: spec!.market_ids[0]! } });
+    expect(r.receipts[0]!.provenance).toEqual({ price_cents: { source: quote.market_id, as_of: quote.as_of } });
+    const move = r.receipts.find((x) => x.op === 'movement')!;
+    expect(move.args.window_s).toBe(86400);
+    expect(move.provenance?.series?.source).toBe(spec!.market_ids[0]);
+    const line = r.receipts.filter((x) => x.op === 'price_at');
+    expect(line.map((x) => x.args.ago_s)).toEqual(lineAgo(7 * 86400));
+    expect(line.every((x) => x.provenance?.series?.source === spec!.market_ids[0])).toBe(true);
     expect(d.bus.events.map((e) => e.event)).toEqual(['run.started', 'run.step', 'run.step', 'run.step']);
     const got = await getRunHandlers(d.store).getRun({ params: { run_id: rec.run_id } } as never, {} as never);
     expect(got).toMatchObject({ run_id: rec.run_id, status: 'done', last_step: 'publish' });
@@ -152,6 +163,51 @@ describe.skipIf(!have)('runner', () => {
     expect(receipt.origins).toEqual(['market']);
     expect(receipt.formula).toBe('gap = b_cents - a_cents');
     expect(r.numbers[0]!.receipt_id).toBe(receipt.id);
+  });
+
+  it('Biggest move: every game of the night through the engine, the largest move kept with its chance and line', async () => {
+    const d = deps();
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Movement');
+    const rec = await handleRun(d, jobFor(w, 'numbers'), ctx());
+    expect(rec.status).toBe('done');
+    const r = (await current(w)).result!;
+    expect(r.numbers[0]!.op).toBe('movement');
+    expect(r.numbers.length).toBe(2 + LINE_POINTS);
+    const spec = w.spec.kind === 'display' ? w.spec : null;
+    const ids = await moverIds(via('runner', marketsApp), spec!);
+    expect(ids.length).toBeGreaterThan(1);
+    expect(ids).toContain(spec!.market_ids[0]);
+    const moves = await Promise.all(
+      ids.map(async (market_id) => {
+        const h = await via('runner', marketsApp)(MARKETS.history, { params: { market_id }, query: { window_s: 86400 } });
+        const last = h.points.at(-1)!;
+        return { market_id, move: last.price_cents - h.points.find((p) => p.t >= last.t - 86400)!.price_cents };
+      }),
+    );
+    const best = moves.reduce((a, b) => (Math.abs(b.move) > Math.abs(a.move) ? b : a));
+    expect(r.numbers[0]!.value).toBeCloseTo(best.move, 9);
+    for (const x of r.receipts) for (const p of Object.values(x.provenance ?? {})) expect(p.source).toBe(best.market_id);
+    expect(new Set(r.receipts.map((x) => x.plan_hash)).size).toBe(1);
+  });
+
+  it('a movement widget the agent made for one game keeps that game: its move, volatility and small line', async () => {
+    const { account_id, byTitle } = await freshBoard();
+    const mover = byTitle('Movement').spec;
+    if (mover.kind !== 'display') throw new Error('display');
+    const own = { ...mover, title: 'Lakers at Celtics move', params: { event_keys: mover.params.event_keys } };
+    expect(isBiggestMove(own)).toBe(false);
+    expect(isBiggestMove(mover)).toBe(true);
+    expect(defaultPlan(own).ops.map((o) => o.op)).toEqual(['movement', 'volatility', ...Array(LINE_POINTS).fill('price_at')]);
+    expect(account_id).toBeTruthy();
+  });
+
+  it("Biggest move compares the widget's own games when it lists several (the user's board)", async () => {
+    const { byTitle } = await freshBoard();
+    const tonight = byTitle('Tonight').spec;
+    const mover = byTitle('Movement').spec;
+    if (tonight.kind !== 'display' || mover.kind !== 'display') throw new Error('displays');
+    expect(await moverIds(via('runner', marketsApp), { ...mover, market_ids: tonight.market_ids })).toEqual(tonight.market_ids);
   });
 
   it("two prices: a game that isn't paired gets no number, and the widget says why in words", async () => {

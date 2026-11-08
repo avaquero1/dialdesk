@@ -120,7 +120,9 @@ impl OpName {
             OpName::ExpectedValue => "ev = probability * 100 - price_cents",
             OpName::Movement => "move = last.v - v of first point with t >= last.t - window_s",
             OpName::Volatility => "sd = population stddev of (v[i] - v[i-1])",
-            OpName::PriceAt => "price = v of first point with t >= last.t - ago_s",
+            OpName::PriceAt => {
+                "price = v of first point with t >= last.t - ago_s (the last point at ago_s 0)"
+            }
             OpName::Gap => "gap = b_cents - a_cents",
             OpName::BaseRate => "rate = hits / total",
             OpName::BaseRateHistory => {
@@ -413,10 +415,13 @@ fn count(c: f64) -> Result<f64, Fail> {
 }
 
 /// A price series: at least `min` points, sorted by t, every v in 0..=100.
-/// The first point with t >= last.t - ago (the last point when none is older).
+/// The first point with t >= last.t - ago (the last point at ago 0, or when none is older).
 /// movement and price_at both read it, so a move is always the difference of two line points.
 fn point_from(s: &[Point], ago: f64) -> Point {
     let last = s[s.len() - 1];
+    if ago <= 0.0 {
+        return last; // now: the series' last price, even when earlier points share its t
+    }
     let from = last.t as f64 - ago;
     *s.iter().find(|p| p.t as f64 >= from).unwrap_or(&last)
 }

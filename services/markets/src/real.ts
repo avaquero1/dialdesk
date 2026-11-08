@@ -19,7 +19,11 @@ import { UpstreamError, httpGet, type Fetch } from './upstream.ts';
 export const MarketsConfig = z.object({
   QUOTE_TTL_S: z.coerce.number().int().min(10).max(30).default(15),
   LIST_TTL_S: z.coerce.number().int().min(10).max(300).default(30),
-  HISTORY_TTL_S: z.coerce.number().int().min(10).max(600).default(60),
+  HISTORY_TTL_S: z.coerce.number().int().min(10).max(3600).default(300),
+  /** History requests per exchange per minute, at most (polite: they are spaced evenly). */
+  HISTORY_PER_MIN: z.coerce.number().int().min(1).max(6000).default(20),
+  /** A history request that would wait longer than this for its turn is refused (the cached copy is served if any). */
+  HISTORY_MAX_WAIT_S: z.coerce.number().int().min(0).max(60).default(20),
   FEED_TTL_S: z.coerce.number().int().min(60).max(3600).default(600),
   SEARCH_TTL_S: z.coerce.number().int().min(300).max(86400).default(1800),
   FEED_MAX_AGE_H: z.coerce.number().int().min(6).max(720).default(96),
@@ -61,6 +65,7 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
   const cache = new TtlCache(5000, now);
   const rows: SourceRow[] = SOURCE_CATALOG.rows.filter((r) => r.env === cfg.SOURCE_ENV && r.verified);
   const ms = (seconds: number) => seconds * 1000;
+  const spacers = { kalshi: spacer(60_000 / cfg.HISTORY_PER_MIN, ms(cfg.HISTORY_MAX_WAIT_S)), polymarket: spacer(60_000 / cfg.HISTORY_PER_MIN, ms(cfg.HISTORY_MAX_WAIT_S)) };
   const stale = { staleIf: isUpstream };
 
   // --- raw reads, cached by what they fetch (never by who asks) ---------------------------------------------------
@@ -204,26 +209,32 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
     history: async ({ params, query }) => {
       const { market, raw } = await mustMarket(params.market_id);
       const w = query.window_s;
+      // One fetch per market serves every window up to 7 days (hourly points); shorter than 6 h asks for minutes.
+      const span = w <= 6 * 3600 ? w : Math.max(w, 7 * 86400);
       try {
         const h = await cache.get(
-          `h:${market.market_id}:${w}`,
+          `h:${market.market_id}:${span}`,
           ms(cfg.HISTORY_TTL_S),
-          async () => {
-            const end = Math.floor(now() / 1000);
-            if (market.exchange === 'kalshi') {
-              const ticker = market.market_id.slice(7);
-              const period = w <= 6 * 3600 ? 1 : w <= 7 * 86400 ? 60 : 1440;
-              const c = await kalshi.candles(ticker.split('-')[0]!, ticker, end - w, end, period);
-              return c ? kalshiPoints(c) : [];
-            }
-            const token = raw?.clobTokenIds?.[0];
-            if (!token) return [];
-            const pts = (await poly.history(token, w)) ?? [];
-            return pts.filter((p) => p.t >= end - w).map((p) => ({ t: p.t, price_cents: Math.min(100, Math.max(0, Math.round(p.p * 1000) / 10)) }));
-          },
+          () =>
+            spacers[market.exchange].run(market.exchange, async () => {
+              const end = Math.floor(now() / 1000);
+              if (market.exchange === 'kalshi') {
+                const ticker = market.market_id.slice(7);
+                const period = span <= 6 * 3600 ? 1 : span <= 7 * 86400 ? 60 : 1440;
+                const c = await kalshi.candles(ticker.split('-')[0]!, ticker, end - span, end, period);
+                return c ? kalshiPoints(c) : [];
+              }
+              const token = raw?.clobTokenIds?.[0];
+              if (!token) return [];
+              const pts = (await poly.history(token, span)) ?? [];
+              return pts.map((p) => ({ t: p.t, price_cents: Math.min(100, Math.max(0, Math.round(p.p * 1000) / 10)) }));
+            }),
           stale,
         );
-        return { market_id: market.market_id, points: h.value, as_of: iso(h.at) };
+        // The window ends at the series' last point, as the engine's movement reads it, so a 24 h move is the same
+        // whether it comes from the 24 h or the 7-day series.
+        const from = (h.value.at(-1)?.t ?? 0) - w;
+        return { market_id: market.market_id, points: h.value.filter((p) => p.t >= from), as_of: iso(h.at) };
       } catch (err) {
         if (isUpstream(err)) throw down(market.exchange);
         throw err;
@@ -308,6 +319,24 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
         receipts.push({ provider: 'brave', query: search.query, cached_at: search.cached_at, shared_key: sharedKey });
       }
       return { market_id: market.market_id, candidates: toCandidates(links, rows, parseExtraDomains(query.extra_domains)), receipts };
+    },
+  };
+}
+
+/**
+ * Spaces one exchange's history requests at least `gapMs` apart, by the wall clock (a pinned test clock doesn't move).
+ * A request whose turn is more than `maxWaitMs` away is refused as an upstream error, so the cache serves its last copy.
+ */
+export function spacer(gapMs: number, maxWaitMs: number, clock: () => number = Date.now) {
+  let next = 0;
+  return {
+    async run<T>(host: string, fn: () => Promise<T>): Promise<T> {
+      const t = clock();
+      const at = Math.max(t, next);
+      if (at - t > maxWaitMs) throw new UpstreamError(host, null, `${host}: history requests are spaced out; try again shortly`);
+      next = at + gapMs;
+      if (at > t) await new Promise((r) => setTimeout(r, at - t));
+      return fn();
     },
   };
 }

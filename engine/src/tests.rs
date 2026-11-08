@@ -256,6 +256,33 @@ fn movement() {
 }
 
 #[test]
+fn price_at() {
+    let s = series(&[(0, 40.0), (100, 45.0), (200, 50.0), (300, 48.0)]);
+    let args = json!({"series": "s", "ago_s": "a"});
+    let at = |a: serde_json::Value| one("price_at", args.clone(), json!({"s": s, "a": a}));
+    assert_eq!(at(json!(0)), Ok(48.0));
+    // 150 back from t=300 is the first point with t >= 150: t=200.
+    assert_eq!(at(json!(150)), Ok(50.0));
+    assert_eq!(at(json!(200)), Ok(45.0));
+    assert_eq!(at(json!(5000)), Ok(40.0));
+    assert_eq!(at(json!(-1)), Err("out_of_range".into()));
+    // Two points at the last t: now is the last one, as movement reads it.
+    let tied = series(&[(0, 40.0), (300, 45.0), (300, 48.0)]);
+    assert_eq!(
+        one(
+            "price_at",
+            json!({"series": "s", "ago_s": "a"}),
+            json!({"s": tied, "a": 0})
+        ),
+        Ok(48.0)
+    );
+    assert_eq!(
+        one("price_at", args, json!({"s": [], "a": 0})),
+        Err("out_of_range".into())
+    );
+}
+
+#[test]
 fn volatility() {
     // Changes: +2, -2, +2, -2 -> mean 0, stddev 2.
     let s = series(&[(0, 50.0), (1, 52.0), (2, 50.0), (3, 52.0), (4, 50.0)]);

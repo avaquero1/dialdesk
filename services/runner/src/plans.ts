@@ -3,13 +3,14 @@
  * own spec (user_probability, window_s). A plan from the planner is checked against the widget's catalog entry; one
  * that fails is refused whole and the default plan for the type runs instead.
  */
-import { CONNECTIONS, EnginePlan, MARKETS, displayEntry, type DisplayType, type EngineInput, type Market, type WidgetSpec } from '@app/contracts';
+import { CONNECTIONS, EnginePlan, MARKETS, displayEntry, type DisplayType, type EngineInput, type EngineResult, type Market, type WidgetSpec } from '@app/contracts';
 import { CallError, type Call } from '@app/service-kit';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
 type Op = EnginePlan['ops'][number];
 type Value = number | { t: number; v: number }[];
 type Origins = NonNullable<EngineInput['origins']>;
+type Provenance = NonNullable<EngineInput['provenance']>;
 
 /**
  * Ops no plan may use yet. base_rate_history needs resolved results, and markets has no resolved-history endpoint;
@@ -22,10 +23,18 @@ export const allowedOps = (type: DisplayType) => displayEntry(type).engine_ops.f
 
 const DAY = 86400;
 export const MAX_OPS = 16;
+/** Points on a line (the Market's 7-day line, Biggest move's small line): ago_1 is window_s back, ago_<LINE_POINTS> is now. */
+export const LINE_POINTS = 8;
+const LINE_KEYS = Array.from({ length: LINE_POINTS }, (_, j) => `ago_${j + 1}`);
+/** How far back each line point is, in seconds: evenly spaced over the window, the last one now. */
+export const lineAgo = (window_s: number) => LINE_KEYS.map((_, j) => Math.round((window_s * (LINE_POINTS - 1 - j)) / (LINE_POINTS - 1)));
 
-/** Keys a plan may read. price_<i> / series_<i> follow spec.market_ids (1-based); kalshi_* and polymarket_* alias the first of each. */
+/**
+ * Keys a plan may read. price_<i> / series_<i> follow spec.market_ids (1-based); kalshi_* and polymarket_* alias the first
+ * of each. day_s is 24 h ("since yesterday"); ago_<j> are the line's points over window_s.
+ */
 export function numberKeys(spec: DisplaySpec): string[] {
-  const keys = ['window_s'];
+  const keys = ['window_s', 'day_s', ...LINE_KEYS];
   spec.market_ids.forEach((m, i) => keys.push(`price_${i + 1}`, `series_${i + 1}`));
   for (const ex of ['kalshi', 'polymarket'] as const)
     if (spec.market_ids.some((m) => m.startsWith(`${ex}:`))) keys.push(`${ex}_price`, `${ex}_series`);
@@ -49,7 +58,9 @@ export function defaultPlan(spec: DisplaySpec): EnginePlan {
     if (n >= 2) add('implied_probability', { price_cents: 'price_2' });
     // EV takes its probability only from the user (F8), never from a model.
     if (n >= 1 && spec.params.user_probability !== undefined) add('expected_value', { price_cents: 'price_1', probability: 'user_probability' });
-    if (n >= 1) add('movement', { series: 'series_1', window_s: 'window_s' });
+    // "Up 4 points since yesterday", then the 7-day line (window_s): its points, oldest first.
+    if (n >= 1) add('movement', { series: 'series_1', window_s: 'day_s' });
+    if (n >= 1) for (const k of LINE_KEYS) add('price_at', { series: 'series_1', ago_s: k });
   } else if (type === 'gap') {
     if (has(spec, 'kalshi') && has(spec, 'polymarket')) add('gap', { a_cents: 'kalshi_price', b_cents: 'polymarket_price' });
   } else if (type === 'news') {
@@ -58,9 +69,11 @@ export function defaultPlan(spec: DisplaySpec): EnginePlan {
       add('movement', { series: 'series_1', window_s: 'window_s' });
     }
   } else if (type === 'movement') {
+    // One game's move (Biggest move has its own plan: biggestMoveNumbers) and its small line over the window.
     if (n >= 1) {
       add('movement', { series: 'series_1', window_s: 'window_s' });
       add('volatility', { series: 'series_1' });
+      for (const k of LINE_KEYS) add('price_at', { series: 'series_1', ago_s: k });
     }
   }
   return { plan_version: 1, ops };
@@ -96,8 +109,8 @@ export interface MarketNumbers {
   numbers: Record<string, Value>;
   /** Where each input came from: market for prices, history for series, user for the widget's own settings. */
   origins: Origins;
-  /** Where and when each input was read (gap: both prices' markets and quote times), copied onto the receipts. */
-  provenance?: NonNullable<EngineInput['provenance']>;
+  /** Where and when each price and series was read (its market and quote or fetch time), copied onto the receipts. */
+  provenance?: Provenance;
   quotes: Market[];
   /** The oldest market time among the quotes. */
   as_of: string;
@@ -112,13 +125,24 @@ export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: Engi
   const window_s = spec.params.window_s ?? DAY;
   const numbers: Record<string, Value> = { window_s };
   const origins: Origins = { window_s: 'user' };
+  const provenance: Provenance = {};
+  // Fixed spans by code: untagged numbers (no op takes a probability from them).
+  // The line spans window_s; a Market (a folder's card names none) draws 7 days.
+  const lineWindow = spec.params.window_s ?? (spec.type === 'probability' ? 7 * DAY : DAY);
+  if (!want || want.has('day_s')) numbers.day_s = DAY;
+  lineAgo(lineWindow).forEach((ago, j) => {
+    if (!want || want.has(LINE_KEYS[j]!)) numbers[LINE_KEYS[j]!] = ago;
+  });
+  const drawsLine = LINE_KEYS.some((k) => k in numbers);
+  const historyWindow = Math.max(window_s, 'day_s' in numbers ? DAY : 0, drawsLine ? lineWindow : 0, 3600);
   if (spec.params.user_probability !== undefined) {
     numbers.user_probability = spec.params.user_probability;
     origins.user_probability = 'user';
   }
-  const put = (key: string, v: Value, o: Origins[string]) => {
+  const put = (key: string, v: Value, o: Origins[string], from: Provenance[string]) => {
     numbers[key] = v;
     origins[key] = o;
+    provenance[key] = from;
   };
   const quotes: Market[] = [];
   const down: string[] = [];
@@ -130,8 +154,9 @@ export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: Engi
       try {
         const m = await markets(MARKETS.get, { params: { market_id } });
         quotes[i] = m;
-        put(`price_${k}`, m.yes_price_cents, 'market');
-        if (firstOfExchange) put(`${ex}_price`, m.yes_price_cents, 'market');
+        const from = { source: m.market_id, as_of: m.as_of };
+        put(`price_${k}`, m.yes_price_cents, 'market', from);
+        if (firstOfExchange) put(`${ex}_price`, m.yes_price_cents, 'market', from);
       } catch (e) {
         if (e instanceof CallError && (e.status === 503 || e.status === 404)) return void down.push(market_id);
         throw e;
@@ -139,11 +164,12 @@ export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: Engi
       const needSeries = !want || want.has(`series_${k}`) || (firstOfExchange && want.has(`${ex}_series`));
       if (!needSeries) return;
       try {
-        const h = await markets(MARKETS.history, { params: { market_id }, query: { window_s: Math.max(window_s, 3600) } });
+        const h = await markets(MARKETS.history, { params: { market_id }, query: { window_s: historyWindow } });
         const series = h.points.map((p) => ({ t: p.t, v: p.price_cents }));
         if (series.length) {
-          put(`series_${k}`, series, 'history');
-          if (firstOfExchange) put(`${ex}_series`, series, 'history');
+          const from = { source: h.market_id, as_of: h.as_of };
+          put(`series_${k}`, series, 'history', from);
+          if (firstOfExchange) put(`${ex}_series`, series, 'history', from);
         }
       } catch (e) {
         if (!(e instanceof CallError && (e.status === 503 || e.status === 404))) throw e;
@@ -152,7 +178,7 @@ export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: Engi
   );
   const got = quotes.filter(Boolean);
   const as_of = got.length ? got.map((q) => q.as_of).sort()[0]! : new Date().toISOString();
-  return { numbers, origins, quotes: got, as_of, stale: got.some((q) => q.stale), down };
+  return { numbers, origins, provenance, quotes: got, as_of, stale: got.some((q) => q.stale), down };
 }
 
 /** The plan without the ops whose inputs are missing (a market down, no history), and without ops that read them. */
@@ -210,6 +236,85 @@ export async function gapNumbers(markets: Call, spec: DisplaySpec): Promise<{ pl
   const provenance = { kalshi_price: { source: k.market_id, as_of: k.as_of }, polymarket_price: { source: p.market_id, as_of: p.as_of } };
   const as_of = [k.as_of, p.as_of].sort()[0]!;
   return { plan: GAP_PLAN, mn: { numbers, origins, provenance, quotes: [k, p], as_of, stale: k.stale || p.stale, down: [] } };
+}
+
+/**
+ * Biggest move: the board's own movement tile (it keeps the catalog's title), or one that lists several games. A
+ * movement widget the agent made for one game ("Lakers at Celtics move") shows that game.
+ */
+export const isBiggestMove = (spec: DisplaySpec) => spec.type === 'movement' && (spec.market_ids.length > 1 || spec.title === displayEntry('movement').title);
+
+/** Games Biggest move compares, at most (the most traded first). */
+export const MAX_MOVERS = 8;
+
+const GAME_DAY = /^(?:nfl|nba)-(\d{4}-\d{2}-\d{2})-([a-z]+)-([a-z]+)$/;
+
+/**
+ * The games Biggest move compares: the widget's own markets when it lists several (the games on the user's board),
+ * else tonight's games, one market per game (Kalshi's away-team market, as the board picks it, else Polymarket's).
+ * "Tonight" is the ET day of the widget's own game, else the first day with games from markets' list.
+ */
+export async function moverIds(markets: Call, spec: DisplaySpec): Promise<string[]> {
+  if (spec.market_ids.length > 1) return spec.market_ids.slice(0, MAX_MOVERS);
+  let list: Market[];
+  try {
+    list = (await markets(MARKETS.list, { query: { category: 'sports' } })).markets;
+  } catch (e) {
+    if (e instanceof CallError && e.status === 503) return spec.market_ids;
+    throw e;
+  }
+  const games = new Map<string, { day: string; id: string; volume: number; kalshi: boolean }>();
+  for (const m of list) {
+    const k = m.event_key ? GAME_DAY.exec(m.event_key) : null;
+    if (!k) continue;
+    const away = m.exchange === 'kalshi' && m.market_id.endsWith(`-${k[2]!.toUpperCase()}`);
+    if (m.exchange === 'kalshi' && !away) continue;
+    const g = games.get(m.event_key!);
+    if (!g || (away && !g.kalshi)) games.set(m.event_key!, { day: k[1]!, id: m.market_id, volume: (g?.volume ?? 0) + m.volume, kalshi: away });
+    else g.volume += m.volume;
+  }
+  const own = spec.params.event_keys?.[0] ? GAME_DAY.exec(spec.params.event_keys[0])?.[1] : undefined;
+  const days = [...new Set([...games.values()].map((g) => g.day))].sort();
+  const day = own && days.includes(own) ? own : days[0];
+  const tonight = [...games.values()].filter((g) => g.day === day).sort((a, b) => b.volume - a.volume || a.id.localeCompare(b.id));
+  const ids = tonight.slice(0, MAX_MOVERS).map((g) => g.id);
+  for (const id of spec.market_ids) if (!ids.includes(id)) ids.splice(Math.min(ids.length, MAX_MOVERS - 1), 1, id);
+  return ids.length ? ids : spec.market_ids;
+}
+
+/**
+ * Biggest move's inputs and plan: for each game, its chance, its move over window_s and its small line. The engine
+ * computes them all; pickBiggest keeps the game whose move is largest.
+ */
+export async function biggestMoveNumbers(markets: Call, spec: DisplaySpec): Promise<{ plan: EnginePlan; mn: MarketNumbers; ids: string[] }> {
+  const ids = await moverIds(markets, spec);
+  const all = { ...spec, market_ids: ids };
+  const ops: Op[] = [];
+  const add = (op: Op['op'], args: Op['args']) => ops.push({ id: `n${ops.length + 1}`, op, args });
+  ids.forEach((_, i) => {
+    add('implied_probability', { price_cents: `price_${i + 1}` });
+    add('movement', { series: `series_${i + 1}`, window_s: 'window_s' });
+    for (const k of LINE_KEYS) add('price_at', { series: `series_${i + 1}`, ago_s: k });
+  });
+  const plan: EnginePlan = { plan_version: 1, ops };
+  return { plan, mn: await marketNumbers(markets, all, plan), ids };
+}
+
+/**
+ * Of the engine's moves, the largest by size (the first, by the order games were listed, on a tie), with that game's
+ * other numbers: every number and receipt kept is the engine's own, unchanged. null when no game has a move.
+ */
+export function pickBiggest(er: EngineResult): EngineResult | null {
+  const moves = er.numbers.filter((n) => n.op === 'movement');
+  if (!moves.length) return null;
+  const best = moves.reduce((a, b) => (Math.abs(b.value) > Math.abs(a.value) ? b : a));
+  const series = er.receipts.find((r) => r.id === best.receipt_id)?.refs?.series;
+  const mine = new Set(er.receipts.filter((r) => Object.values(r.refs ?? {}).some((ref) => ref === series || ref === series?.replace('series_', 'price_'))).map((r) => r.id));
+  const keep = (id: string) => mine.has(id);
+  const numbers = er.numbers.filter((n) => keep(n.receipt_id));
+  // The move first: board's movement flag and the display read the first movement number.
+  numbers.sort((a, b) => (a.op === 'movement' ? -1 : b.op === 'movement' ? 1 : 0));
+  return { ...er, numbers, receipts: er.receipts.filter((r) => keep(r.id)) };
 }
 
 /** Positions shown per widget, at most. */

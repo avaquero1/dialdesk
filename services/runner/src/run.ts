@@ -51,7 +51,7 @@ import {
   type SandboxClient,
 } from '@app/service-kit';
 import { z } from 'zod';
-import { allowedOps, defaultPlan, gapNumbers, marketNumbers, numberKeys, planProblem, positionNumbers, runnablePlan, type MarketNumbers } from './plans.ts';
+import { allowedOps, biggestMoveNumbers, isBiggestMove, defaultPlan, gapNumbers, marketNumbers, numberKeys, pickBiggest, planProblem, positionNumbers, runnablePlan, type MarketNumbers } from './plans.ts';
 import { toRunState, type RunRecord, type Store } from './store.ts';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
@@ -326,6 +326,7 @@ class Run {
     const t0 = Date.now();
     let use = plan;
     let mn: MarketNumbers;
+    let asked = spec.market_ids.length;
     if (spec.type === 'positions') {
       const pn = await positionNumbers(this.d.connections, this.d.markets, spec);
       if ('skip' in pn) {
@@ -343,8 +344,14 @@ class Run {
       }
       use = gn.plan;
       mn = gn.mn;
+    } else if (isBiggestMove(spec)) {
+      // Biggest move: every game's move through the engine, then the largest is kept (pickBiggest).
+      const bn = await biggestMoveNumbers(this.d.markets, spec);
+      use = bn.plan;
+      mn = bn.mn;
+      asked = bn.ids.length;
     } else mn = await marketNumbers(this.d.markets, spec, plan);
-    if (spec.market_ids.length && mn.down.length === spec.market_ids.length) {
+    if (asked && mn.down.length === asked) {
       await this.step({ step: 'math', status: 'failed', note: 'every exchange is down and nothing is cached' }, t0);
       throw new NoRetry('exchange_down');
     }
@@ -365,7 +372,9 @@ class Run {
     }
     // The manager destroys a compute sandbox when its job ends; its rows come back with the job.
     const j = (await this.ended(job_id, settled)) ?? settled;
-    const er = j.state === 'done' ? EngineResult.safeParse(j.compute_result) : null;
+    const parsed = j.state === 'done' ? EngineResult.safeParse(j.compute_result) : null;
+    // Biggest move keeps the game with the largest move: the engine's own numbers and receipts, unchanged.
+    const er = parsed?.success && isBiggestMove(spec) ? { success: true as const, data: pickBiggest(parsed.data) ?? parsed.data } : parsed;
     if (!er?.success) {
       await this.step({ step: 'math', status: 'failed', sandbox: { sandbox_id: j.sandbox_id, state: 'destroyed' }, note: `compute ${j.state}` }, t0);
       throw new Error(`compute job ended ${j.state}`);
