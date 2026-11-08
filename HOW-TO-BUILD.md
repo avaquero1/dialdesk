@@ -90,6 +90,10 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
 - **Sandbox image tags:** `make` builds and runs this worktree's own `vha-engine-compute`, `vha-browse` and `vha-probe`
   tags (`<worktree>-<HEAD>`, older ones of this worktree removed; `:dev` is still written for manual runs), because a
   shared `:dev` let one worktree's `make check` run another's engine mid-run. `SANDBOX_*_IMAGE` overrides them.
+- **The web stack per worktree:** `web/dev/stack.sh` (and `make web-e2e`) runs each worktree's stack on its own ports and
+  Compose project (`vha-web-<worktree>`; the main checkout keeps 8490, 1848x and `vha-web`), and the browser tests find it
+  through `web/test/stack.ts`, so two web workers can test at the same time. `web/dev/stack.sh ports` shows them;
+  `WEB_STACK_OFFSET=N` picks the offset if two worktree names ever land on the same one.
 - `make valkey-test`: the bus on a real Valkey 8.1 in its own Compose project (`vha-valkey-test`, port 56393): pub/sub, the log
   stream's consumer group, BullMQ retries, every service's ACL allow and deny, and runner's real worker running the
   scheduler's enqueues on the fakes (`services/runner/test/valkey-worker.test.ts`). Not part of `make check` (it needs Docker

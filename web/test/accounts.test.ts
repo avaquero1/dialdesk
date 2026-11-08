@@ -6,15 +6,16 @@
  * The private key is a throwaway Ed25519 key made here, never a real one. The test checks that it leaves the page
  * only sealed: not in the request body, not in the field after sending, not in local or session storage.
  *
- *   WEB_URL (default http://localhost:8490)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
+ *   WEB_URL (default: this worktree's stack, web/test/stack.ts)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
  */
 import { generateKeyPairSync } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { WEB_URL } from './stack.ts';
 
-const URL0 = process.env.WEB_URL ?? 'http://localhost:8490';
+const URL0 = WEB_URL;
 const SHOTS = process.env.SHOTS_DIR ?? join(import.meta.dirname, '.shots');
 mkdirSync(SHOTS, { recursive: true });
 const shot = (name: string) => page.screenshot({ path: join(SHOTS, `accounts-phone-${name}.png`) });

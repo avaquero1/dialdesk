@@ -5,15 +5,16 @@
  * a plain line. The errors and the slow reply come from page.route; everything else, the picks too, from the stack
  * (the real agent on the models fake).
  *
- *   WEB_URL (default http://localhost:8490)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
+ *   WEB_URL (default: this worktree's stack, web/test/stack.ts)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page, type Route } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BLOCKED_CHAT_LINE } from '@app/contracts';
+import { WEB_URL } from './stack.ts';
 
-const URL0 = process.env.WEB_URL ?? 'http://localhost:8490';
+const URL0 = WEB_URL;
 const SHOTS = process.env.SHOTS_DIR ?? join(import.meta.dirname, '.shots');
 mkdirSync(SHOTS, { recursive: true });
 const DESKTOP = { viewport: { width: 1440, height: 900 } };

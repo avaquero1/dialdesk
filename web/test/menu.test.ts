@@ -4,14 +4,15 @@
  * Clear all that asks once, then offers Undo. Undo sends nothing; a change whose offer ends is saved, and the board
  * after a reload is the board before it.
  *
- *   WEB_URL (default http://localhost:8490)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
+ *   WEB_URL (default: this worktree's stack, web/test/stack.ts)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
  */
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { WEB_URL } from './stack.ts';
 
-const URL0 = process.env.WEB_URL ?? 'http://localhost:8490';
+const URL0 = WEB_URL;
 const SHOTS = process.env.SHOTS_DIR ?? join(import.meta.dirname, '.shots');
 mkdirSync(SHOTS, { recursive: true });
 const shot = (page: Page, name: string) => page.screenshot({ path: join(SHOTS, `menu-phone-${name}.png`) });

@@ -10,33 +10,21 @@
  * - Add adds a Two prices widget with one tap, and it pours in;
  * - Settings: reduced transparency and the mode survive a reload; Sign out goes to the door.
  *
- *   WEB_URL (default http://localhost:8490)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
+ *   WEB_URL (default: this worktree's stack, web/test/stack.ts)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
  */
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BOARD, POISONED_NOTE, newId, type RunTraceStep } from '@app/contracts';
 import { busFromConfig, clientFromEnv, logEntry } from '@app/service-kit';
 import { sampleResult } from '@app/testkit';
+import { WEB_URL, stackEnv } from './stack.ts';
 
-const URL0 = process.env.WEB_URL ?? 'http://localhost:8490';
+const URL0 = WEB_URL;
 const SHOTS = process.env.SHOTS_DIR ?? join(import.meta.dirname, '.shots');
 mkdirSync(SHOTS, { recursive: true });
 const shot = (page: Page, name: string) => page.screenshot({ path: join(SHOTS, `w1-2-5-${name}.png`) });
-
-/** The repo's .env, with the web stack's ports (web/dev/stack.sh moves Valkey to WEB_VALKEY_PORT, board to 18482). */
-function stackEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const l of readFileSync(join(import.meta.dirname, '../../.env'), 'utf8').split('\n')) {
-    const m = /^([A-Z0-9_]+)=(.*)$/.exec(l.trim());
-    if (m) env[m[1]!] = m[2]!;
-  }
-  const vk = process.env.WEB_VALKEY_PORT ?? '56491';
-  env.RUNNER_VALKEY_URL = env.RUNNER_VALKEY_URL!.replace('127.0.0.1:56379', `127.0.0.1:${vk}`);
-  env.RUNNER_URL_BOARD = 'http://127.0.0.1:18482';
-  return env;
-}
 
 let browser: Browser;
 let ctx: BrowserContext;

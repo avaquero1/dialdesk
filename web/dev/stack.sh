@@ -1,22 +1,39 @@
 #!/usr/bin/env bash
-# The web app's local stack, beside (never on) vha-dev's ports:
+# The web app's local stack, beside (never on) vha-dev's ports. In the main checkout:
 #   Compose project vha-web: Postgres :55491, Valkey :56491, Caddy http://localhost:8490 (serves web/dist, policy on)
 #   real: edge :18480, accounts :18481, board :18482, agent :18483, audit :18488 (Postgres + Valkey; audit chains and signs
 #   the real log)
 #   fakes: runner :18484, markets :18485, connections :18486, models :18487
+# Any other (linked) worktree gets its own stack, so two worktrees never share a port, a container or a volume: an offset N of
+# 1-29 from its directory name (WEB_STACK_OFFSET=N overrides it; 0 is the main checkout's), Caddy, Postgres and Valkey on
+# +N, the services on +10N, and Compose project vha-web-<worktree>. `web/dev/stack.sh ports` prints them; the browser
+# tests read them from there (web/test/stack.ts).
 # The agent is the real one on the models fake (canned chat steps, no model calls), so first-visit picks, proposals
 # and set_look come from the agent's own code in the browser tests.
 #
-#   web/dev/stack.sh up | down | status       (needs `make dev-secrets` and `npx tsx web/build.ts` first)
+#   web/dev/stack.sh up | down | status | ports       (needs `make dev-secrets` and `npx tsx web/build.ts` first)
 # Logs and pids: web/dev/.run/
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 run="$here/.run"
-export WEB_PORT="${WEB_PORT:-8490}" WEB_PG_PORT="${WEB_PG_PORT:-55491}" WEB_VALKEY_PORT="${WEB_VALKEY_PORT:-56491}"
-compose() { docker compose -f "$here/compose.yml" --env-file "$repo/.env" "$@"; }
+wt="$(basename "$repo" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_\n-' '_')"
+# The main checkout is the one whose .git is its own (a linked worktree's points into the main one's).
+main=1
+[ "$(git -C "$repo" rev-parse --path-format=absolute --git-dir 2> /dev/null)" = "$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir 2> /dev/null)" ] || main=0
+if [ -z "${WEB_STACK_OFFSET:-}" ]; then
+  if [ "$main" = 1 ]; then WEB_STACK_OFFSET=0; else WEB_STACK_OFFSET=$(( $(printf %s "$wt" | cksum | cut -d' ' -f1) % 29 + 1 )); fi
+fi
+# 29 at most: the services end at 18778, below the box's 18782.
+[[ "$WEB_STACK_OFFSET" =~ ^([0-9]|[12][0-9])$ ]] || { echo "WEB_STACK_OFFSET must be 0-29"; exit 2; }
+off=$WEB_STACK_OFFSET
+if [ "$main" = 1 ]; then project=vha-web; else project="vha-web-$wt"; fi
+export WEB_PORT="${WEB_PORT:-$((8490 + off))}" WEB_PG_PORT="${WEB_PG_PORT:-$((55491 + off))}" WEB_VALKEY_PORT="${WEB_VALKEY_PORT:-$((56491 + off))}"
+compose() { docker compose -p "$project" -f "$here/compose.yml" --env-file "$repo/.env" "$@"; }
 
-declare -A PORT=([edge]=18480 [accounts]=18481 [board]=18482 [agent]=18483 [runner]=18484 [markets]=18485 [connections]=18486 [models]=18487 [audit]=18488)
+declare -A PORT=()
+i=0
+for s in edge accounts board agent runner markets connections models audit; do PORT[$s]=$((18480 + 10 * off + i)); i=$((i + 1)); done
 REAL="edge accounts board agent audit"
 FAKE="runner markets connections models"
 export WEB_EDGE="127.0.0.1:${PORT[edge]}"
@@ -103,8 +120,17 @@ case "${1:-}" in
     stop_services
     compose down -v --remove-orphans
     ;;
+  ports)
+    echo "WEB_STACK_OFFSET=$off"
+    echo "WEB_STACK_PROJECT=$project"
+    echo "WEB_URL=http://localhost:$WEB_PORT"
+    echo "WEB_PORT=$WEB_PORT"
+    echo "WEB_PG_PORT=$WEB_PG_PORT"
+    echo "WEB_VALKEY_PORT=$WEB_VALKEY_PORT"
+    for s in edge accounts board agent runner markets connections models audit; do echo "WEB_${s^^}_PORT=${PORT[$s]}"; done
+    ;;
   status)
     for s in "${!PORT[@]}"; do printf '%-12s %s\n' "$s" "$(curl -fsS "http://127.0.0.1:${PORT[$s]}/health" 2> /dev/null || echo DOWN)"; done
     ;;
-  *) echo "usage: $0 up|down|status"; exit 2 ;;
+  *) echo "usage: $0 up|down|status|ports"; exit 2 ;;
 esac
