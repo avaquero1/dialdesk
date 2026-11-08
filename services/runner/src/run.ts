@@ -450,6 +450,8 @@ class Run {
       draft = { ...draft, summary: null };
       verdict = await guard.publish(draft, this.account_id);
     }
+    // A block names its rules and where they hit (field paths or fact ids, never text): the trace says why nothing went out.
+    if (verdict.outcome !== 'pass') note = [note, `blocked: ${[...new Set(verdict.reasons.map((r) => `${r.code}@${r.where}`))].join(', ')}`].filter(Boolean).join('; ');
     await this.step({ step: 'guard', status: verdict.outcome === 'pass' ? 'ok' : 'failed', verdict_id: verdict.verdict_id, note }, t0);
     if (verdict.outcome !== 'pass') {
       await this.audit('guard.blocked', { subject_id: this.job.widget_id, outcome: 'blocked', ids: { run_id: this.run_id, verdict_id: verdict.verdict_id } });

@@ -18,7 +18,7 @@ import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { fake as modelsFake } from '../../models/src/fake.ts';
 import { getRunHandlers } from '../src/real.ts';
 import { LINE_POINTS, defaultPlan, isBiggestMove, lineAgo, moverIds } from '../src/plans.ts';
-import { handleRun, layerOneGuard, type RunnerDeps } from '../src/run.ts';
+import { handleRun, layerOneGuard, modelGuard, type RunnerDeps } from '../src/run.ts';
 import { ACTIVE_FOR_MS, Scheduler } from '../src/scheduler.ts';
 import { MemoryStore } from '../src/store.ts';
 
@@ -451,6 +451,18 @@ describe.skipIf(!have)('runner', () => {
     const r = (await current(w)).result!;
     expect(r.summary).toBeNull();
     expect(r.facts.length).toBeGreaterThan(0);
+  });
+
+  it('a publish the guard blocks whole: the guard step names the rules and where they hit (C2.1: a live run published nothing, unexplained)', async () => {
+    const d = deps();
+    const g = modelGuard(d.models);
+    d.guard = { ...g, extract: g.extract.bind(g), publish: async (draft, account) => ({ ...(await g.publish(draft, account)), outcome: 'block' as const, reasons: [{ code: 'advice' as const, where: 'facts.f2' }] }) };
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    const rec = await handleRun(d, jobFor(w, 'research'), ctx()).catch((e) => e);
+    expect(String(rec)).toMatch(/guard_block/);
+    const steps = [...d.store.runs.values()].flatMap((r) => r.steps).filter((s) => s.step === 'guard');
+    expect(steps.at(-1)!.note).toMatch(/(^|; )blocked: advice@facts\.f2$/);
   });
 
   it('busy at compute: the job waits without an attempt, then resumes from the saved steps', async () => {
