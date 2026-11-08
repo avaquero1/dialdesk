@@ -113,8 +113,12 @@ export const api = {
       undefined,
       { quiet: true },
     ),
-  // The Add app: one widget of a catalog type with its prescribed defaults, accepted at once.
-  addWidget: (type: string) => call<{ proposal: Proposal; widgets: Widget[] }>('POST', '/api/widgets', { type }),
+  // The Add app: one widget of a catalog type on this week's games (event_key: the game picked), accepted at once.
+  addWidget: (type: string, event_key?: string) =>
+    call<{ proposal: Proposal; widgets: Widget[] }>('POST', '/api/widgets', event_key ? { type, event_key } : { type }),
+  /** "Which game?" for a one-game display. quiet: without it, Add adds the default. */
+  addChoices: (type: string) =>
+    call<{ choices: { event_key: string; label: string }[] }>('GET', `/api/add/${encodeURIComponent(type)}`, undefined, { quiet: true }),
   // The top bar's chip: the same counts, quiet (it keeps its last words on a 429).
   trustQuiet: () => call<TrustPage>('GET', '/api/trust', undefined, { quiet: true }),
   // Accounts. connect's body is opaque to edge (the private key in it is sealed to connections); quiet: the sheet says

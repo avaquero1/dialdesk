@@ -1,9 +1,11 @@
 /**
  * Two apps: Add (inside: Catalog) and Settings.
  *
- * Add: one row per display type, in plain words. A tap adds one widget of that type with the catalog's prescribed
- * defaults (edge's POST /api/widgets: proposed and accepted at once), the sheet drains and the widget pours in on the
- * board like an accepted proposal.
+ * Add: one row per display type, in plain words. A tap adds one widget of that type on this week's games, the way the
+ * first board picks them (edge's POST /api/widgets: proposed and accepted at once), the sheet drains and the widget pours
+ * in on the board like an accepted proposal. A one-game display (a market, Two prices, News) first asks "Which game?"
+ * with a chip per game of this week ("Jets at Chiefs, Sun 1 PM"), the most traded first; with no games to choose (markets
+ * down, or only the catalog's made-up games) it adds at once, as before.
  *
  * Settings: the Look (theme, mode, hue: the Look sheet), the easier-to-see switches (reduced motion, reduced
  * transparency, glass refraction; per device, in localStorage), sign out, and the plain line.
@@ -40,26 +42,53 @@ export function addBody() {
   );
 }
 
+/** The displays that follow one game (board's ONE_GAME): Add asks which. */
+const ONE_GAME = new Set<DisplayType>(['probability', 'gap', 'news']);
+
 let adding = false;
-/** A tap on an Add row. boardChanged fetches the board, so the new widget pours in. */
+/** A tap on an Add row or a game chip. boardChanged fetches the board, so the new widget pours in. */
 export async function addClick(e: Event, boardChanged: () => void) {
   const b = (e.target as Element).closest<HTMLButtonElement>('[data-add]');
   if (!b || adding) return;
   const t = ADD_TYPES.find((x) => x.type === b.dataset.add);
   if (!t) return;
+  const game = b.dataset.game;
   adding = true;
   b.setAttribute('aria-busy', 'true');
   try {
-    await api.addWidget(t.type);
+    if (!game && ONE_GAME.has(t.type) && (await askWhichGame(b, t.type))) return b.removeAttribute('aria-busy');
+    await api.addWidget(t.type, game);
     closeSurface();
     boardChanged();
-    toast(`${t.name} added to your board.`);
+    toast(`${game ? b.textContent!.split(',')[0] : t.name} added to your board.`);
   } catch {
     b.removeAttribute('aria-busy');
     toast(`Couldn't add ${t.name} right now. Try again in a moment.`);
   } finally {
     adding = false;
   }
+}
+
+/**
+ * "Which game?" under the row: this week's games as chips. false: nothing to choose (or the list didn't come), so the
+ * row adds the default at once. A second tap on the row closes the question.
+ */
+async function askWhichGame(row: HTMLButtonElement, type: DisplayType): Promise<boolean> {
+  const open = row.nextElementSibling?.classList.contains('add-games') ? row.nextElementSibling : null;
+  row.parentElement?.querySelectorAll('.add-games').forEach((x) => x.remove());
+  row.parentElement?.querySelectorAll('.add-row[aria-expanded]').forEach((x) => x.removeAttribute('aria-expanded'));
+  if (open) return true;
+  const choices = await api.addChoices(type).then((r) => r.choices, () => []);
+  if (!choices.length) return false;
+  row.setAttribute('aria-expanded', 'true');
+  row.insertAdjacentHTML(
+    'afterend',
+    `<div class="add-games" role="group" aria-label="Which game?"><h3 class="sf-h">Which game?</h3><div class="add-chips">` +
+      choices.map((c) => `<button class="add-game" type="button" data-add="${esc(type)}" data-game="${esc(c.event_key)}">${esc(c.label)}</button>`).join('') +
+      `</div></div>`,
+  );
+  row.nextElementSibling?.querySelector<HTMLElement>('.add-game')?.focus({ preventScroll: true });
+  return true;
 }
 
 // ---------- Settings ----------
