@@ -103,6 +103,8 @@ export function leftOutNotes(dropped: Verdict['reasons']): string[] {
 }
 /** The guard looks again after each cut (layer one decides alone, so layer two may only speak on the next look). */
 const MAX_GUARD_LOOKS = 5;
+/** A verdict's reasons as code@where, for the trace (field paths or fact ids, never text). */
+const saidBy = (rs: Verdict['reasons']) => [...new Set(rs.map((r) => `${r.code}@${r.where}`))].join(', ');
 
 const NO_NUMBERS = 'the engine computed no numbers';
 
@@ -482,19 +484,19 @@ class Run {
         if (!facts.length) break;
         const quotesGone = !!draft.summary && Object.values(draft.summary.slots).some((x) => x.kind === 'quote' && gone.has(x.fact_id));
         dropped.push(...onFacts);
-        notes.push(`facts left out: ${[...new Set(onFacts.map((r) => `${r.code}@${r.where}`))].join(', ')}`);
-        if (draft.summary && (onSummary.length || quotesGone)) notes.push(onSummary.length ? `summary blocked: ${[...new Set(onSummary.map((r) => r.code))].join(', ')}` : 'summary dropped: it quotes a fact left out');
+        notes.push(`facts left out: ${saidBy(onFacts)}`);
+        if (draft.summary && (onSummary.length || quotesGone)) notes.push(onSummary.length ? `summary blocked: ${saidBy(onSummary)}` : 'summary dropped: it quotes a fact left out');
         draft = { ...draft, facts, summary: onSummary.length || quotesGone ? null : draft.summary };
       } else if (draft.summary) {
         // The summary broke a rule (or something else did): publish the numbers and facts without it, then look again.
-        notes.push(`summary blocked: ${[...new Set(verdict.reasons.map((r) => r.code))].join(', ')}`);
+        notes.push(`summary blocked: ${saidBy(verdict.reasons)}`);
         draft = { ...draft, summary: null };
       } else break;
       await this.audit('guard.blocked', { subject_id: this.job.widget_id, outcome: 'blocked', ids: { run_id: this.run_id, verdict_id: verdict.verdict_id } });
       verdict = await guard.publish(draft, this.account_id);
     }
     // A block names its rules and where they hit (field paths or fact ids, never text): the trace says why nothing went out.
-    if (verdict.outcome !== 'pass') notes.push(`blocked: ${[...new Set(verdict.reasons.map((r) => `${r.code}@${r.where}`))].join(', ')}`);
+    if (verdict.outcome !== 'pass') notes.push(`blocked: ${saidBy(verdict.reasons)}`);
     await this.step({ step: 'guard', status: verdict.outcome === 'pass' ? 'ok' : 'failed', verdict_id: verdict.verdict_id, note: notes.join('; ') || null }, t0);
     if (verdict.outcome !== 'pass') {
       await this.audit('guard.blocked', { subject_id: this.job.widget_id, outcome: 'blocked', ids: { run_id: this.run_id, verdict_id: verdict.verdict_id } });

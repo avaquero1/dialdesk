@@ -1,8 +1,8 @@
 /**
  * Layer two: the decision model, through models with role `guard` (mimo-v2.6-flash first, then
  * deepseek-v4.1-flash-1017, picked by the A1.2.1 bake-off; `MODELS_ROLE_GUARD` overrides). It runs only on what layer one passed, and it can only add
- * reasons: it never lets through what layer one blocked. When the model errors or its answer can't be read, the guard
- * fails closed with reason `unchecked`.
+ * reasons: it never lets through what layer one blocked. When the model errors, or its answer still can't be read after a
+ * second try, the guard fails closed with reason `unchecked`.
  */
 import {
   BLOCKED_CHAT_LINE,
@@ -51,6 +51,10 @@ export function unconfirmedReport(v: Verdict): UnconfirmedCode | null {
 }
 
 type Question = 'advice' | 'instructions';
+/** Room for the model's reasoning as well as its short JSON: A1.4.6's real answers ran 18 to over 256 tokens (mimo, effort minimal), and 256 cut them off. */
+const GUARD_MAX_TOKENS = 1024;
+const GUARD_ANSWER_TRIES = 2;
+
 const QUESTIONS: Record<Stage, Question[]> = { extract: ['instructions'], publish: ['advice'], chat: ['advice', 'instructions'] };
 const CODE: Record<Question, VerdictReasonCode> = { advice: 'advice', instructions: 'instruction' };
 
@@ -138,18 +142,28 @@ export function readAnswer(stage: Stage, content: string, items: Item[]): Reason
   return null;
 }
 
-/** Ask the decision model about the items. Never throws: a failure is the reason `unchecked`. */
+/**
+ * Ask the decision model about the items. Never throws: a failure is the reason `unchecked`. An answer that can't be read
+ * (cut off at max_tokens, empty, not our shape) gets one more try; the second answer decides alone, and if it can't be
+ * read either the guard fails closed. A pass only ever comes from a whole answer that readAnswer understood. A model error
+ * isn't retried here: models already tried the role's other model.
+ */
 export async function askModel(stage: Stage, items: Item[], opts: GuardOptions): Promise<{ reasons: Reasons; model: string | null }> {
-  const body: CompleteBody = { role: 'guard', account_id: opts.account_id, messages: guardPrompt(stage, items), json: true, max_tokens: 256 };
+  const body: CompleteBody = { role: 'guard', account_id: opts.account_id, messages: guardPrompt(stage, items), json: true, max_tokens: GUARD_MAX_TOKENS };
   if (opts.scenario) body.scenario = opts.scenario;
-  let done: Completion;
-  try {
-    done = await opts.models(MODELS.complete, { body });
-  } catch {
-    return { reasons: [{ code: 'unchecked', where: 'guard.model' }], model: null };
+  let model: string | null = null;
+  for (let tries = 0; tries < GUARD_ANSWER_TRIES; tries++) {
+    let done: Completion;
+    try {
+      done = await opts.models(MODELS.complete, { body });
+    } catch {
+      return { reasons: [{ code: 'unchecked', where: 'guard.model' }], model: null };
+    }
+    model = done.model;
+    const reasons = readAnswer(stage, done.content, items);
+    if (reasons) return { reasons, model };
   }
-  const reasons = readAnswer(stage, done.content, items);
-  return { reasons: reasons ?? [{ code: 'unchecked', where: 'guard.answer' }], model: done.model };
+  return { reasons: [{ code: 'unchecked', where: 'guard.answer' }], model };
 }
 
 async function layered(stage: Stage, layerOne: Reasons, items: Item[], opts: GuardOptions): Promise<Verdict> {

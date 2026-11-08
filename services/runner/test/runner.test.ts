@@ -557,7 +557,7 @@ describe.skipIf(!have)('runner', () => {
     const { byTitle } = await freshBoard();
     const w = byTitle('Bills news');
     const rec = await handleRun(d, jobFor(w, 'research'), ctx());
-    expect(rec.steps.find((s) => s.step === 'guard')!.note).toMatch(/^summary blocked: .*advice/);
+    expect(rec.steps.find((s) => s.step === 'guard')!.note).toMatch(/^summary blocked: .*advice@summary/);
     const r = (await current(w)).result!;
     expect(r.summary).toBeNull();
     expect(r.facts.length).toBeGreaterThan(0);

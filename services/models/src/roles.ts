@@ -36,7 +36,8 @@ export const ROLES: Record<ModelRole, RoleSpec> = {
   // exactly the poisoned scenario's planted orders on every run. qwen3.8-flash-next is out: on the poisoned facts it returned
   // nothing all five times (reasoning used up the 256 tokens), which is "unchecked": a block, not a kill. nemotron-3.5-content-safety
   // was dropped after the first real calls (A1.1.1): it echoes the reply back and judges harm, not advice or orders.
-  guard: { models: ['mimo-v2.6-flash', 'deepseek-v4.1-flash-1017'], tools: false, max_tokens: 256, temperature: 0, reasoning_effort: 'minimal' },
+  // max_tokens went from 256 to 1024 (A1.4.8): mimo's reasoning counts against it, and live publish looks were cut off at 256.
+  guard: { models: ['mimo-v2.6-flash', 'deepseek-v4.1-flash-1017'], tools: false, max_tokens: 1024, temperature: 0, reasoning_effort: 'minimal' },
 };
 
 export function rolesFromEnv(env: Record<string, string | undefined>): Record<ModelRole, RoleSpec> {

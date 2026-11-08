@@ -52,11 +52,11 @@ function usageDelta(before: ReturnType<StepUsageStore['rows']>) {
 
 /** Every model call, from models' own "model call" log lines: role, tokens, cost and time, one row per call. */
 function modelCalls() {
-  const rows: { at: number; role: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; ms: number }[] = [];
+  const rows: { at: number; role: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; ms: number; finish: string | null }[] = [];
   for (const line of readFileSync(join(stack.logs, 'models.log'), 'utf8').split('\n')) {
     if (!line.includes('"model call"')) continue;
-    const l = JSON.parse(line) as { time: number; role: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; ms: number };
-    rows.push({ at: l.time, role: l.role, model: l.model, input_tokens: l.input_tokens, output_tokens: l.output_tokens, cost_usd: l.cost_usd, ms: l.ms });
+    const l = JSON.parse(line) as { time: number; role: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; ms: number; finish?: string | null };
+    rows.push({ at: l.time, role: l.role, model: l.model, input_tokens: l.input_tokens, output_tokens: l.output_tokens, cost_usd: l.cost_usd, ms: l.ms, finish: l.finish ?? null });
   }
   return rows;
 }
@@ -84,10 +84,29 @@ async function boardTrace() {
   try {
     const { widgets } = await board();
     const traces = await Promise.all(widgets.map((w) => browser(EDGE.trace, { params: { widget_id: w.spec.widget_id } }).catch(() => ({ steps: [] as RunTraceStep[] }))));
-    return failureTrace(traces.flatMap((t) => t.steps));
+    // A failed run has no result, so board keeps no trace for it: its steps come from runner's run_state.
+    return failureTrace([...traces.flatMap((t) => t.steps), ...(await failedRuns()).flatMap((r) => r.steps)]);
   } catch (e) {
     return { error: String((e as Error).message).slice(0, 200) };
   }
+}
+
+/** The stack's failed runs, from runner's run_state (read only). */
+async function failedRuns() {
+  const sql = postgres(`postgres://postgres:${stack.env.PG_SUPERUSER_PASSWORD}@127.0.0.1:${PG_PORT}/app`, { max: 1 });
+  try {
+    return [...(await sql<{ run_id: string; widget_id: string; kind: string; started_at: Date; steps: RunTraceStep[] }[]>`select run_id, widget_id, kind, started_at, steps from runner.run_state where status = 'failed'`)];
+  } finally {
+    await sql.end();
+  }
+}
+
+/** A research run of this widget, started since `since`, that ended at a failed guard step (guard_block): it will never publish. */
+async function guardBlockedRun(widget_id: string, since: number) {
+  return (await failedRuns()).find((r) => r.widget_id === widget_id && r.kind === 'research' && r.started_at.getTime() >= since && r.steps.some((x) => x.step === 'guard' && x.status === 'failed')) ?? null;
+}
+function failGuardBlocked(run: { run_id: string; steps: RunTraceStep[] }): never {
+  throw new Error(`research run ${run.run_id} ended guard_block: ${run.steps.findLast((x) => x.step === 'guard')?.note ?? 'no note'}`);
 }
 
 let cookie = '';
@@ -286,9 +305,10 @@ describe('e2e on the real pieces (live markets and news, Vultr models, real Chro
   it('4. the research run reads live pages in sealed boxes and our poisoned one: that box is killed and destroyed, the widget keeps the clean numbers', async () => {
     await step('4 research run', async (saw) => {
       // The widget's research result, or the run's end without one (a failed guard step): the trace says which.
-      const both = async () => ({ w: await widget(s.widget_id!), trace: await browser(EDGE.trace, { params: { widget_id: s.widget_id! } }).catch(() => ({ steps: [] })) });
-      const ended = (v: Awaited<ReturnType<typeof both>>) => v.w.result?.kind === 'research' || v.trace.steps.some((x) => x.step === 'guard' && x.status === 'failed');
-      const { w, trace } = await until('the news widget’s research run to end', both, ended, 300_000);
+      const both = async () => ({ w: await widget(s.widget_id!), trace: await browser(EDGE.trace, { params: { widget_id: s.widget_id! } }).catch(() => ({ steps: [] })), blocked: await guardBlockedRun(s.widget_id!, s.accepted_at!) });
+      const ended = (v: Awaited<ReturnType<typeof both>>) => v.w.result?.kind === 'research' || !!v.blocked || v.trace.steps.some((x) => x.step === 'guard' && x.status === 'failed');
+      const { w, trace, blocked } = await until('the news widget’s research run to end', both, ended, 300_000);
+      if (blocked && w.result?.kind !== 'research') failGuardBlocked(blocked);
       saw.accept_to_research_ms = Date.now() - s.accepted_at!;
       saw.trace = trace.steps.map((x) => ({ step: x.step, status: x.status, ms: x.duration_ms, note: x.source ? undefined : x.note }));
       expect(w.result?.kind, 'a research result (see the trace’s guard note)').toBe('research');
@@ -331,7 +351,10 @@ describe('e2e on the real pieces (live markets and news, Vultr models, real Chro
       await sleep(60_000 - (Date.now() % 60_000) + 1000);
       const t0 = Date.now();
       await browser(EDGE.refresh, { params: { widget_id: s.widget_id! }, body: {} });
-      const w = await until('the refreshed research result', () => widget(s.widget_id!), (w) => w.result?.kind === 'research' && w.result.run_id !== before!.run_id, 300_000);
+      const fresh = (w: Widget) => w.result?.kind === 'research' && w.result.run_id !== before!.run_id;
+      const both = async () => ({ w: await widget(s.widget_id!), blocked: await guardBlockedRun(s.widget_id!, t0) });
+      const { w, blocked } = await until('the refreshed research result', both, (v) => fresh(v.w) || !!v.blocked, 300_000);
+      if (blocked && !fresh(w)) failGuardBlocked(blocked);
       saw.refresh_to_research_ms = Date.now() - t0;
       s.runs.push(w.result!.run_id);
       saw.research = researchSaw((await browser(EDGE.trace, { params: { widget_id: s.widget_id! } })).steps, w.result!);

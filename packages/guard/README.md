@@ -49,8 +49,10 @@ aimed at the agent?" (extract, chat). It only adds reasons: it never lets throug
   and deepseek-v4.1-flash-1017 flagged exactly the poisoned scenario's planted orders on all five runs and passed every clean and
   advice case (45/45 each). qwen3.8-flash-next returned nothing on the poisoned facts all five times (its reasoning used up the
   256 tokens): `unchecked`, so a block and not a kill. It left the role.
-- **Fails closed.** A model error (402 kill switch, 429, 502) or an unreadable answer gives reason `unchecked` and
-  outcome `block`. At the extract stage that's `block`, not `poison`: runner releases the sandbox and drops that
+- **Fails closed.** A model error (402 kill switch, 429, 502) gives reason `unchecked` and outcome `block`. So does an
+  answer that can't be read (cut off, empty, not our shape) after one more try (`guard.answer`): a pass only comes from a
+  whole answer that was read. The limit is 1024 output tokens: the model's reasoning counts against it, and 256 cut real
+  answers off (A1.4.8). At the extract stage that's `block`, not `poison`: runner releases the sandbox and drops that
   source's facts, without the poison note (the page did nothing we know of).
 - `checker.model` names the model that answered, or `null` when layer one decided alone.
 
