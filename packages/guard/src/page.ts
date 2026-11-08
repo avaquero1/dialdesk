@@ -59,12 +59,12 @@ export const PAGE_EXFIL_PATTERNS: RegExp[] = [
   /\bdocument\.cookie\b/i,
 ];
 
-/** Zero-width and format characters an injection uses to split words past a pattern ("ig​nore"). */
-const INVISIBLE = /[­᠎​-‏‪-‮⁠-⁤⁦-⁯﻿]/g;
+/** Zero-width and format characters an injection uses to split words past a pattern ("ig", U+200B, "nore"). */
+const INVISIBLE = /[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/g;
 
 /** The text the patterns read: compatibility forms folded (full-width letters, ligatures), invisible characters removed. */
 export function normalizePage(text: string): string {
-  return text.normalize('NFKC').replace(INVISIBLE, '').replace(/[‘’ʼ]/g, "'").replace(/\s+/g, ' ');
+  return text.normalize('NFKC').replace(INVISIBLE, '').replace(/[\u2018\u2019\u02BC]/g, "'").replace(/\s+/g, ' ');
 }
 
 /** The reasons a page's own text gives. `where` is `page` (no page words go into a verdict). */
