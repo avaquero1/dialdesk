@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AccountId, CandidateId, Cents, ConnectionId, Domain, Exchange, MarketId, Ok, ProposalId, ReceiptId, ResultId, RunId, Timestamp, WidgetId } from '../common.ts';
-import { DisplaySize } from '../catalog.ts';
+import { DisplaySize, DisplayType } from '../catalog.ts';
 import { api } from '../endpoint.ts';
 import { ResultSince, RunTraceStep, WidgetResult } from '../result.ts';
 import { EngineReceipt } from '../rust.ts';
@@ -91,6 +91,16 @@ const acc = z.object({ account_id: AccountId });
 const wid = z.object({ widget_id: WidgetId });
 const accQuery = z.object({ account_id: AccountId });
 /** On a refresh answer: true when it joined the run of the same kind already asked for in this minute ("Updated just now"). */
+/**
+ * One way to add a display by hand (the Add app): a widget draft on this week's games, with the game it follows and its
+ * label in plain words ("Jets at Chiefs, Sun 1 PM"). event_key null: the catalog's own draft (no games ahead, markets down
+ * or only fixture markets), or a type that follows several games (Tonight, Biggest move) or none (Your account).
+ */
+export const AddDraft = z
+  .object({ event_key: z.string().max(64).nullable(), label: z.string().min(1).max(80), widget: WidgetDraft })
+  .strict();
+export type AddDraft = z.infer<typeof AddDraft>;
+
 export const Joined = z.boolean().optional().describe('true: joined the run already asked for in this minute');
 
 export const BOARD = api('board', {
@@ -113,6 +123,16 @@ export const BOARD = api('board', {
     status: 201,
     errors: [409],
     summary: 'Create the prescribed default board (after sign-up). Enqueues a numbers run for each display.',
+  },
+  addDrafts: {
+    method: 'GET',
+    path: '/drafts/:type',
+    callers: ['edge'],
+    params: z.object({ type: DisplayType }),
+    response: z.object({ drafts: z.array(AddDraft).min(1).max(12) }).strict(),
+    errors: [400],
+    summary:
+      "The Add app's drafts for a display type, the way the first board picks this week's games: the default first (the most traded game, tonight's games), then one per game for a one-game display. The catalog's draft when markets has no real games.",
   },
   setLayout: {
     method: 'PUT',

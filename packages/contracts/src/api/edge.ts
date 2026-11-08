@@ -113,11 +113,21 @@ export const EDGE = api('edge', {
     method: 'POST',
     path: '/api/widgets',
     callers: ['browser'],
-    body: z.object({ type: DisplayType }).strict(),
+    body: z.object({ type: DisplayType, event_key: z.string().max(64).optional().describe("one of addChoices' games; omitted: the default") }).strict(),
     response: z.object({ proposal: Proposal, widgets: z.array(Widget) }).strict(),
     status: 201,
     errors: [400, 404],
-    summary: "The Add app: one widget of this type with the catalog's prescribed defaults (defaultDraft), proposed and accepted at once.",
+    summary:
+      "The Add app: one widget of this type on this week's games (board's addDrafts; the catalog's defaults when markets has none), proposed and accepted at once. 404: event_key is not one of this week's games.",
+  },
+  addChoices: {
+    method: 'GET',
+    path: '/api/add/:type',
+    callers: ['browser'],
+    params: z.object({ type: DisplayType }),
+    response: z.object({ choices: z.array(z.object({ event_key: z.string(), label: z.string() }).strict()).max(12) }).strict(),
+    errors: [400],
+    summary: 'The Add app\'s "Which game?" picks for a one-game display: this week\'s games, most traded first. Empty: add at once.',
   },
   resize: {
     method: 'PATCH',

@@ -167,7 +167,21 @@
       400,
       404
     ],
-    "summary": "The Add app: one widget of this type with the catalog's prescribed defaults (defaultDraft), proposed and accepted at once."
+    "summary": "The Add app: one widget of this type on this week's games (board's addDrafts; the catalog's defaults when markets has none), proposed and accepted at once. 404: event_key is not one of this week's games."
+  },
+  {
+    "service": "edge",
+    "name": "addChoices",
+    "method": "GET",
+    "path": "/api/add/:type",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      400
+    ],
+    "summary": "The Add app's \"Which game?\" picks for a one-game display: this week's games, most traded first. Empty: add at once."
   },
   {
     "service": "edge",
@@ -561,6 +575,20 @@
       409
     ],
     "summary": "Create the prescribed default board (after sign-up). Enqueues a numbers run for each display."
+  },
+  {
+    "service": "board",
+    "name": "addDrafts",
+    "method": "GET",
+    "path": "/drafts/:type",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      400
+    ],
+    "summary": "The Add app's drafts for a display type, the way the first board picks this week's games: the default first (the most traded game, tonight's games), then one per game for a one-game display. The catalog's draft when markets has no real games."
   },
   {
     "service": "board",
