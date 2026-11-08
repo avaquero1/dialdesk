@@ -5,6 +5,7 @@
  */
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { NO_DIGITS_NOTE } from '../src/real.ts';
 
 export const KC = 'kalshi:KXNFLGAME-26NOV08KCBUF-KC';
 export const KC_POLY = 'polymarket:nfl-kc-buf-2026-11-08';
@@ -34,12 +35,23 @@ const draft = (title: string, more: Record<string, unknown> = {}) => ({
  */
 export const MADE_UP_PROBABILITY = 0.123;
 
-/** One move: `user` is the user's message, `results` the tool results since it (newest last). */
-export function play(user: string, results: string[]): Move {
+/** One move: `user` is the user's message, `results` the tool results since it (newest last), `again` on the stray-digit retry. */
+export function play(user: string, results: string[], again = false): Move {
   const u = user.toLowerCase();
   const first = results.length === 0;
   const widget = /\b(wid_[a-z0-9]+)\b/i.exec(user)?.[1];
   if (u.includes('advice-test')) return { content: 'You should buy YES. It is a sure thing.' };
+  if (u.includes('digit once'))
+    return again
+      ? first ? { calls: [['propose_widget', { widgets: [draft('Chiefs clean title')] }]] } : { content: 'Tap to add it.' }
+      : first ? { calls: [['propose_widget', { widgets: [draft('Chiefs Week 77')] }]] } : { content: 'Kickoff is at 73.' };
+  if (u.includes('digit twice'))
+    return first
+      ? { calls: [['propose_widget', { widgets: [draft('Chiefs Week 77')] }], ['propose_widget', { widgets: [draft('Chiefs clean title')] }]] }
+      : { content: 'Kickoff is at 73.' };
+  if (u.includes('digit quiet')) return first ? { calls: [['propose_widget', { widgets: [draft('Chiefs Week 77')] }]] } : {};
+  if (u.includes('digit advice')) return { content: 'You should buy YES at 73.' };
+  if (u.includes('49ers')) return { content: 'The 49ers it is.' };
   if (u.includes('number bait')) return { content: 'The market says 70% today.' };
   if (u.includes('stray slot')) return { content: 'The market says {n7}.' };
   if (u.includes('subtle advice')) return { content: 'The Chiefs look like the side to be on tonight.' };
@@ -112,13 +124,14 @@ export async function startScriptedVultr(expectedKey: string): Promise<ScriptedV
       return send(200, { id: `chatcmpl-${++n}`, object: 'chat.completion', model: b.model, choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }], usage: { prompt_tokens: 80, completion_tokens: 8, total_tokens: 88 } });
     }
     const isResult = (m: { role: string; content: string }) => m.role === 'user' && m.content.startsWith('[tool result');
+    const isNote = (m: { role: string; content: string }) => m.role === 'user' && m.content === NO_DIGITS_NOTE;
     let i = msgs.length - 1;
     const results: string[] = [];
-    while (i >= 0 && (isResult(msgs[i]!) || msgs[i]!.role === 'assistant')) {
+    while (i >= 0 && (isResult(msgs[i]!) || isNote(msgs[i]!) || msgs[i]!.role === 'assistant')) {
       if (isResult(msgs[i]!)) results.unshift(msgs[i]!.content);
       i--;
     }
-    const move = play(msgs[i]?.content ?? '', results);
+    const move = play(msgs[i]?.content ?? '', results, msgs.some(isNote));
     const tool_calls = move.calls?.map(([name, args]) => ({ id: `call_${++n}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }));
     send(200, {
       id: `chatcmpl-${++n}`,

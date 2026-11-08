@@ -1,7 +1,7 @@
 /**
  * The real agent, end to end in process: the real models service (real mode, against a scripted Vultr Inference on
  * localhost), board and markets fakes, memory history. The contract cases run in real mode, then the rules: advice
- * gets the fixed line, a number the model typed blocks the reply, tool calls are validated, set_look refuses bad
+ * gets the fixed line, a number the model typed never reaches the screen (one retry, then a line code writes), tool calls are validated, set_look refuses bad
  * values, a blocked reply proposes nothing, and the model never reads page text or a number's value.
  */
 import { randomBytes } from 'node:crypto';
@@ -16,7 +16,7 @@ import { fake as boardFake } from '../../board/src/fake.ts';
 import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { MemoryUsageStore } from '../../models/src/meter.ts';
 import { real as modelsReal } from '../../models/src/real.ts';
-import { createReal, MAX_STEPS } from '../src/real.ts';
+import { createReal, MAX_STEPS, NEUTRAL_LINE, NEUTRAL_PICKS_LINE, NO_DIGITS_NOTE } from '../src/real.ts';
 import { MemoryConversationStore } from '../src/store.ts';
 import { cases } from './cases.ts';
 import { KC, MADE_UP_PROBABILITY, startScriptedVultr, type ScriptedVultr } from './scripted-vultr.ts';
@@ -150,9 +150,69 @@ describe('agent real mode: the rules', () => {
     expect(guardCalls.every((q) => !q.tools)).toBe(true);
   });
 
-  it('a number the model typed itself blocks the reply', async () => {
-    expect((await chat('number bait')).body.turn.text).toBe(BLOCKED_CHAT_LINE);
-    expect((await chat('stray slot')).body.turn.text).toBe(BLOCKED_CHAT_LINE);
+  describe('a digit the model typed itself', () => {
+    const newChatCalls = async (run: () => Promise<unknown>) => {
+      const before = chatCalls().length;
+      await run();
+      return chatCalls().slice(before);
+    };
+
+    it('a slot that was never handed out is still the blocked line', async () => {
+      expect((await chat('stray slot')).body.turn.text).toBe(BLOCKED_CHAT_LINE);
+    });
+
+    it('a stray digit, then a clean retry: the retry goes out, and the first try proposes nothing', async () => {
+      const pending = (await boardOf(ACC)).pending.length;
+      let r!: Awaited<ReturnType<typeof chat>>;
+      const calls = await newChatCalls(async () => (r = await chat('digit once for the game')));
+      expect(r.body.turn.text).toBe('Tap to add it.');
+      expect(r.body.turn.chips.map((c) => c.label)).toEqual(['Chiefs clean title']);
+      expect(r.body.turn.chips[0]!.proposal_id).toMatch(/^.+/);
+      expect((await boardOf(ACC)).pending.length).toBe(pending + 1);
+      expect(calls.filter((q) => JSON.stringify(q.messages).includes(NO_DIGITS_NOTE))).toHaveLength(2);
+    });
+
+    it('a stray digit twice: the neutral line keeps the clean proposal and drops the one with the digit', async () => {
+      const pending = (await boardOf(ACC)).pending.length;
+      const r = await chat('digit twice for the game');
+      expect(r.body.turn.text).toBe(NEUTRAL_LINE);
+      expect(r.body.turn.chips.map((c) => c.label)).toEqual(['Chiefs clean title']);
+      expect(JSON.stringify(r.body.turn)).not.toMatch(/73|77/);
+      expect((await boardOf(ACC)).pending.length).toBe(pending + 1);
+      expect(r.body.turn.picks).toBeUndefined();
+    });
+
+    it('a stray digit twice and nothing to add: the neutral line over the picks', async () => {
+      const r = await chat('number bait');
+      expect(r.body.turn.text).toBe(NEUTRAL_PICKS_LINE);
+      expect(r.body.turn.picks?.length).toBeGreaterThan(0);
+      expect(r.body.turn.text).not.toMatch(/\d/);
+    });
+
+    it('a digit in a title under a reply code wrote ("Done.") is caught too', async () => {
+      const r = await chat('digit quiet for the game');
+      expect(JSON.stringify(r.body.turn)).not.toContain('77');
+      expect(r.body.turn.chips).toEqual([]);
+    });
+
+    it('advice beside a digit is the blocked line and gets no retry', async () => {
+      let r!: Awaited<ReturnType<typeof chat>>;
+      const calls = await newChatCalls(async () => (r = await chat('digit advice')));
+      expect(r.body.turn.text).toBe(BLOCKED_CHAT_LINE);
+      expect(r.body.turn.chips).toEqual([]);
+      expect(calls).toHaveLength(1);
+    });
+
+    it('a digit in the user\'s own words is theirs to repeat, with no retry', async () => {
+      let r!: Awaited<ReturnType<typeof chat>>;
+      const calls = await newChatCalls(async () => (r = await chat('I follow the 49ers')));
+      expect(r.body.turn.text).toBe('The 49ers it is.');
+      expect(calls).toHaveLength(1);
+    });
+
+    it('the lines code writes and the retry note hold no digit', () => {
+      for (const line of [NEUTRAL_LINE, NEUTRAL_PICKS_LINE, NO_DIGITS_NOTE]) expect(line).not.toMatch(/\d/);
+    });
   });
 
   it('a blocked reply proposes nothing (advice in a widget title)', async () => {

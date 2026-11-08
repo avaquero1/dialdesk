@@ -6,6 +6,11 @@
  *   code writes from the chips (the bake-off saw "I proposed two widgets" with one chip).
  */
 import type { ToolChip } from '@app/contracts';
+import type { ProposalChange } from './tools.ts';
+
+/** What a chip's own changes would show the user besides its code-written label: titles and briefs. */
+export const changeTexts = (changes: ProposalChange[]): string[] =>
+  changes.flatMap((c) => (c.op === 'add' ? [c.widget.title, c.widget.brief ?? ''] : c.op === 'tune' ? [c.brief ?? ''] : []));
 
 const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9{}]+/g, ' ').trim();
 
