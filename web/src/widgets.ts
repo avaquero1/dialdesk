@@ -4,7 +4,7 @@
  * server or from a model. The words follow design.md section 3: "62% chance", "Up 4 points since yesterday", "2
  * points apart"; a move has an arrow and words, never a good or bad color.
  */
-import type { Quote, Widget, WidgetResult } from '@app/contracts';
+import { SOURCE_CATALOG, displayEntry, type Quote, type Widget, type WidgetResult } from '@app/contracts';
 import { connections, exchangeName } from './conns.ts';
 import { css, esc } from './dom.ts';
 import { IC } from './icons.ts';
@@ -50,7 +50,12 @@ function mvEl(d: number, o: { long?: boolean; since?: string } = {}) {
   return `<span class="mv mv--${c} num"><span class="mv-a" aria-hidden="true">${ARROW[c]}</span> ${esc(words)}</span>`;
 }
 const usd = (v: number) => (v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const signedUsd = (v: number) => (v > 0 ? '+' : '') + usd(v);
+/** A money move with its arrow and words, never a color (design.md section 8): "▲ Up $2.40 since you bought", "▼ Down $1.10 today". */
+function moneyMv(v: number, tail: string) {
+  const c = mvCls(Math.round(v * 100));
+  const words = c === 'flat' ? 'No change' : `${c === 'up' ? 'Up' : 'Down'} ${usd(Math.abs(v))}`;
+  return `<span class="mv mv--${c} num"><span class="mv-a" aria-hidden="true">${ARROW[c]}</span> ${esc(`${words} ${tail}`)}</span>`;
+}
 
 /** One engine number in its unit, in plain words ("62%", "4 points", "61¢"). */
 export function fmtNum(n: Num): string {
@@ -341,28 +346,140 @@ function gap(w: Widget, s: Display, c: RenderCtx) {
   );
 }
 
+/** How long ago, short (design.md section 6: "Sports Wire · 2 h"): "just now", "35 min", "2 h", "3 days", else the date. */
+export function agoWords(iso: string | null | undefined, now = Date.now()): string {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const min = Math.floor((now - t) / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min`;
+  if (min < 24 * 60) return `${Math.floor(min / 60)} h`;
+  const days = Math.floor(min / (24 * 60));
+  if (days < 7) return `${days} ${days === 1 ? 'day' : 'days'}`;
+  return new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+/** A slot's engine number in its format ("61%", "4 points", "61¢"). */
+function slotValue(n: Num, format: string): string {
+  switch (format) {
+    case 'percent':
+      return `${Math.round(n.value * 100)}%`;
+    case 'points': {
+      const v = Math.round((n.unit === 'probability' ? n.value * 100 : n.value) * 10) / 10;
+      return v < 0 ? `minus ${points(-v)}` : points(v);
+    }
+    case 'cents':
+      return `${Math.round(n.value * 10) / 10}¢`;
+    case 'usd':
+      return usd(n.value);
+    case 'odds':
+      return n.value.toFixed(2);
+    default:
+      return fmtNum(n);
+  }
+}
+
+/**
+ * A research result's summary with its slots filled by code: `{nK}` from the engine number its slot names (with that
+ * number's receipt), `{qK}` from the fact's quote. The template holds no digits (the guard checks), so every number on
+ * screen is the engine's. A slot that can't be filled, or a template with a digit outside a slot, shows nothing.
+ */
+export function summaryWords(r: WidgetResult | null | undefined): string | null {
+  const sm = r?.summary;
+  if (!sm || !Object.keys(sm.slots).length) return null;
+  let bad = /[0-9]/.test(sm.template.replace(/\{[nq][0-9]{1,2}\}/g, ''));
+  const out = sm.template.replace(/\{([nq][0-9]{1,2})\}/g, (_m, name: string) => {
+    const sl = sm.slots[name];
+    if (sl?.kind === 'number') {
+      const n = r.numbers.find((x) => x.id === sl.number_id && x.receipt_id === sl.receipt_id);
+      if (n) return slotValue(n, sl.format);
+    } else if (sl?.kind === 'quote') {
+      const f = r.facts.find((x) => x.fact_id === sl.fact_id);
+      if (f && !r.blocked.some((b) => b.candidate_id === f.candidate_id)) return `“${f.quote.trim()}”`;
+    }
+    bad = true;
+    return '';
+  });
+  return bad ? null : out.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * One clean article's line: the reader's short claim, in plain words. A claim with a digit in it is the model's typing,
+ * so the line is the article's own quote instead (checked against the page before it was kept).
+ */
+export const factLine = (f: { claim: string; quote: string }) => (/[0-9]/.test(f.claim) ? f.quote : f.claim).trim();
+
+/**
+ * When the first research run comes (design.md section 11: say what happens and when). runner's scheduler books a
+ * display's research after its first numbers run, at the next window of its cadence (the hour, by default), and
+ * "Refresh now" runs it at once.
+ */
+export function firstNewsWords(w: Widget, now = Date.now()): string {
+  // A profile's own null means the user turned the schedule off.
+  const every = w.profile ? w.profile.cadence.research_every_s : displayEntry('news').default_cadence.research_every_s;
+  if (!every) return 'The news comes when you tap ⋯ then Refresh now.';
+  const next = (Math.floor(now / 1000 / every) + 1) * every * 1000;
+  const when = next - now <= 2 * 60_000 ? 'in a minute or two' : `at about ${fmtTime(new Date(next).toISOString())}`;
+  return `The first news comes ${when}. To get it sooner, tap ⋯ then Refresh now.`;
+}
+/** "the latest articles about the Bills from Sports Wire, Weather Desk and Fan Post" (the widget's sources' outlets). */
+function readFromWords(w: Widget, team: string | undefined): string {
+  const ids = w.profile?.source_ids ?? displayEntry('news').default_sources;
+  const outlets = [...new Set(ids.map((id) => SOURCE_CATALOG.rows.find((r) => r.source_id === id)?.outlet).filter((x): x is string => !!x))];
+  const from = outlets.length > 1 ? `${outlets.slice(0, -1).join(', ')} and ${outlets.at(-1)}` : outlets[0];
+  return `We read the latest articles${team ? ` about the ${team}` : ''}${from ? ` from ${from}` : ''}, each in its own sealed box, destroyed after.`;
+}
+
+/** How many items a News display shows: 2–3 (design.md section 6), a blocked page among them. A medium tile has room for one article beside a blocked page. */
+const NEWS_ITEMS = 3;
+const cleanCap = (size: Display['size'], blocked: number) => (blocked && size !== 'L' ? 1 : Math.max(1, NEWS_ITEMS - blocked));
+
 function news(w: Widget, s: Display) {
   const team = s.params.team;
   const r = w.result;
+  // "Bills news" already says whose news it is.
+  const teamSub = team && !s.title.toLowerCase().includes(team.toLowerCase()) ? team : undefined;
   if (!r) {
     return (
-      head(s.title, team ? `${team}` : undefined) +
-      `<div class="items"><div class="item"><div class="hl">Articles are read on the first research run.</div><div class="meta">Each one in its own sealed box, destroyed after.</div></div></div>`
+      head(s.title, teamSub) +
+      `<div class="items news-wait"><div class="item"><div class="hl">${esc(firstNewsWords(w))}</div><div class="meta">${esc(readFromWords(w, team))}</div></div></div>`
     );
   }
   const src = new Map(r.sources.map((x) => [x.candidate_id, x]));
-  const items = r.facts.slice(0, 3).map((f) => {
+  const blockedIds = new Set(r.blocked.map((b) => b.candidate_id));
+  // One line per distinct claim, from pages read clean; the same news from two outlets is one item.
+  const seen = new Set<string>();
+  const clean: string[] = [];
+  for (const f of r.facts) {
     const so = src.get(f.candidate_id);
-    const meta = [so?.outlet ?? so?.domain, so?.published_at ? fmtTime(so.published_at) : null].filter(Boolean).join(' · ');
-    return `<div class="item"><div class="hl">${esc(f.claim)}</div><div class="meta">${esc(meta)}</div></div>`;
-  });
-  const blocked = r.blocked.map(
+    if (!so || so.status !== 'read' || blockedIds.has(f.candidate_id)) continue;
+    const line = factLine(f);
+    const key = line.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+    if (!line || seen.has(key)) continue;
+    seen.add(key);
+    const meta = [so.outlet ?? so.domain, agoWords(so.published_at)].filter(Boolean).join(' · ');
+    // A tap opens How we got this at this article: its screenshot, outlet and time.
+    clean.push(
+      `<button class="item item--tap" type="button" data-cnd="${esc(f.candidate_id)}" aria-label="${esc(`${line}. ${meta}. How we got this`)}"><span class="hl">${esc(line)}</span><span class="meta">${esc(meta)}</span></button>`,
+    );
+  }
+  const blocked = r.blocked.slice(0, s.size === 'L' ? 2 : 1).map(
     (b) =>
-      // Never the page's words: the plain line and the time (design.md section 10).
+      // Never the page's words, never its picture: the plain line and the time (design.md section 10).
       `<div class="item item--blocked"><span class="x">${IC.blocked}</span><div class="hl"><b>Blocked:</b> this page tried to trick the agent. Its sealed box was destroyed.<div class="meta num">${esc(fmtTime(b.killed_at))}</div></div></div>`,
   );
-  const n = r.facts.length + r.blocked.length;
-  return head(s.title, `${n} ${n === 1 ? 'item' : 'items'}`) + `<div class="items">${items.join('')}${blocked.join('')}</div>`;
+  const items = clean.slice(0, cleanCap(s.size, blocked.length)).concat(blocked);
+  const sum = summaryWords(r);
+  const body = items.length ? items.join('') : '<div class="item"><div class="hl">No news in the articles we read this time.</div></div>';
+  return (
+    head(s.title, teamSub ?? `${items.length} ${items.length === 1 ? 'item' : 'items'}`) +
+    `<div class="items">${body}</div>` +
+    // The sentence with the numbers, and when those prices are from, need a large tile: a medium one is for the items.
+    (sum ? `<div class="w-note news-sum num from-l">${esc(sum)}</div>` : '') +
+    notesHtml(w) +
+    (sum ? stamp(w, 'w-foot from-l') : '')
+  );
 }
 
 /**
@@ -370,10 +487,10 @@ function news(w: Widget, s: Display) {
  * positionNumbers): `balance`, and per position `value_<i>`, `pnl_<i>` and `today_<i>` (today's change, against the
  * price 24 h ago). The numbers show only while the user still shares them (consent on, connection there).
  */
-function positions(w: Widget, s: Display) {
-  const c = connections().find((x) => x.connection_id === s.params.connection_id) ?? (s.params.connection_id ? undefined : connections()[0]);
+function positions(w: Widget, s: Display, c: RenderCtx) {
+  const con = connections().find((x) => x.connection_id === s.params.connection_id) ?? (s.params.connection_id ? undefined : connections()[0]);
   const byId = new Map((w.result?.numbers ?? []).map((n) => [n.id, n]));
-  if (c && c.share_numbers && w.result && byId.size) {
+  if (con && con.share_numbers && w.result && byId.size) {
     const bal = byId.get('balance');
     const rows: string[] = [];
     for (let i = 1; byId.has(`value_${i}`); i++) {
@@ -381,38 +498,39 @@ function positions(w: Widget, s: Display) {
       const pnl = byId.get(`pnl_${i}`);
       const today = byId.get(`today_${i}`);
       const mkt = w.result.receipts.find((r) => r.op_id === `value_${i}`)?.provenance?.price_cents?.source ?? '';
+      const name = (mkt && marketLabel(mkt, c)) || mkt.replace(/^[a-z]+:/, '');
+      const mvs = [pnl ? moneyMv(pnl.value, 'since you bought') : '', today ? moneyMv(today.value, 'today') : ''].filter(Boolean).join('');
       rows.push(
-        `<div class="pos-row"><span class="pos-mkt">${esc(mkt.replace(/^[a-z]+:/, ''))}</span><span class="num">${esc(fmtNum(v))}</span>` +
-          (pnl ? `<span class="mv mv--${mvCls(pnl.value)} num">${esc(signedUsd(pnl.value))}</span>` : '') +
-          (today ? `<span class="mv mv--${mvCls(today.value)} num">${esc(signedUsd(today.value))} today</span>` : '') +
+        `<div class="pos-item"><div class="pos-row"><span class="pos-mkt">${esc(name)}</span><span class="num">${esc(fmtNum(v))}</span></div>` +
+          (mvs ? `<div class="pos-mvs">${mvs}</div>` : '') +
           '</div>',
       );
     }
     const n = rows.length;
     return (
       head(s.title, `as of ${fmtTime(w.result.as_of)}`) +
-      `<div class="who">${esc(exchangeName(c.exchange))} <span class="pillnote">read only</span></div>` +
+      `<div class="pos-top"><div class="who">${esc(exchangeName(con.exchange))} <span class="pillnote">read only</span></div>` +
       `<div class="bal num">${bal ? esc(fmtNum(bal)) : '—'}</div>` +
-      `<div class="pos-meta">${bal ? 'Balance · ' : ''}${n ? `${n} open ${n === 1 ? 'position' : 'positions'}` : 'No open positions'}</div>` +
+      `<div class="pos-meta"><span>${bal ? 'Balance · ' : ''}${n ? `${n} open ${n === 1 ? 'position' : 'positions'}` : 'No open positions'}</span><span class="num only-s">as of ${esc(fmtTime(w.result.as_of))}</span></div></div>` +
       (n ? `<div class="pos-list">${rows.join('')}</div>` : '')
     );
   }
-  if (!c)
+  if (!con)
     return (
       head(s.title) +
       '<button class="acc-open" type="button" data-open-accounts><span class="who">Not connected</span>' +
       '<span class="w-empty">Tap to connect Kalshi or Polymarket, read only, in Accounts. The agent never trades.</span></button>'
     );
   // Connected, but no numbers here yet: not linked, not shared, or the first read is on its way.
-  const why = !c.share_numbers
+  const why = !con.share_numbers
     ? 'Turn on "Let my widgets use its numbers" in Accounts to see the balance and positions here.'
     : s.params.connection_id
       ? 'Reading the balance and positions…'
       : 'No balance or positions on this display yet.';
   return (
     head(s.title) +
-    `<div class="who">${esc(exchangeName(c.exchange))} <span class="pillnote">read only</span></div>` +
-    `<div class="w-empty">${esc(c.exchange === 'kalshi' && c.checked_at ? `Checked with Kalshi at ${fmtTime(c.checked_at)}. We can look, never trade.` : 'Public wallet. We can look, never trade.')}</div>` +
+    `<div class="who">${esc(exchangeName(con.exchange))} <span class="pillnote">read only</span></div>` +
+    `<div class="w-empty">${esc(con.exchange === 'kalshi' && con.checked_at ? `Checked with Kalshi at ${fmtTime(con.checked_at)}. We can look, never trade.` : 'Public wallet. We can look, never trade.')}</div>` +
     `<button class="acc-open" type="button" data-open-accounts><span class="w-empty">${esc(why)}</span></button>`
   );
 }
@@ -450,7 +568,7 @@ export function displayHtml(w: Widget, c: RenderCtx): string {
     case 'news':
       return news(w, s);
     case 'positions':
-      return positions(w, s);
+      return positions(w, s, c);
     case 'movement':
       return movement(w, s, c);
     default:

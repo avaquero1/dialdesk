@@ -45,8 +45,8 @@ export interface BoardHooks {
   openMenu: (id: string) => void;
   openApp: (id: string) => void;
   openFolder: (id: string) => void;
-  /** A tap on a number: How we got this. */
-  openHow: (id: string) => void;
+  /** A tap on a number: How we got this; a tap on a News item: How we got this at that article. */
+  openHow: (id: string, article?: string) => void;
   /** The user dropped a tile: the new desktop order to save. */
   saveOrder: (order: string[]) => void;
   closeSurface: (instant?: boolean) => void;
@@ -609,6 +609,7 @@ export function bindBoard(h: BoardHooks) {
     const it = S.widgets.get(w.dataset.id!);
     if (!it) return;
     if (t.closest('.w-menu-btn')) h.openMenu(it.spec.widget_id);
+    else if (it.spec.kind === 'display' && t.closest('[data-cnd]')) h.openHow(it.spec.widget_id, t.closest<HTMLElement>('[data-cnd]')!.dataset.cnd);
     else if (it.spec.kind === 'display' && t.closest('.num')) h.openHow(it.spec.widget_id);
     else if (it.spec.kind === 'app') h.openApp(it.spec.widget_id);
     else if (it.spec.kind === 'folder') h.openFolder(it.spec.widget_id);

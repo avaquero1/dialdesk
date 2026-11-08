@@ -19,7 +19,7 @@ import { IC } from './icons.ts';
 import { closeBtn, panel, rz, sheetHead, tileFrom, toast } from './surfaces.ts';
 import { loadConnections } from './accounts.ts';
 import { connections } from './conns.ts';
-import { fmtNum, fmtTime, tileName } from './widgets.ts';
+import { agoWords, factLine, fmtNum, fmtTime, tileName } from './widgets.ts';
 
 type Num = WidgetResult['numbers'][number];
 type Receipt = WidgetResult['receipts'][number];
@@ -235,11 +235,11 @@ function pricesStep(w: Widget, r: WidgetResult | null) {
  * A clean page's screenshot, small, tap to enlarge; the picture loads after the sheet opens (loadShots). Only a read
  * that finished clean has one: a blocked or poisoned read shows its site and time, never a picture or its words.
  */
-function shotHTML(r: WidgetResult, s: WidgetResult['sources'][number], tr: RunTraceStep | undefined) {
+function shotHTML(r: WidgetResult, s: WidgetResult['sources'][number], tr: RunTraceStep | undefined, cls = '') {
   if (!tr?.source?.screenshot_key || tr.status !== 'ok' || s.status !== 'read' || r.blocked.some((b) => b.candidate_id === s.candidate_id)) return '';
   const label = `The page on ${s.domain}, as its sealed box saw it. Tap to enlarge.`;
   return (
-    `<button class="how-shot is-loading" type="button" data-shot-run="${esc(tr.run_id)}" data-shot-cnd="${esc(s.candidate_id)}" aria-label="${esc(label)}">` +
+    `<button class="how-shot${cls} is-loading" type="button" data-shot-run="${esc(tr.run_id)}" data-shot-cnd="${esc(s.candidate_id)}" aria-label="${esc(label)}">` +
     `<img alt="" decoding="async"><span class="how-shot-tag">External page</span></button>`
   );
 }
@@ -287,16 +287,49 @@ function zoomShot(b: HTMLButtonElement) {
   requestAnimationFrame(() => z.classList.add('is-open'));
 }
 
-function articlesStep(r: WidgetResult | null, trace: RunTraceStep[]) {
+/** The read steps of a run's trace, by candidate. */
+const readsOf = (trace: RunTraceStep[]) => new Map(trace.filter((s) => s.step === 'read' && s.source).map((s) => [s.source!.candidate_id, s]));
+
+/** An article's time in words: "5:45 PM" today, else "Fri 5:45 PM". */
+function whenWords(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toDateString() === new Date().toDateString() ? fmtTime(iso) : d.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
+/**
+ * How we got this, opened from one News item: that article first, its outlet, when it was published, when its sealed box
+ * read it, what we took from it, and its screenshot. Only a page read clean has this; a blocked one never shows here.
+ */
+function articleHTML(r: WidgetResult | null, trace: RunTraceStep[], cnd: string | undefined, i: number) {
+  const s = r && cnd ? r.sources.find((x) => x.candidate_id === cnd) : undefined;
+  if (!r || !s || s.status !== 'read' || r.blocked.some((b) => b.candidate_id === cnd)) return '';
+  const tr = readsOf(trace).get(s.candidate_id);
+  const facts = r.facts.filter((f) => f.candidate_id === s.candidate_id).map(factLine).filter(Boolean);
+  const ago = s.published_at ? agoWords(s.published_at) : '';
+  const agoTxt = ago === 'just now' ? ' (just now)' : /^\d/.test(ago) ? ` (${ago} ago)` : '';
+  const pub = s.published_at ? `Published ${whenWords(s.published_at)}${agoTxt}.` : '';
+  return (
+    `<section class="how-art${rz(i)} data-article="${esc(s.candidate_id)}"><h3>${esc(s.outlet ?? s.domain)}</h3>` +
+    (pub ? p(pub) : '') +
+    p(`Read in a sealed box${tr ? ` at ${fmtTime(tr.at)}` : ''}. The box was destroyed after.`) +
+    (facts.length ? p(`What we took from it: ${facts.join(' ')}`) : '') +
+    shotHTML(r, s, tr) +
+    '</section>'
+  );
+}
+
+function articlesStep(r: WidgetResult | null, trace: RunTraceStep[], focus?: string) {
   if (!r) return p('Nothing read yet. Until its first run, this widget shows the latest exchange prices only.');
-  const reads = new Map(trace.filter((s) => s.step === 'read' && s.source).map((s) => [s.source!.candidate_id, s]));
+  const reads = readsOf(trace);
   const out: string[] = [];
   for (const s of r.sources) {
     const tr = reads.get(s.candidate_id);
     const who = s.outlet ?? s.domain;
     if (s.status === 'read')
       out.push(
-        `<li class="how-src is-read">${IC.check}<span><b>${esc(who)}</b> was read in a sealed box${tr ? ` at ${esc(fmtTime(tr.at))}` : ''}. The box was destroyed after.${shotHTML(r, s, tr)}</span></li>`,
+        // The article the sheet opened at already shows its picture above.
+        `<li class="how-src is-read${s.candidate_id === focus ? ' is-focus' : ''}">${IC.check}<span><b>${esc(who)}</b> was read in a sealed box${tr ? ` at ${esc(fmtTime(tr.at))}` : ''}. The box was destroyed after.${s.candidate_id === focus ? '' : shotHTML(r, s, tr)}</span></li>`,
       );
     else if (s.status === 'blocked') {
       const b = r.blocked.find((x) => x.candidate_id === s.candidate_id);
@@ -344,13 +377,17 @@ function detailsHTML(r: WidgetResult | null, trace: RunTraceStep[]) {
   );
 }
 
-function howHTML(w: Widget, trace: RunTraceStep[]) {
+function howHTML(w: Widget, trace: RunTraceStep[], article?: string) {
   const r = w.result;
   let i = 2;
+  const art = articleHTML(r, trace, article, i);
+  if (art) i++;
+  const focus = art ? article : undefined;
   return (
     `<div class="sh-head${rz(0)}><h2>How we got this</h2>${closeBtn(0)}</div><p class="sh-sub${rz(1)}>${esc(tileName(w))}${r ? `, updated ${esc(fmtTime(r.created_at))}` : ''}</p>` +
+    art +
     step(1, 'Where the prices came from', pricesStep(w, r), i++) +
-    step(2, 'What we read', articlesStep(r, trace), i++) +
+    step(2, 'What we read', articlesStep(r, trace, focus), i++) +
     step(3, 'The math', mathStep(r), i++) +
     step(4, 'The safety check', checkStep(r, trace), i++) +
     `<button class="btn how-toggle${rz(i)} type="button" id="how-toggle" aria-expanded="false" aria-controls="how-details">Details</button>` +
@@ -358,15 +395,15 @@ function howHTML(w: Widget, trace: RunTraceStep[]) {
   );
 }
 
-/** "How we got this" for one widget: from the ⋯ menu, or from tapping one of its numbers. */
-export async function openHow(id: string) {
+/** "How we got this" for one widget: from the ⋯ menu, from tapping one of its numbers, or at one article (a News item). */
+export async function openHow(id: string, article?: string) {
   const w = S.widgets.get(id);
   if (!w || w.spec.kind !== 'display') return;
   // The trace adds times and reads; the sheet doesn't wait long for it.
   const trace = w.result ? await Promise.race([api.trace(id).then((t) => t.steps).catch(() => []), wait(800).then(() => [] as RunTraceStep[])]) : [];
   const cur = S.widgets.get(id);
   if (!cur) return toast('That widget is gone.');
-  panel('sheet sheet--how', howHTML(cur, trace), {
+  panel('sheet sheet--how', howHTML(cur, trace, article), {
     w: 520,
     from: tileFrom(id),
     fromFn: () => tileFrom(id),

@@ -243,9 +243,26 @@ html[data-motion="reduced"] .w-live { transform: none; }
 .acc-open { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .acc-open .who { color: var(--accent); }
 /* Your account's positions: one row each, the market's ticker, its value, P&L and today's change (engine numbers). */
-.pos-list { display: grid; gap: 2px; margin-top: 6px; overflow: hidden; font: 500 calc(var(--u) * 12px)/1.3 var(--font-num); }
+.pos-list { display: grid; gap: 5px; margin-top: 6px; min-height: 0; overflow: hidden; font: 500 calc(var(--u) * 12px)/1.3 var(--font-num); }
+.pos-item { display: grid; gap: 1px; min-width: 0; }
 .pos-row { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
-.pos-mkt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.pos-mkt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-family: var(--font-ui); }
+.pos-meta { flex-wrap: wrap; column-gap: 8px; }
+/* A position's P&L and today's change: an arrow and words in the text color, one per line when the tile is narrow. */
+.pos-mvs { display: flex; flex-wrap: wrap; column-gap: 10px; row-gap: 1px; min-width: 0; }
+.pos-mvs .mv { font-weight: 500; font-size: calc(var(--u) * 11.5px); white-space: normal; }
+/* A small tile: one position, today's change only ("3 open positions" says there are more). A medium tile: the balance beside its words, every position under them. */
+.pos-top { display: grid; gap: 3px; min-width: 0; }
+/* The small tile's title has no room beside the ⋯ button: "as of" moves to the line under the balance. */
+.w--s:has(.pos-top) .w-head .w-sub { display: none; }
+.w--s .pos-item:nth-child(n+2) { display: none; }
+.w--s .pos-mvs .mv:not(:only-child):first-child { display: none; }
+.w--m .pos-top { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: center; }
+.w--m .pos-top .bal { grid-row: 1 / span 2; margin: 0; }
+.w--m .pos-top .pos-meta { justify-content: flex-start; }
+.w--m .pos-list { gap: 2px; margin-top: 2px; line-height: 1.2; }
+.w--m .pos-item { gap: 0; }
+.w--m .pos-top .pillnote { padding-block: 0; }
 
 /* ---- Add (the catalog): one row per display type ---- */
 .add-row { width: 100%; text-align: left; color: inherit; font: inherit; border: 0; cursor: pointer; min-height: 56px; }
@@ -295,6 +312,8 @@ html[data-transparency="reduced"] :is(.chip, .btn, .w-menu-btn, .seg, .mini, .ca
 /* Up and down are an arrow and words, never a good or bad color (design.md section 8): the themes' --up and --down
    tints are not used for moves. Red stays for a blocked trick or a real error, amber for "this needs you". */
 .mv--up, .mv--down { color: var(--text-2); }
+/* Nor a good or bad glow: a theme's own tint on a move (Deep Sea's dark mode) is off too. */
+html[data-theme][data-mode] :is(.mv--up, .mv--down) { text-shadow: none; }
 .mv .mv-a { font-size: .8em; }
 .big-row { display: flex; align-items: baseline; gap: 6px; }
 .big-u { font: 600 calc(14px * var(--u))/1 var(--font-ui); color: var(--text-2); }
@@ -325,3 +344,18 @@ html[data-transparency="reduced"] :is(.chip, .btn, .w-menu-btn, .seg, .mini, .ca
 /* A small tile's title stays whole; its game name gives way. */
 .w--s .w-title { flex: none; }
 .w--s .w-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- News (W1.2.2): 2–3 short items with outlet and time; a tap on a clean one opens How we got this at that article ---- */
+.item--tap { width: 100%; min-width: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 8px; }
+.item--tap .hl, .item--tap .meta { display: block; }
+.item--tap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.news-wait .hl { white-space: normal; }
+.news-wait .meta { line-height: 1.35; }
+.news-sum { margin-top: 4px; }
+.w--l .items:has(~ .news-sum) { flex: 0 1 auto; }
+/* How we got this, opened at one article: its outlet, time and screenshot first. */
+.how-art { padding: 12px 14px; border-radius: 16px; background: var(--field); display: grid; gap: 4px; }
+.how-art h3 { margin: 0; font: 600 15px/1.3 var(--font-ui); }
+.how-art p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--text-2); }
+.how-art .how-shot { width: 100%; }
+.how-src.is-focus b { color: var(--accent); }
