@@ -334,3 +334,8 @@
 [data-theme="obsidian"]:not([data-mode="dark"]) .g-clip::after {
   background: linear-gradient(90deg, transparent, oklch(.62 .15 var(--hue) / .5), transparent);
 }
+
+/* ---------- on a phone only the two thin soft-box strips move; the wide glow behind them stands still ---------- */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="obsidian"] .wallpaper-fx .fx3 { animation: none; will-change: auto; opacity: .82; }
+}

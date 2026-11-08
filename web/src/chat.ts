@@ -283,8 +283,13 @@ function render() {
 /** Desktop: hide the panel (the board takes the room) or show it again. */
 function showPanel(on: boolean) {
   if (S.phone) return;
+  const board = document.querySelector<HTMLElement>('#board');
+  const from = board?.getBoundingClientRect().left ?? 0;
   document.documentElement.classList.toggle('chat-hidden', !on);
   relayout();
+  // The board re-centres at once; a transform glide from where it was, so the panel closing never snaps it.
+  const shift = board ? from - board.getBoundingClientRect().left : 0;
+  if (board && shift && !reduced()) board.animate([{ transform: `translateX(${shift}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.16,.84,.3,1)' });
   if (on) input.focus({ preventScroll: true });
   else fab.focus({ preventScroll: true });
 }

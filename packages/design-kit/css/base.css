@@ -446,7 +446,7 @@ html[data-layout="phone"] .chat-handle { display: block; }
 html[data-layout="phone"] .toast { bottom: 90px; }
 
 /* ---- motion ------------------------------------------------------------------------------------------------ */
-@keyframes rise { from { opacity: 0; transform: translateY(12px); filter: blur(5px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes pour-in { 0% { scale: .5 .16; } 46% { scale: 1.05 .95; } 72% { scale: .99 1.012; } 100% { scale: 1 1; } }
 @keyframes glass-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes shimmer { 0% { transform: translateX(-130%) skewX(-14deg); opacity: 0; } 14% { opacity: 1; } 86% { opacity: 1; } 100% { transform: translateX(330%) skewX(-14deg); opacity: 0; } }
@@ -459,6 +459,7 @@ html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-
   animation-duration: .001ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important;
   transition-duration: 200ms !important; transition-delay: 0ms !important; transition-property: opacity, background-color, color !important;
 }
+@media (pointer: coarse), (max-width: 720px) { .needs i, .needs-dot { animation: none; } }
 html[data-motion="reduced"] .wallpaper-fx > i, html[data-motion="reduced"] .wallpaper-fx::after { animation: none !important; }
 html[data-motion="reduced"] .w-spot, html[data-motion="reduced"] .w-shimmer { animation: none !important; display: none; }
 html[data-motion="reduced"] .surface .rz { opacity: 1; }

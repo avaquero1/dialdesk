@@ -353,3 +353,9 @@
 [data-theme="daybreak"][data-mode="dark"] .foot span {
   background: oklch(.25 .06 calc(var(--hue) + 34) / .78);
 }
+
+/* ---------- on a phone the sun and the dawn glow (larger than the screen) stand still; the haze and clouds keep moving ---------- */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="daybreak"] .wallpaper-fx .fx1,
+  [data-theme="daybreak"][data-mode="dark"] .wallpaper-fx .fx1 { animation: none; will-change: auto; }
+}

@@ -124,12 +124,12 @@ describe('Milestone W1.4: the containment moment on screen (phone)', () => {
     await step({ step: 'plan', status: 'ok', note: 'planner plan; 3 source(s)' });
     await expect.poll(() => line().innerText(), { timeout: 10_000 }).toBe('Reading 3 articles in sealed boxes…');
     await expect.poll(() => tile().locator('.wl-box').count(), { timeout: 5000 }).toBe(3);
-    // The calm shimmer, not a spinner: it repeats while the run is on; nothing else in the tile moves.
+    // The calm shimmer, not a spinner: on a phone it sweeps once when the run starts (the speed rules); nothing else in the tile moves.
     const shimmer = await tile().evaluate((e) => {
       const s = e.querySelector('.w-shimmer')!;
       return { name: getComputedStyle(s).animationName, iter: getComputedStyle(s).animationIterationCount, spinners: e.querySelectorAll('[class*="spin"]').length };
     });
-    expect(shimmer).toEqual({ name: 'shimmer', iter: 'infinite', spinners: 0 });
+    expect(shimmer).toEqual({ name: 'shimmer', iter: '1', spinners: 0 });
     for (const s of ['sbx_m04', 'sbx_m05', 'sbx_m06']) await sm('sandbox.created', s, { ids: { kind: 'browse' } });
     await step({ step: 'read', status: 'ok', source: a, sandbox: { sandbox_id: 'sbx_m04', state: 'held' }, proxy: { allowed: 3, refused: 0 } });
     await step({ step: 'read', status: 'ok', source: bad, sandbox: { sandbox_id: 'sbx_m05', state: 'held' }, proxy: { allowed: 1, refused: 4 } });

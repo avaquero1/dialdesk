@@ -72,6 +72,37 @@ export function setLook(o: Partial<Look>, opt: { how?: 'instant' | 'live'; save?
   if (opt.save !== false) queueSave(opt.how === 'live' ? 450 : 0);
 }
 
+/** Hue slider, live: a re-tint repaints the whole board, so at most one a frame and about 12 a second (speed rule). */
+const HUE_LIVE_MS = 80;
+let huePending: number | null = null;
+let hueRaf = 0;
+let hueLast = 0;
+
+function hueFrame(t: number) {
+  hueRaf = 0;
+  if (huePending == null) return;
+  if (t - hueLast < HUE_LIVE_MS) {
+    hueRaf = requestAnimationFrame(hueFrame);
+    return;
+  }
+  hueLast = t;
+  const h = huePending;
+  huePending = null;
+  setLook({ hue: h }, { how: 'live' });
+}
+
+export function setHueLive(h: number) {
+  huePending = h;
+  if (!hueRaf) hueRaf = requestAnimationFrame(hueFrame);
+}
+
+/** The slider let go: the last value now, and the live state ends. */
+export function endHueLive(h: number) {
+  huePending = null;
+  setLook({ hue: h }, { how: 'live' });
+  root.classList.remove('hue-live');
+}
+
 function queueSave(ms: number) {
   clearTimeout(saveT);
   saveT = window.setTimeout(() => {

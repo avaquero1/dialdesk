@@ -318,3 +318,10 @@
   from { transform: translate3d(0, 0, 0); }
   to   { transform: translate3d(-60px, -80px, 0); }
 }
+
+/* ---------- on a phone the light stands still: its three layers are larger than the screen, so they are painted once ---------- */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="ice"] .wallpaper-fx > .fx1,
+  [data-theme="ice"] .wallpaper-fx > .fx2,
+  [data-theme="ice"] .wallpaper-fx > .fx3 { animation: none; will-change: auto; }
+}

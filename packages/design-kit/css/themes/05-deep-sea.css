@@ -361,3 +361,12 @@
   [data-theme="deep-sea"] .wallpaper-fx > i::before,
   [data-theme="deep-sea"] .wallpaper-fx > i::after { animation: none; }
 }
+
+/* ---------- on a phone the water stands still: the shafts and the net are masked and larger than the screen, so they
+   are painted once. The look is the same still picture. ---------- */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="deep-sea"] .wallpaper-fx .fx1,
+  [data-theme="deep-sea"] .wallpaper-fx .fx2,
+  [data-theme="deep-sea"] .wallpaper-fx .fx2::before,
+  [data-theme="deep-sea"] .wallpaper-fx .fx2::after { animation: none; will-change: auto; }
+}

@@ -6,10 +6,10 @@
  * Not built yet: the menu's agent row. It shows as a greyed item, never fake results.
  */
 import type { Account, Widget, WidgetResult } from '@app/contracts';
-import { $, $$, clamp, css, cssNum, esc, mk, reduced, root, setHtml } from './dom.ts';
+import { $, $$, clamp, css, cssNum, esc, mk, reduced, setHtml } from './dom.ts';
 import { EL, S, folderHooks, indexAt } from './board.ts';
 import { IC, type IconName } from './icons.ts';
-import { L, THEMES, mqDark, resolveMode, setLook, themeHue } from './look.ts';
+import { L, THEMES, endHueLive, mqDark, resolveMode, setHueLive, setLook, themeHue } from './look.ts';
 import { cardHtml, fmtNum, fmtTime, tileName } from './widgets.ts';
 import { foldersFor, menuRows, sizesFor, type MenuAction } from './menu.ts';
 import { openHow, openSafety } from './safety.ts';
@@ -604,8 +604,8 @@ export function openLook() {
         else if (L.hue != null) setLook({ hue: null });
       });
       const rg = $<HTMLInputElement>('#lk-range', s);
-      rg.addEventListener('input', () => setLook({ hue: +rg.value }, { how: 'live' }));
-      rg.addEventListener('change', () => root.classList.remove('hue-live'));
+      rg.addEventListener('input', () => setHueLive(+rg.value));
+      rg.addEventListener('change', () => endHueLive(+rg.value));
       syncLook();
     },
   });

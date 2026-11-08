@@ -235,10 +235,6 @@
     --r-widget: 22px;
   }
 }
-@media (pointer: coarse), (max-width: 720px) {
-  [data-theme="stadium-night"] .wallpaper-fx > i,
-  [data-theme="stadium-night"] .wallpaper-fx::after { animation: none; }
-}
 
 /* ---------- this theme's own paint ---------- */
 
@@ -347,4 +343,15 @@
 @keyframes sn-sweep-b {
   0%   { transform: rotate(1.4deg); opacity: 1; }
   100% { transform: rotate(-1.8deg); opacity: .8; }
+}
+
+/* ---------- on a phone the wallpaper stands still (light and dark): one still picture, nothing to composite every frame ---------- */
+@media (pointer: coarse), (max-width: 720px) {
+  [data-theme="stadium-night"] .wallpaper-fx > i,
+  [data-theme="stadium-night"] .wallpaper-fx .fx2,
+  [data-theme="stadium-night"] .wallpaper-fx .fx3,
+  [data-theme="stadium-night"][data-mode="dark"] .wallpaper-fx .fx2,
+  [data-theme="stadium-night"][data-mode="dark"] .wallpaper-fx .fx3,
+  [data-theme="stadium-night"] .wallpaper-fx::after,
+  [data-theme="stadium-night"][data-mode="dark"] .wallpaper-fx::after { animation: none; will-change: auto; }
 }

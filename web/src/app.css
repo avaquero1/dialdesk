@@ -210,6 +210,7 @@ html[data-layout="phone"] button.chip--trust { font-size: 12px; }
 .w.is-running .w-shimmer { animation: shimmer 2600ms var(--ease-honey) infinite both; }
 .w.is-running > .w-in { animation: none; }
 
+@media (pointer: coarse), (max-width: 720px) { .w.is-running .w-shimmer { animation-iteration-count: 1; } }
 html[data-motion="reduced"] .w.is-running .w-shimmer { animation: none; }
 html[data-motion="reduced"] .wl-box.is-destroyed { animation: box-gone-fade 300ms ease 1 both; }
 @keyframes box-gone-fade { to { opacity: 0; } }
