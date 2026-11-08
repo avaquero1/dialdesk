@@ -54,6 +54,22 @@ aimed at the agent?" (extract, chat). It only adds reasons: it never lets throug
   source's facts, without the poison note (the page did nothing we know of).
 - `checker.model` names the model that answered, or `null` when layer one decided alone.
 
+**The reader's self-report is a nomination** (`guardExtract` with `reader_text`, `SELF_REPORT_CLAIM`). The reader may say
+"The page embeds instructions aimed at AI agents" with a quote. A cheap model says that about ordinary sentences now and
+then (A1.4.6), so the claim alone no longer poisons:
+
+- Layer one still scans the quote, and a match there is poison, with no model asked.
+- The model then judges the quote alone. Confirmed => `poison`: box killed, Blocked line, counted as a trick.
+- Not confirmed (the model says no `model_no`, gives no usable answer `no_answer`, the quote is empty `empty_quote`, or
+  isn't in the text the reader was given `not_on_page`, by `quoteOnPage`) => `block` with `{code: 'unchecked', where:
+  'self_report:<code>'}`. Nobody is accused: runner releases the box and uses nothing from that page, and the trace note
+  names the code (`unconfirmedReport`). It isn't in `blocked[]`, isn't a poison kill and isn't counted as a trick.
+- Every other fact on that page goes through both layers as always, and an order in one of them still poisons.
+
+Why it's safe: a model can only overrule the accusation, never the safety. A reader that read planted text publishes
+nothing from that page whatever the guard's model says. `checkPage` runs before all of this and decides alone. Without
+`reader_text`, and in `checkExtract`, the claim poisons as it always did.
+
 ```ts
 import { guardChatReply, guardExtract } from '@app/guard';
 const models = await clientFromEnv('runner', 'models');

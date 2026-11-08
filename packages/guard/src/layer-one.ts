@@ -17,7 +17,7 @@ export interface Item {
 }
 
 /** Codes that mean a source tried to give the agent orders: at the extract stage they poison. */
-const POISON_CODES = new Set<VerdictReasonCode>(['instruction', 'exfil']);
+export const POISON_CODES = new Set<VerdictReasonCode>(['instruction', 'exfil']);
 
 export function outcomeFor(stage: Stage, reasons: Reasons): Verdict['outcome'] {
   if (!reasons.length) return 'pass';
@@ -49,6 +49,13 @@ function scan(text: string, where: string, out: Reasons, checks: [VerdictReasonC
 
 export function extractItems(facts: ExtractInput): Item[] {
   return facts.map((f) => ({ id: f.fact_id, text: f.claim === f.quote ? f.claim : `${f.claim}\n${f.quote}` }));
+}
+
+/** The reader's fixed report that a page holds orders for an AI (READER_PROMPT's first fact). */
+export const SELF_REPORT_CLAIM = 'The page embeds instructions aimed at AI agents';
+
+export function isSelfReport(fact: Pick<Fact, 'claim'>): boolean {
+  return fact.claim.trim().replace(/[.!]+$/, '').toLowerCase() === SELF_REPORT_CLAIM.toLowerCase();
 }
 
 export function extractReasons(facts: ExtractInput): Reasons {

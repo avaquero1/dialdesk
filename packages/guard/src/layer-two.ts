@@ -17,7 +17,9 @@ import {
   chatReasons,
   extractItems,
   extractReasons,
+  isSelfReport,
   makeVerdict,
+  POISON_CODES,
   publishItems,
   publishReasons,
   type ExtractInput,
@@ -26,6 +28,7 @@ import {
   type Reasons,
   type Stage,
 } from './layer-one.ts';
+import { quoteOnPage } from './page.ts';
 
 /** The models client (`clientFromEnv('runner', 'models')` or `('agent', 'models')`). Only `MODELS.complete` is used. */
 export type ModelsCall = (e: typeof MODELS.complete, input: { body: CompleteBody }) => Promise<Completion>;
@@ -35,6 +38,16 @@ export interface GuardOptions {
   account_id: string | null;
   /** Fake mode only: which canned guard answer to give. */
   scenario?: FakeScenario;
+}
+
+/** Why a reader's self-report wasn't confirmed: `model_no`, `no_answer`, `empty_quote`, `not_on_page`. No page text. */
+export type UnconfirmedCode = 'model_no' | 'no_answer' | 'empty_quote' | 'not_on_page';
+const UNCONFIRMED = 'self_report:';
+
+/** The code when this verdict is an unconfirmed self-report, else null. */
+export function unconfirmedReport(v: Verdict): UnconfirmedCode | null {
+  const r = v.reasons.find((x) => x.where.startsWith(UNCONFIRMED));
+  return r ? (r.where.slice(UNCONFIRMED.length) as UnconfirmedCode) : null;
 }
 
 type Question = 'advice' | 'instructions';
@@ -149,9 +162,30 @@ async function layered(stage: Stage, layerOne: Reasons, items: Item[], opts: Gua
   return makeVerdict(stage, [...layerOne, ...two.reasons], two.model);
 }
 
-/** Step 3, both layers: orders aimed at the agent => poison. A failed model check => block (`unchecked`), never poison. */
-export async function guardExtract(facts: ExtractInput, opts: GuardOptions): Promise<Verdict> {
-  return layered('extract', extractReasons(facts), extractItems(facts), opts);
+/**
+ * Step 3, both layers: orders aimed at the agent => poison. A failed model check => block (`unchecked`), never poison.
+ *
+ * With `reader_text` (the text the reader was given), the reader's fixed self-report is a nomination, not a verdict. Its
+ * quote still goes through layer one, then the model judges the quote alone: confirmed => poison. Not confirmed => block
+ * with `self_report:<code>`: no accusation, and nothing from that page is used. A model can overrule the accusation,
+ * never the safety. Every other fact goes through both layers as always. Without `reader_text` the claim poisons in
+ * layer one.
+ */
+export async function guardExtract(facts: ExtractInput, opts: GuardOptions & { reader_text?: string }): Promise<Verdict> {
+  const reports = opts.reader_text === undefined ? [] : facts.filter(isSelfReport);
+  if (!reports.length) return layered('extract', extractReasons(facts), extractItems(facts), opts);
+  const others = facts.filter((f) => !isSelfReport(f));
+  const quotes = reports.map((f) => ({ ...f, claim: f.quote }));
+  const sure = extractReasons([...quotes, ...others]);
+  if (sure.length) return makeVerdict('extract', sure, null);
+  const onPage = quoteOnPage(opts.reader_text!);
+  const judged = quotes.filter((q) => onPage(q.quote));
+  const [rest, two] = await Promise.all([layered('extract', [], extractItems(others), opts), judged.length ? askModel('extract', extractItems(judged), opts) : null]);
+  if (rest.outcome === 'poison') return rest;
+  const orders = two?.reasons.filter((r) => POISON_CODES.has(r.code)) ?? [];
+  if (orders.length) return makeVerdict('extract', orders, two!.model);
+  const code: UnconfirmedCode = two ? (two.reasons.some((r) => r.code === 'unchecked') ? 'no_answer' : 'model_no') : quotes.some((q) => q.quote.trim()) ? 'not_on_page' : 'empty_quote';
+  return makeVerdict('extract', [{ code: 'unchecked', where: `${UNCONFIRMED}${code}` }], two?.model ?? null);
 }
 
 /** Step 6, both layers. */

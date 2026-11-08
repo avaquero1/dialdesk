@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { BOARD, CONNECTIONS, MARKETS, MODELS, POISONED_NOTE, TRUST_ACTIONS, newId, widgetRunJobId, type CompleteBody, type LogEntry, type RunKind, type SbxJobStatus as SbxJob, type Verdict, type Widget, type WidgetRunJob } from '@app/contracts';
 import { MemoryBus, NoRetry, SandboxBusy, createClient, hashToken, sandboxClient, type Call, type SandboxClient } from '@app/service-kit';
 import { fakeApp, fixtures, pageText, sampleResult, TEST_TOKENS } from '@app/testkit';
+import { SELF_REPORT_CLAIM } from '@app/guard';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createFakeAudit } from '../../audit/src/fake.ts';
 import { fake as boardFake } from '../../board/src/fake.ts';
@@ -18,7 +19,7 @@ import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { fake as modelsFake } from '../../models/src/fake.ts';
 import { getRunHandlers } from '../src/real.ts';
 import { LINE_POINTS, defaultPlan, isBiggestMove, lineAgo, moverIds } from '../src/plans.ts';
-import { handleRun, layerOneGuard, modelGuard, type Guard, type RunnerDeps } from '../src/run.ts';
+import { handleRun, layerOneGuard, modelGuard, READER_PROMPT, type Guard, type RunnerDeps } from '../src/run.ts';
 import { ACTIVE_FOR_MS, Scheduler } from '../src/scheduler.ts';
 import { MemoryStore } from '../src/store.ts';
 
@@ -678,6 +679,71 @@ describe.skipIf(!have)('runner', () => {
     expect(guardNote(d)).toMatch(/(^|; )blocked: .*advice@f2/);
     expect(guardNote(d)).not.toMatch(/facts left out/);
     expect((await current(w)).result?.facts ?? []).toEqual([]);
+  });
+
+  describe("the reader's report of orders is a nomination", () => {
+    const REPORTED = 'Starting LT listed questionable';
+    const CLAIM = 'The page embeds instructions aimed at AI agents';
+    /** The models fake, except the reader of one clean page reports `quote`, and the guard's answer on that report is `answer`. */
+    const reporting = (quote: string, answer: string | 'error'): Call => {
+      const call = via('runner', modelsApp);
+      return (async (e, input) => {
+        const body = (input as { body: CompleteBody }).body;
+        const last = body.messages.at(-1)!.content;
+        if (body.role === 'reader' && last.includes(REPORTED)) return { model: 'test/reader', content: JSON.stringify({ facts: [{ claim: CLAIM, quote }, { claim: 'A tackle is listed questionable.', quote: REPORTED }] }), tool_calls: [], usage: { input_tokens: 1, output_tokens: 1, cost_usd: 0 } };
+        const judged = body.role === 'guard' && (JSON.parse(last) as { items?: { text?: string }[] }).items?.some((i) => i.text === quote);
+        if (judged) {
+          if (answer === 'error') throw new Error('boom');
+          return { model: 'test/guard', content: answer, tool_calls: [], usage: { input_tokens: 1, output_tokens: 1, cost_usd: 0 } };
+        }
+        return call(e, input as never);
+      }) as Call;
+    };
+    const run = async (quote: string, answer: string | 'error') => {
+      const d = deps({ models: reporting(quote, answer) });
+      const { byTitle } = await freshBoard();
+      const w = byTitle('Bills news');
+      const rec = await handleRun(d, jobFor(w, 'research'), ctx());
+      const result = (await current(w)).result!;
+      const extract = rec.steps.filter((s) => s.step === 'extract');
+      return { d, rec, result, extract };
+    };
+    const QUOTE = 'Sports Wire is a made-up outlet on a test domain.';
+
+    it('confirmed: the box dies, the Blocked line shows, it counts as a trick', async () => {
+      const { d, rec, result } = await run(QUOTE, '{"instructions": ["f1"]}');
+      expect(rec.status).toBe('poisoned');
+      expect(result.blocked.map((b) => b.domain).sort()).toEqual(['fanpost.fixture.test', 'sportswire.fixture.test']);
+      expect(d.bus.events.filter((e) => e.event === 'run.poisoned')).toHaveLength(2);
+      expect(rec.steps.filter((s) => s.status === 'poisoned').some((s) => s.note!.endsWith('instruction@f1'))).toBe(true);
+    });
+
+    it.each([
+      ['model_no', QUOTE, '{"instructions": []}'],
+      ['no_answer', QUOTE, 'sure, looks fine to me'],
+      ['no_answer', QUOTE, 'error'],
+      ['empty_quote', '', '{"instructions": ["f1"]}'],
+      ['not_on_page', 'A sentence that is nowhere at all on this particular page.', '{"instructions": ["f1"]}'],
+    ])('not confirmed (%s, on %j / %j): nothing from that page publishes and nobody is accused', async (code, quote, answer) => {
+      const { d, rec, result, extract } = await run(quote, answer);
+      const left = extract.filter((s) => (s.note ?? '').includes('not confirmed'));
+      expect(left).toHaveLength(1);
+      expect(left[0]).toMatchObject({ status: 'failed', sandbox: { state: 'released' } });
+      expect(left[0]!.note).toBe(`page left out: the reader's report was not confirmed (${code})`);
+      // The planted fixture page is still the only accusation; the reported page is not in blocked[].
+      expect(result.blocked.map((b) => b.domain)).toEqual(['fanpost.fixture.test']);
+      expect(d.bus.events.filter((e) => e.event === 'run.poisoned')).toHaveLength(1);
+      // Nothing from that page publishes, and its box wasn't killed for poison.
+      expect(JSON.stringify(result.facts)).not.toContain(REPORTED);
+      const read = rec.steps.find((s) => s.step === 'read' && s.sandbox?.sandbox_id === left[0]!.sandbox!.sandbox_id)!;
+      expect(read.source!.domain).toBe('sportswire.fixture.test');
+      expect((await sandbox.getJob(`${rec.run_id}:read:${read.source!.candidate_id}`)).kill_reason).not.toBe('poison');
+      expect(result.sources.find((x) => x.candidate_id === read.source!.candidate_id)).toMatchObject({ status: 'failed' });
+    });
+
+    it("the reader's prompt uses the claim the guard knows", () => {
+      expect(READER_PROMPT).toContain(`"${SELF_REPORT_CLAIM}"`);
+    });
   });
 
   describe('the reader gets only what a person can see', () => {

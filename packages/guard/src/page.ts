@@ -86,3 +86,18 @@ export function pageReasons(text: string): Reasons {
 export function checkPage(text: string) {
   return makeVerdict('extract', pageReasons(text), null);
 }
+
+const squash = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+const words = (s: string) => s.toLowerCase().split(/[^a-z0-9']+/).filter((w) => w.length >= 3);
+
+/** A quote counts as on the page when it is there verbatim, or when 80% of its words (3+ letters, at least 2) are. */
+export function quoteOnPage(page: string): (quote: string) => boolean {
+  const sq = squash(page);
+  const have = new Set(words(page));
+  return (quote) => {
+    if (!quote.trim()) return false;
+    if (sq.includes(squash(quote))) return true;
+    const w = words(quote);
+    return w.length >= 2 && w.filter((x) => have.has(x)).length / w.length >= 0.8;
+  };
+}
