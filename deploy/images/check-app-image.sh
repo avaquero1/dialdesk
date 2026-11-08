@@ -41,3 +41,9 @@ for f in dry.txt dry-out.txt; do
   fi
 done
 echo "check-app-image: $n files, $(wc -l < "$work/values") values, none in either report: passed"
+
+# caddy starts the way compose runs it: no capabilities, no new privileges (the official binary's file capability makes
+# exec fail with EPERM there, so the image takes it off).
+docker build -q -f deploy/images/app.Dockerfile --target caddy -t vha/caddy:check . >/dev/null
+run vha/caddy:check caddy version >/dev/null || { echo "check-app-image: FAIL: caddy won't run with no capabilities" >&2; exit 1; }
+echo "check-app-image: caddy runs with no capabilities: passed"

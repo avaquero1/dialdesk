@@ -50,4 +50,7 @@ RUN --mount=type=cache,id=vha-npm,target=/root/.npm \
 FROM caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d AS caddy
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=web /out /srv/web
+# The official binary carries a file capability (cap_net_bind_service=ep). With cap_drop ALL the kernel refuses to exec
+# it (EPERM), and Docker's ip_unprivileged_port_start=0 lets it bind 443 with no capability, so take the capability off.
+RUN setcap -r /usr/bin/caddy
 RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
