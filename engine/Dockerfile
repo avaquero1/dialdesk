@@ -1,7 +1,7 @@
 # The compute sandbox image: the engine binary alone, static, on an empty filesystem.
 # A plan plus numbers on stdin, the result plus receipts on stdout. No shell, no network code.
 #
-#   make engine-image          # builds vha-engine-compute:<git hash> and :dev
+#   make engine-image          # builds vha-engine-compute:<worktree>-<git hash> (what make's tests run) and :dev (manual runs)
 #   make engine-image-check    # runs it with --network none and the sandbox limits
 #
 # Run it the way the sandbox manager does:

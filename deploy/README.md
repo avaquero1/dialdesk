@@ -11,7 +11,6 @@
 | `nftables/egress-*.nft`, `egress-refresh.sh`, `vha-egress-refresh.*` | control's egress mode (log-only or enforce) and the timer that refills each container's allow set from `egress-hosts.ts`. |
 | `sandbox-host/` | The sandbox machine in one script: `push.sh` (from a dev PC), `setup.sh`, `smoke.sh`, `run-containment.sh` (`make containment`). See its README. `scripts/deploy.sh sandbox` runs it for the deploy. |
 | `compose.control.yml` | control's containers, with their uids, networks and secret files. |
-| `compose.sandbox.yml` | Not used by any script: the sandbox machine runs the proxy and the manager under systemd (`sandbox-host/`). |
 | `prod-secrets.ts`, `s3-bucket.ts`, `egress-hosts.ts` | Run on control in the app image by `scripts/deploy.sh`: the secret files, the two buckets, the egress table. |
 | `scripts/deploy.sh` | Deploys control and the sandbox machine (below). `--dry-run` prints every step and changes nothing; `tests/deploy/deploy-script.test.ts` and `make deploy-dry-run` run it. |
 | `deploy.env.example` | control's settings, copied to `/etc/vha/deploy.env` on control. `deploy/deploy.env` is gitignored. |
@@ -71,6 +70,7 @@ buckets, the secrets, `db-init.sql` over TLS, `docker compose up --wait`, and th
   `egress-hosts.ts`, then deploy again with `--enforce-egress` (`--log-only-egress` goes back).
 - **The sandbox machine** (`deploy/sandbox-host`): with `VHA_SANDBOX_HOST=root@<it>` set, `push` does it first, and
   `deploy.sh sandbox` does it alone. The VPC must already be attached (`PROVISION.md`, step 4). It checks the VPC address
-  is on `SANDBOX_VPC_IF`, runs `setup.sh` with `--vpc-if`, `--control-vpc-ip` and `--vpc-subnet` (and `vha-nft-confirm`
-  from a new connection), sets `SANDBOX_MANAGER_ADDR` to `SANDBOX_VPC_IP:8200`, and copies the machine's runner token
+  is on `SANDBOX_VPC_IF`, runs `setup.sh` with `--vpc-if`, `--control-vpc-ip`, `--vpc-subnet` and `--manager-addr
+  SANDBOX_VPC_IP:8200` (and `vha-nft-confirm` from a new connection; a later run without `--manager-addr` keeps that
+  address), reads the manager's `/health` there, and copies the machine's runner token
   (`/etc/vha/runner-token`) to control as `SANDBOX_MANAGER_TOKEN_FILE`, which prod-secrets.ts gives to runner.

@@ -157,10 +157,15 @@ describe.skipIf(!on)('S3 on versitygw', () => {
       S3_BUCKET_HEADS: `vha-heads-${run}`,
       S3_SCREENSHOTS_CREDENTIALS: cred,
     };
-    expect(await ensureBuckets(env)).toEqual([
+    const made = await ensureBuckets(env);
+    // versitygw's answer to the lifecycle rule is printed, not assumed (Vultr's is checked by the first deploy).
+    process.stdout.write(`s3-test: screenshots expiry on versitygw: ${made[0]!.expiry}\n`);
+    expect(made.map(({ expiry: _, ...b }) => b)).toEqual([
       { role: 'screenshots', bucket: `vha-shots-${run}`, result: 'created', objectLock: null },
       { role: 'heads', bucket: `vha-heads-${run}`, result: 'created', objectLock: 'Enabled' },
     ]);
+    expect(made[0]!.expiry).toMatch(/^(after 2 days|MISSING: .*)$/);
+    expect(made[1]!.expiry).toBe('none');
     expect((await ensureBuckets(env)).map((r) => r.result)).toEqual(['exists', 'exists']);
     // A heads bucket made without lock (here: the plain one) can't be fixed afterwards.
     await expect(ensureBuckets({ ...env, S3_BUCKET_HEADS: plain.cfg.bucket })).rejects.toThrow(/without object lock/);

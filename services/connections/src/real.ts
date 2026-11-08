@@ -12,6 +12,7 @@ import {
   logEntry,
   NoRetry,
   now,
+  secretFile,
   type AccountData,
   type Bus,
   type Handlers,
@@ -27,7 +28,7 @@ import { openVault, readMasterKey, type Vault } from './vault.ts';
 /** connections' own config (CONNECTIONS_*), on top of the template's. */
 export const ConnectionsConfig = z.object({
   /** 32 random bytes, base64. Only this container mounts it. Dev: `make dev-secrets` writes deploy/.dev/connections-master.key. */
-  MASTER_KEY_FILE: z.string().default('/run/secrets/connections-master'),
+  MASTER_KEY_FILE: z.string().default(secretFile('connections-master')),
   /** Which Kalshi exchanges a key may be connected on. Public demo default: `demo` only, so no real key reaches the public link. */
   KALSHI_ENVS: z.string().default('demo'),
   /** How often shared connections are re-read through `account-refresh` jobs. */

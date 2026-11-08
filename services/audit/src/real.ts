@@ -1,5 +1,5 @@
 import { AUDIT } from '@app/contracts';
-import { HttpError, LogStreamReader, createLogger, now, type Handlers } from '@app/service-kit';
+import { HttpError, LogStreamReader, createLogger, now, secretFile, type Handlers } from '@app/service-kit';
 import { z } from 'zod';
 import { Consumer, DEFAULTS, type ConsumerOptions } from './consumer.ts';
 import { DirHeadStore, type HeadStore } from './heads.ts';
@@ -14,7 +14,7 @@ export const AuditConfig = z.object({
   DATABASE_URL: z.string().min(1, 'real mode needs AUDIT_DATABASE_URL'),
   VALKEY_URL: z.string().min(1, 'real mode needs AUDIT_VALKEY_URL'),
   /** The Ed25519 signing key (PKCS#8 PEM). `make dev-secrets` writes one into deploy/.dev/. */
-  SIGNING_KEY_FILE: z.string().min(1).default('/run/secrets/audit-signing-key'),
+  SIGNING_KEY_FILE: z.string().min(1).default(secretFile('audit-signing-key')),
   /** Write-once storage for the signed heads: a folder (dev, and the fallback if the bucket isn't up). */
   HEADS_DIR: z.string().min(1).default('/var/lib/audit/heads'),
   /** Object Storage for the heads (write-once). Set S3_BUCKET to use it instead of HEADS_DIR. */

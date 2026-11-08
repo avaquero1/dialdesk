@@ -100,6 +100,22 @@ describe('deploy/prod-secrets.ts', () => {
     expect(bad.printed).toMatch(/SANDBOX_MANAGER_TOKEN_FILE: .* is not a token/);
   });
 
+  it('the account deletes (D1.2.1): board, agent and connections may call accounts.missing and subscribe to account.deleted', () => {
+    const accounts = kv(join(out, 'accounts/env')).get('ACCOUNTS_CALLERS')!.split(',');
+    const acl = readFileSync(join(out, 'valkey/users.acl'), 'utf8').split('\n');
+    const rule = (s: string) => acl.find((l) => l.startsWith(`user ${valkeyUser(s as never)} on `))!;
+    for (const s of ['board', 'agent', 'connections']) {
+      const mine = kv(join(out, s, 'env'));
+      expect(mine.get(envKey(s, 'URL_ACCOUNTS')), s).toBe('http://accounts:8101');
+      expect(accounts).toContain(`${s}:${hashToken(mine.get(envKey(s, 'TOKEN_ACCOUNTS'))!)}`);
+      expect(rule(s), s).toMatch(/ &events\.account\.deleted\b.* \+subscribe\b/);
+      expect(first.printed).toMatch(new RegExp(`${s}/env .*${envKey(s, 'TOKEN_ACCOUNTS')} ${envKey(s, 'URL_ACCOUNTS')}`));
+      expect(first.printed).toMatch(new RegExp(`valkey channels .*; ${s} (pub\\+)?sub [^;]*events\\.account\\.deleted`));
+    }
+    // accounts publishes it.
+    expect(rule('accounts')).toMatch(/&events\.account\.deleted\b.* \+publish\b/);
+  });
+
   it('DB URLs use TLS and the passwords db-init gets; Valkey URLs match the ACL', () => {
     const pg = kv(join(out, 'postgres/env'));
     for (const s of DATA_SERVICES) {

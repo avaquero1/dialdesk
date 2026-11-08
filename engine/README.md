@@ -37,13 +37,14 @@ The git hash comes from `git rev-parse` at build time, or from `ENGINE_GIT_HASH`
 About 450 KB. It has no shell, no libc and no network code, and it runs with no network:
 
 ```sh
-make engine-image          # vha-engine-compute:<git hash> and :dev; the git hash comes in as a build arg
+make engine-image          # vha-engine-compute:<worktree>-<git hash> (this worktree's own tag) and :dev for manual runs
 make engine-image-check    # runs it with the flags below and checks the output against the native build
 docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
   --pids-limit 8 --memory 64m --memory-swap 64m --cpus 0.5 vha-engine-compute:dev < input.json
 ```
 
-The base image is pinned by digest. The sandbox manager should run the image by its id or digest, never by tag.
+`make` builds and tests use the worktree's own tag (`SANDBOX_COMPUTE_IMAGE` overrides it), never `:dev`, so parallel
+worktrees never run each other's engine. The git hash comes in as a build arg. The base image is pinned by digest. The sandbox manager should run the image by its id or digest, never by tag.
 
 ## Tests
 

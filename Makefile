@@ -52,7 +52,8 @@ web:
 	npx tsx web/build.ts
 
 # The web app in a real browser (system Chromium) on its own local stack (web/dev/stack.sh: Compose project vha-web,
-# real edge, accounts and board, the rest as fakes). Not part of `make check`: it needs Docker and `make dev-secrets`.
+# real edge, accounts, board, agent and audit; the agent runs on the models fake, so no model is called; runner,
+# markets, connections and models are fakes). Not part of `make check`: it needs Docker and `make dev-secrets`.
 web-e2e: web
 	web/dev/stack.sh up
 	npx vitest run --project web; s=$$?; web/dev/stack.sh down; exit $$s

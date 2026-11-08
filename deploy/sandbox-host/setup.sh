@@ -4,6 +4,7 @@
 #
 #   deploy/sandbox-host/setup.sh --ssh-from <admin address> [--rollback-seconds 300] [--with-tests] [--no-firewall]
 #                                [--vpc-if <if> --control-vpc-ip <ip> --vpc-subnet <cidr>]   (the deploy, once the VPC is on)
+#                                [--manager-addr <ip:port>]   where sandbox-manager listens (the deploy: the VPC address:8200)
 #
 # In this order (the firewall is last, with a timed rollback, so a mistake cannot lock SSH out):
 #   1  checks: root, Docker, the runsc runtime
@@ -12,7 +13,8 @@
 #   4  sandbox-manager and egress-proxy, built here in a pinned Rust container, installed in /usr/local/lib/vha
 #   5  the Docker network vha-sbx (bridge vha-sbx, 172.30.78.0/24, no container-to-container traffic)
 #   6  systemd: vha-egress-proxy (as vha-egress, on 172.30.78.1:8201) and vha-sandbox-manager (as vha-sandbox,
-#      SANDBOX_BACKEND=gvisor, images by id, API on 127.0.0.1:8200), plus a caller token for runner in /etc/vha
+#      SANDBOX_BACKEND=gvisor, images by id, API on --manager-addr), plus a caller token for runner in /etc/vha.
+#      Without --manager-addr, the address already in /etc/vha/sandbox-manager.env is kept (127.0.0.1:8200 the first time)
 #   7  with --with-tests: Node (pinned tarball) in /opt/vha/node and `npm ci` here, for `make containment`
 #   8  nftables (deploy/nftables/sandbox.nft, in /etc/vha/nft) loaded live and ufw turned off, the old tables kept for the rollback, which fires after
 #      --rollback-seconds unless `vha-nft-confirm` is run from a NEW ssh connection.
@@ -21,12 +23,13 @@ set -euo pipefail
 
 SSH_FROM=""; ROLLBACK=300; WITH_TESTS=0; FIREWALL=1
 # Until the VPC is attached: no such interface, a documentation address (RFC 5737), and 10/8 (already blocked).
-VPC_IF=none; CONTROL_VPC_IP=192.0.2.1; VPC_SUBNET=10.0.0.0/8
+VPC_IF=none; CONTROL_VPC_IP=192.0.2.1; VPC_SUBNET=10.0.0.0/8; MANAGER_ADDR=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --ssh-from) SSH_FROM=$2; shift 2;; --rollback-seconds) ROLLBACK=$2; shift 2;;
     --with-tests) WITH_TESTS=1; shift;; --no-firewall) FIREWALL=0; shift;;
     --vpc-if) VPC_IF=$2; shift 2;; --control-vpc-ip) CONTROL_VPC_IP=$2; shift 2;; --vpc-subnet) VPC_SUBNET=$2; shift 2;;
+    --manager-addr) MANAGER_ADDR=$2; shift 2;;
     *) echo "unknown option $1" >&2; exit 2;;
   esac
 done
@@ -90,6 +93,12 @@ docker network inspect "$NET" >/dev/null 2>&1 || docker network create --subnet 
 note "$(docker network inspect "$NET" --format '{{.Name}} {{(index .IPAM.Config 0).Subnet}} icc={{index .Options "com.docker.network.bridge.enable_icc"}}')"
 
 step "6 services"
+# The manager's address: --manager-addr, else the one this file already has (a re-run keeps the deploy's VPC address).
+if [[ -z $MANAGER_ADDR && -f $ETC/sandbox-manager.env ]]; then
+  MANAGER_ADDR=$(sed -n 's/^SANDBOX_MANAGER_ADDR=//p' "$ETC/sandbox-manager.env")
+fi
+MANAGER_ADDR=${MANAGER_ADDR:-127.0.0.1:8200}
+[[ $MANAGER_ADDR =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}:[0-9]{1,5}$ ]] || { echo "--manager-addr must look like 10.1.96.4:8200, not $MANAGER_ADDR" >&2; exit 2; }
 if [[ ! -f $ETC/runner-token ]]; then
   ( umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$ETC/runner-token" )
 fi
@@ -98,7 +107,7 @@ TOKEN_SHA=$(tr -d '\n' < "$ETC/runner-token" | sha256sum | cut -d' ' -f1)
 # Written by deploy/sandbox-host/setup.sh. The caller token itself is in $ETC/runner-token (root only); runner gets a copy.
 SANDBOX_BACKEND=gvisor
 SANDBOX_CHROMIUM_SANDBOX=on
-SANDBOX_MANAGER_ADDR=127.0.0.1:8200
+SANDBOX_MANAGER_ADDR=$MANAGER_ADDR
 SANDBOX_MANAGER_CALLERS=runner:$TOKEN_SHA
 SANDBOX_NETWORK=$NET
 SANDBOX_PROXY_URL=http://$GW:$PROXY_PORT
@@ -162,8 +171,8 @@ systemctl enable --quiet vha-egress-proxy.service vha-sandbox-manager.service
 systemctl restart vha-egress-proxy.service
 for _ in $(seq 50); do [[ -S /run/vha-egress/control.sock ]] && break; sleep 0.1; done
 systemctl restart vha-sandbox-manager.service
-for _ in $(seq 100); do curl -fsS http://127.0.0.1:8200/health >/dev/null 2>&1 && break; sleep 0.2; done
-note "proxy $(systemctl is-active vha-egress-proxy), manager $(systemctl is-active vha-sandbox-manager): $(curl -fsS http://127.0.0.1:8200/health || echo 'no /health')"
+for _ in $(seq 100); do curl -fsS "http://$MANAGER_ADDR/health" >/dev/null 2>&1 && break; sleep 0.2; done
+note "proxy $(systemctl is-active vha-egress-proxy), manager $(systemctl is-active vha-sandbox-manager) on $MANAGER_ADDR: $(curl -fsS "http://$MANAGER_ADDR/health" || echo 'no /health')"
 note "control socket $(stat -c '%U:%G %a' /run/vha-egress/control.sock)"
 
 if (( WITH_TESTS )); then

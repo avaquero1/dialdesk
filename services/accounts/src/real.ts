@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import postgres from 'postgres';
 import { z } from 'zod';
 import { ACCOUNTS, DEFAULT_LOOK, Look, TRUST_ACTIONS as A, newId, type Account } from '@app/contracts';
-import { HttpError, MemoryBus, busFromConfig, createLogger, logEntry, now, type Bus, type Handlers, type Logger } from '@app/service-kit';
+import { HttpError, MemoryBus, busFromConfig, createLogger, logEntry, now, secretFile, type Bus, type Handlers, type Logger } from '@app/service-kit';
 import { DEFAULT_COST, dummyHash, hashPassword, verifyPassword, type Argon2Cost } from './password.ts';
 import { loadSigningKey, signSession, type SigningKey } from './session.ts';
 import { memoryStore, pgStore, type AccountRow, type Store } from './store.ts';
@@ -178,8 +178,9 @@ export function scheduleGuestSweep(store: Store, log: Logger, bus: Bus, hourUtc 
   return { tick, stop: () => clearInterval(timer) };
 }
 
-const RealConfig = z.object({
-  SESSION_KEY_FILE: z.string({ error: 'set ACCOUNTS_SESSION_KEY_FILE to the Ed25519 private key (make dev-secrets writes one)' }).min(1),
+/** accounts' own config (ACCOUNTS_*). The session key: /run/secrets/session-key, or the local file `make dev-secrets` writes. */
+export const RealConfig = z.object({
+  SESSION_KEY_FILE: z.string().min(1).default(secretFile('session-key')),
   DATABASE_URL: z.string().optional(),
   VALKEY_URL: z.string().optional(),
   GUEST_SWEEP_HOUR_UTC: z.coerce.number().int().min(0).max(23).default(8),

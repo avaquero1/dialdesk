@@ -5,7 +5,7 @@
 set -euo pipefail
 URL=${1:-https://example.com/}
 HOST_=$(echo "$URL" | sed -E 's|^https://([^/:]+).*|\1|')
-T=$(tr -d '\n' < /etc/vha/runner-token); API=http://127.0.0.1:8200; J=smoke-$(date +%s)
+T=$(tr -d '\n' < /etc/vha/runner-token); API=http://$(sed -n 's/^SANDBOX_MANAGER_ADDR=//p' /etc/vha/sandbox-manager.env); J=smoke-$(date +%s)
 call() { curl -fsS -H "authorization: Bearer $T" -H 'content-type: application/json' "$@"; }
 call -X POST "$API/jobs" -d "{\"job_id\":\"$J\",\"run_id\":\"run_smoke\",\"widget_id\":\"wid_smoke\",\"kind\":\"browse\",\"browse\":{\"urls\":[\"$URL\",\"https://169.254.169.254/latest/meta-data/\",\"https://evil.example/x\"],\"allowlist\":[\"$HOST_\"],\"screenshot\":false,\"hold\":false}}" >/dev/null
 for _ in $(seq 120); do

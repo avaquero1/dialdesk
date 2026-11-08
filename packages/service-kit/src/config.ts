@@ -28,6 +28,14 @@ export const BaseConfig = z.object({
 });
 export type BaseConfig = z.infer<typeof BaseConfig>;
 
+/** Where a container's secret files are mounted (deploy/compose.control.yml): every key file a service reads defaults to one here. */
+export const SECRETS_DIR = '/run/secrets';
+/**
+ * A secret file's path inside its container: secretFile('brave-search') is /run/secrets/brave-search. Dev sets local
+ * paths in .env (scripts/dev-secrets.ts). tests/deploy/key-files.test.ts checks each default against compose and prod-secrets.ts.
+ */
+export const secretFile = (name: string) => `${SECRETS_DIR}/${name}`;
+
 export function envKey(service: string, name: string): string {
   return `${service.toUpperCase().replace(/-/g, '_')}_${name}`;
 }

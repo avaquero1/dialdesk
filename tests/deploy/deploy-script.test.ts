@@ -213,23 +213,31 @@ describe('deploy.sh push and sandbox --dry-run (the dev PC side)', () => {
     expect(r.out).not.toContain('sandbox-host/push.sh');
   });
 
-  it('sandbox: checks the VPC, runs setup.sh with the VPC flags, moves the manager to the VPC address, copies the token', () => {
+  it('sandbox: checks the VPC, runs setup.sh with the VPC flags and the manager on the VPC address, reads its health there, copies the token', () => {
     const r = deploy(['sandbox', '--dry-run', '--env-file', '@env'], example, machines);
     expect(r.err).toBe('');
     expect(r.code).toBe(0);
     const want = [
       /ssh root@sandbox\.example\.invalid .*ip\\? -4\\? -o\\? addr\\? show\\? dev\\? enp8s0.*10\.1\.96\.4/,
-      /deploy\/sandbox-host\/push\.sh --ssh-from 203\.0\.113\.10 --vpc-if enp8s0 --control-vpc-ip 10\.1\.96\.3 --vpc-subnet 10\.1\.96\.0\/20$/m,
+      /deploy\/sandbox-host\/push\.sh --ssh-from 203\.0\.113\.10 --vpc-if enp8s0 --control-vpc-ip 10\.1\.96\.3 --vpc-subnet 10\.1\.96\.0\/20 --manager-addr 10\.1\.96\.4:8200$/m,
       /ssh root@sandbox\.example\.invalid vha-nft-confirm/,
-      /SANDBOX_MANAGER_ADDR=10\.1\.96\.4:8200/,
-      /systemctl\\? restart\\? vha-sandbox-manager/,
+      /ssh root@sandbox\.example\.invalid .*curl\\? -fsS\\? http:\/\/10\.1\.96\.4:8200\/health/,
       /ssh root@sandbox\.example\.invalid cat \/etc\/vha\/runner-token \| ssh root@control\.example\.invalid .*\/etc\/vha\/inputs\/sandbox-runner-token/,
     ];
     for (const re of want) expect(r.out, String(re)).toMatch(re);
-    // In order: VPC, setup, confirm, manager address, token.
+    // In order: VPC, setup, confirm, manager health, token.
     const at = want.map((re) => r.out.search(re));
     expect([...at].sort((x, y) => x - y)).toEqual(at);
     expect(r.calls).toBe('');
+  });
+
+  it("setup.sh takes --manager-addr and keeps the file's address on a run without it (never back to 127.0.0.1)", () => {
+    const setup = readFileSync(join(root, 'deploy/sandbox-host/setup.sh'), 'utf8');
+    expect(setup).toMatch(/--manager-addr\) MANAGER_ADDR=\$2/);
+    expect(setup).toMatch(/^SANDBOX_MANAGER_ADDR=\$MANAGER_ADDR$/m);
+    expect(setup).not.toMatch(/^SANDBOX_MANAGER_ADDR=127/m);
+    expect(setup).toMatch(/MANAGER_ADDR=\$\(sed -n 's\/\^SANDBOX_MANAGER_ADDR=\/\/p' "\$ETC\/sandbox-manager.env"\)/);
+    expect(setup).toMatch(/curl -fsS "http:\/\/\$MANAGER_ADDR\/health"/);
   });
 
   it('a dry run of the sandbox part needs a local --env-file; push needs the machines', () => {

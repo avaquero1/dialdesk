@@ -10,6 +10,10 @@
 #   owned by that container's own uid with mode 0400. No secret is in `environment:` (so not in `docker inspect`).
 #   A service's tokens, caller hashes, database and Valkey URLs are its own env file, /run/secrets/env, read by
 #   `node --env-file`.
+# - A key file's target is the name its service reads by default (secretFile in service-kit: accounts session-key,
+#   board and audit s3, markets brave-search, connections connections-master, models vultr-inference, audit
+#   audit-signing-key), so no *_FILE variable is set here. tests/deploy/key-files.test.ts checks this file, those
+#   defaults and what deploy/prod-secrets.ts writes against each other.
 # - Networks: `apps` is internal (no route out). Only the containers that must reach something outside are also on
 #   `egress`, each at a fixed address, so the host firewall (deploy/nftables/control.nft) can allow per container.
 #   edge and valkey are on `apps` only.
@@ -85,7 +89,6 @@ services:
     environment:
       NODE_ENV: production
       ACCOUNTS_HOST: 0.0.0.0
-      ACCOUNTS_SESSION_KEY_FILE: /run/secrets/session-key
     secrets: [{ source: accounts-env, target: env }, { source: session-key, target: session-key }]
     networks:
       apps: {}
@@ -103,7 +106,6 @@ services:
       BOARD_S3_ENDPOINT: ${S3_ENDPOINT:-}
       BOARD_S3_REGION: ${S3_REGION:-us-east-1}
       BOARD_S3_BUCKET: ${S3_BUCKET_SCREENSHOTS:-}
-      BOARD_S3_CREDENTIALS_FILE: /run/secrets/s3
       BOARD_SCREENSHOT_DIR: /var/lib/board/screenshots
     secrets: [{ source: board-env, target: env }, { source: board-s3, target: s3 }]
     volumes: ["board_screenshots:/var/lib/board/screenshots"]
@@ -144,8 +146,7 @@ services:
     environment:
       NODE_ENV: production
       MARKETS_HOST: 0.0.0.0
-      # An empty file = no Brave key: markets skips Brave with one log line.
-      MARKETS_BRAVE_KEY_FILE: /run/secrets/brave-search
+      # /run/secrets/brave-search: an empty file = no Brave key, and markets skips Brave with one log line.
     secrets: [{ source: markets-env, target: env }, { source: brave-search, target: brave-search }]
     networks:
       apps: {}
@@ -159,7 +160,6 @@ services:
     environment:
       NODE_ENV: production
       CONNECTIONS_HOST: 0.0.0.0
-      CONNECTIONS_MASTER_KEY_FILE: /run/secrets/connections-master
       # Demo exchange only on the public link (architecture, "Public demo").
       CONNECTIONS_KALSHI_ENVS: ${CONNECTIONS_KALSHI_ENVS:-demo}
     secrets: [{ source: connections-env, target: env }, { source: connections-master, target: connections-master }]
@@ -175,7 +175,6 @@ services:
     environment:
       NODE_ENV: production
       MODELS_HOST: 0.0.0.0
-      MODELS_VULTR_KEY_FILE: /run/secrets/vultr-inference
     secrets: [{ source: models-env, target: env }, { source: vultr-inference, target: vultr-inference }]
     networks:
       apps: {}
@@ -189,12 +188,10 @@ services:
     environment:
       NODE_ENV: production
       AUDIT_HOST: 0.0.0.0
-      AUDIT_SIGNING_KEY_FILE: /run/secrets/audit-signing-key
       # Object Storage (write-once) when AUDIT_S3_BUCKET is set; else the write-once folder below (the fallback).
       AUDIT_S3_ENDPOINT: ${S3_ENDPOINT:-}
       AUDIT_S3_REGION: ${S3_REGION:-us-east-1}
       AUDIT_S3_BUCKET: ${S3_BUCKET_HEADS:-}
-      AUDIT_S3_CREDENTIALS_FILE: /run/secrets/s3
       AUDIT_S3_LOCK_DAYS: ${S3_HEADS_LOCK_DAYS:-0}
       AUDIT_HEADS_DIR: /var/lib/audit/heads
     secrets: [{ source: audit-env, target: env }, { source: audit-signing-key, target: audit-signing-key }, { source: audit-s3, target: s3 }]

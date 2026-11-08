@@ -1,8 +1,6 @@
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { z } from 'zod';
 import { MARKETS, SOURCE_CATALOG, type Market, type SourceRow } from '@app/contracts';
-import { HttpError, createLogger, type Handlers, type Logger } from '@app/service-kit';
+import { HttpError, createLogger, secretFile, type Handlers, type Logger } from '@app/service-kit';
 import { braveClient, type BraveClient } from './brave.ts';
 import { TtlCache } from './cache.ts';
 import { parseExtraDomains, toCandidates, type Link } from './candidates.ts';
@@ -34,7 +32,7 @@ export const MarketsConfig = z.object({
   FEED_TTL_S: z.coerce.number().int().min(60).max(3600).default(600),
   SEARCH_TTL_S: z.coerce.number().int().min(300).max(86400).default(1800),
   FEED_MAX_AGE_H: z.coerce.number().int().min(6).max(720).default(96),
-  BRAVE_KEY_FILE: z.string().default(join(homedir(), '.config/siren/secrets/brave-search')),
+  BRAVE_KEY_FILE: z.string().default(secretFile('brave-search')),
   SOURCE_ENV: z.enum(['prod', 'fixture']).default('prod'),
   DATABASE_URL: z.string().optional(),
 });

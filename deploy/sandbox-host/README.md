@@ -23,7 +23,7 @@ The machine's address, the key and the admin address stay out of the repo. Run i
 | sandbox-manager and egress-proxy, static binaries built in the pinned Rust container (`Dockerfile.bins`) | `/usr/local/lib/vha/` |
 | The sandbox network | Docker network `vha-sbx`: bridge `vha-sbx`, 172.30.78.0/24, container-to-container traffic off |
 | The egress proxy | `vha-egress-proxy.service`, as user `vha-egress`, on 172.30.78.1:8201. Control socket `/run/vha-egress/control.sock`, mode 0660, group `vha-ctl` |
-| sandbox-manager | `vha-sandbox-manager.service`, as user `vha-sandbox` (groups `docker` and `vha-ctl`), `SANDBOX_BACKEND=gvisor`, Chromium's own sandbox on, API on 127.0.0.1:8200 |
+| sandbox-manager | `vha-sandbox-manager.service`, as user `vha-sandbox` (groups `docker` and `vha-ctl`), `SANDBOX_BACKEND=gvisor`, Chromium's own sandbox on, API on `--manager-addr` (127.0.0.1:8200 until the deploy gives the VPC address) |
 | The caller token for runner | `/etc/vha/runner-token` (root only); its sha256 is in `SANDBOX_MANAGER_CALLERS` |
 | The firewall | `deploy/nftables/sandbox.nft` in `/etc/vha/nft/`, with this machine's values in `/etc/vha/nft/sandbox-vars.nft`; `vha-nft.service` loads it at boot |
 | Test tools (`--with-tests`) | Node (pinned tarball, checked by sha256) in `/opt/vha/node`, and `npm ci` in the copy |
@@ -68,8 +68,6 @@ and adds the firewall's drop counters to `containment-out/run.log`.
 
 - The VPC: until it is attached, the manager listens on 127.0.0.1:8200 and the firewall's VPC values are placeholders
   (`VPC_IF=none`). The deploy runs `setup.sh` again with `--vpc-if <if> --control-vpc-ip <control's VPC address>
-  --vpc-subnet <cidr>` and sets `SANDBOX_MANAGER_ADDR` in `/etc/vha/sandbox-manager.env` to this machine's VPC address.
+  --vpc-subnet <cidr> --manager-addr <this machine's VPC address>:8200`. A later run without `--manager-addr` keeps the
+  address already in `/etc/vha/sandbox-manager.env`; `smoke.sh` reads it from there.
 - runner on the control VM needs `/etc/vha/runner-token` as its sandbox-manager token.
-- `deploy/compose.sandbox.yml` and `deploy/images/sandbox-host.Dockerfile` (the paused deploy WIP) run the same two
-  binaries in host-network containers that share uid 10002. That is not what was tested here: here the proxy and the
-  manager are two users, and only the proxy's user may connect out. The deploy uses one of the two ways, not both.

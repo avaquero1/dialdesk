@@ -1,6 +1,6 @@
 /**
- * Writes the production secret files that deploy/compose.control.yml mounts (and sandbox-manager's caller list for
- * compose.sandbox.yml). The production twin of scripts/dev-secrets.ts: the same tokens and caller graph (callGraph,
+ * Writes the production secret files that deploy/compose.control.yml mounts (and sandbox-manager's caller list, a
+ * check against the sandbox machine's own). The production twin of scripts/dev-secrets.ts: the same tokens and caller graph (callGraph,
  * valkeyAclRule), but one folder per container under the output folder, each file owned by that container's uid with
  * mode 0400 and each folder root-only (0700).
  *
@@ -239,6 +239,12 @@ export function run(argv: string[], env: Env, print: (s: string) => void): numbe
         const what = f.names ? f.names.join(' ') : `${Buffer.byteLength(f.body)} bytes`;
         return `  ${f.mode.toString(8).padStart(4, '0')} ${`${f.uid}:${f.gid}`.padEnd(11)} ${f.path.padEnd(24)} ${what}${f.note ? `  [${f.note}]` : ''}`;
       }),
+      `  valkey channels (users.acl): ${SERVICES.map((s) => {
+        const rule = valkeyAclRule(s);
+        const ch = [...rule.matchAll(/&(\S+)/g)].map((m) => m[1]).join(',');
+        const how = [rule.includes('+publish') && 'pub', /\+p?subscribe/.test(rule) && 'sub'].filter(Boolean).join('+');
+        return ch ? `${s} ${how} ${ch}` : '';
+      }).filter(Boolean).join('; ')}`,
       `  sandbox-manager/env goes to the VX1 (deploy.sh). Fingerprint of runner's caller hash: ${createHash('sha256').update(callers['sandbox-manager']!.join(',')).digest('hex').slice(0, 12)}`,
     ].join('\n');
     const values = [...state.values(), sessionPem, auditPem, master, boardS3.body, auditS3.body, inference.body, brave.body]

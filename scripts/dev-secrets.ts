@@ -2,8 +2,12 @@
  * Writes the local dev secrets: `.env` (every service's tokens, caller hashes, database and Valkey users),
  * `deploy/.dev/valkey-users.acl`, the session signing key `deploy/.dev/session-ed25519.pem` (accounts reads it;
  * edge gets only the public key), audit's head signing key `deploy/.dev/audit-signing-key.pem` and connections'
- * master key `deploy/.dev/connections-master.key`. All are gitignored. Run once: `make dev-secrets` (it refuses to
- * overwrite unless you pass --force). `--example` prints `.env.example` instead (names only, no values).
+ * master key `deploy/.dev/connections-master.key`. All are gitignored. Every *_FILE variable gets a local path here
+ * (production reads /run/secrets/<name>, the services' defaults). The two keys handed in, Vultr Inference's and Brave's,
+ * point at `deploy/.dev/vultr-inference` and `deploy/.dev/brave-search` (absent = no key), or at the path in
+ * MODELS_VULTR_KEY_FILE / MARKETS_BRAVE_KEY_FILE when you run this with one set. Run once: `make dev-secrets` (it refuses to
+ * overwrite unless you pass --force). `--example` prints `.env.example` instead (names only, no values). `--out <dir>`
+ * writes `<dir>/.env` and `<dir>/deploy/.dev/` instead of the repo's (tests/deploy/key-files.test.ts).
  */
 import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -11,7 +15,8 @@ import { join } from 'node:path';
 import { DATA_SERVICES, PORTS, SERVICES, callGraph, valkeyAclRule, valkeyUser } from '@app/contracts';
 import { envKey, hashToken } from '@app/service-kit';
 
-const root = join(import.meta.dirname, '..');
+const outAt = process.argv.indexOf('--out');
+const root = outAt > 0 ? process.argv[outAt + 1]! : join(import.meta.dirname, '..');
 const example = process.argv.includes('--example');
 const force = process.argv.includes('--force');
 const secret = () => (example ? '' : randomBytes(24).toString('base64url'));
@@ -52,8 +57,9 @@ for (const s of SERVICES) {
 }
 
 lines.push('', '# --- models: Vultr Serverless Inference. The key lives in its own file (one line, mode 600), never in .env.');
-lines.push('# Blank = the default: key file /run/secrets/vultr-inference, caps $5/day global, $0.25 and 200000 tokens per account, 30 calls/min.');
-put('MODELS_VULTR_KEY_FILE', example ? '' : (process.env.MODELS_VULTR_KEY_FILE ?? ''));
+lines.push('# The key file: deploy/.dev/vultr-inference unless you set another (absent = no key: every real model call fails).');
+lines.push('# Blank = the default: caps $5/day global, $0.25 and 200000 tokens per account, 30 calls/min.');
+put('MODELS_VULTR_KEY_FILE', example ? '' : (process.env.MODELS_VULTR_KEY_FILE || join(root, 'deploy/.dev/vultr-inference')));
 for (const k of ['DAILY_CAP_USD', 'ACCOUNT_DAILY_USD', 'ACCOUNT_DAILY_TOKENS', 'ACCOUNT_RPM', 'KILL', 'KEY_FINGERPRINTS']) put(envKey('models', k), '');
 
 lines.push(
@@ -66,8 +72,9 @@ lines.push(
   '# MARKETS_SEARCH_TTL_S=1800     (one Brave search per game per 30 min, shared by every follower)',
   '# MARKETS_FEED_MAX_AGE_H=96',
   '# MARKETS_SOURCE_ENV=prod       (fixture: read the fixture rows of the source catalog instead)',
-  '# MARKETS_BRAVE_KEY_FILE=      (an absolute path; the default is ~/.config/siren/secrets/brave-search)',
+  '# The Brave key file: deploy/.dev/brave-search unless you set another (absent or empty = markets skips Brave).',
 );
+put('MARKETS_BRAVE_KEY_FILE', example ? '' : (process.env.MARKETS_BRAVE_KEY_FILE || join(root, 'deploy/.dev/brave-search')));
 
 lines.push('', '# --- sessions: Ed25519. The private key file is accounts\' only; edge gets the public key (comma list during a rotation)');
 const sessionKeyPath = join(root, 'deploy/.dev/session-ed25519.pem');
@@ -79,7 +86,7 @@ lines.push(`# kid ${example ? '<kid>' : createHash('sha256').update(Buffer.from(
 put('EDGE_ALLOWED_ORIGINS', 'http://localhost:5173,http://127.0.0.1:8080,http://localhost:8080');
 
 lines.push('', '# --- audit: its Ed25519 signing key (a file only audit reads) and the write-once folder for signed heads (dev).');
-lines.push('# Blank = the default: /run/secrets/audit-signing-key and /var/lib/audit/heads (Object Storage replaces the folder in Phase 3).');
+lines.push('# Production: /run/secrets/audit-signing-key and Object Storage (AUDIT_S3_*); the folder is the fallback.');
 const auditKeyPath = join(root, 'deploy/.dev/audit-signing-key.pem');
 put(envKey('audit', 'SIGNING_KEY_FILE'), example ? '' : auditKeyPath);
 put(envKey('audit', 'HEADS_DIR'), example ? '' : join(root, 'deploy/.dev/audit-heads'));
@@ -103,6 +110,7 @@ if (example) {
     console.error('.env exists; pass --force to replace it (every token changes).');
     process.exit(1);
   }
+  mkdirSync(root, { recursive: true });
   writeFileSync(envPath, lines.join('\n'), { mode: 0o600 });
   mkdirSync(join(root, 'deploy/.dev'), { recursive: true });
   const aclPath = join(root, 'deploy/.dev/valkey-users.acl');

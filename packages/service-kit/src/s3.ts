@@ -9,6 +9,7 @@
  */
 import { createHash, createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { secretFile } from './config.ts';
 
 export type S3Config = {
   /** e.g. https://ewr1.vultrobjects.com */
@@ -210,7 +211,8 @@ export function s3FromConfig(cfg: Record<string, unknown>): S3Client | null {
   const bucket = typeof cfg.S3_BUCKET === 'string' ? cfg.S3_BUCKET : '';
   if (!bucket) return null;
   const endpoint = String(cfg.S3_ENDPOINT ?? '');
-  const credFile = String(cfg.S3_CREDENTIALS_FILE ?? '');
-  if (!endpoint || !credFile) throw new Error('s3: S3_BUCKET is set, so S3_ENDPOINT and S3_CREDENTIALS_FILE are needed');
+  // The key pair's file: <SVC>_S3_CREDENTIALS_FILE, default /run/secrets/s3 (compose.control.yml mounts it there).
+  const credFile = String(cfg.S3_CREDENTIALS_FILE || secretFile('s3'));
+  if (!endpoint) throw new Error('s3: S3_BUCKET is set, so S3_ENDPOINT is needed');
   return new S3Client({ endpoint, region: String(cfg.S3_REGION || 'us-east-1'), bucket, ...readS3Credentials(credFile) });
 }

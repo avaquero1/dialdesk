@@ -43,7 +43,6 @@ STATE=/var/lib/vha
 UNITS=/etc/systemd/system
 SBIN=/usr/local/sbin
 PG_IMAGE=postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
-SANDBOX_CALLERS_PATH=$ETC/sandbox-manager.env   # sandbox-manager's settings on the sandbox machine (setup.sh writes it)
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 DRY=0; ENV_FILE=$ETC/deploy.env; EGRESS_MODE=""; ROLLBACK=300; ROTATE=0
@@ -492,10 +491,10 @@ sandbox_main() {
 # to it (deploy/PROVISION.md, step 4: the Vultr side is done by whoever holds the API key, never by this script).
 #   a  the settings: control's /etc/vha/deploy.env (or --env-file here)
 #   b  its VPC interface holds SANDBOX_VPC_IP
-#   c  HEAD copied there and setup.sh run with --ssh-from, --vpc-if, --control-vpc-ip and --vpc-subnet, then
-#      vha-nft-confirm over a NEW connection (setup.sh's firewall has its own timed rollback)
-#   d  SANDBOX_MANAGER_ADDR in /etc/vha/sandbox-manager.env set to SANDBOX_VPC_IP:8200 (setup.sh writes 127.0.0.1),
-#      the manager restarted and its /health read on that address
+#   c  HEAD copied there and setup.sh run with --ssh-from, --vpc-if, --control-vpc-ip, --vpc-subnet and
+#      --manager-addr SANDBOX_VPC_IP:8200, then vha-nft-confirm over a NEW connection (setup.sh's firewall has its own
+#      timed rollback)
+#   d  the manager's /health read on SANDBOX_VPC_IP:8200
 #   e  its runner token (/etc/vha/runner-token, made by setup.sh) copied to control as SANDBOX_MANAGER_TOKEN_FILE:
 #      through this PC's pipe only, never on its disk or a command line. prod-secrets.ts gives it to runner.
 sandbox_part() {
@@ -523,11 +522,11 @@ sandbox_part() {
 
   note "c: setup.sh (deploy/sandbox-host), then vha-nft-confirm over a new connection"
   run env "VHA_SANDBOX_HOST=$sbx" "VHA_SANDBOX_SSH_KEY=$VHA_SSH_KEY" "$setup" --ssh-from "$(cfg ADMIN_IP)" \
-    --vpc-if "$(cfg SANDBOX_VPC_IF)" --control-vpc-ip "$(cfg CONTROL_VPC_IP)" --vpc-subnet "$(cfg VPC_SUBNET)"
+    --vpc-if "$(cfg SANDBOX_VPC_IF)" --control-vpc-ip "$(cfg CONTROL_VPC_IP)" --vpc-subnet "$(cfg VPC_SUBNET)" --manager-addr "$ip:8200"
   on "$sbx" vha-nft-confirm
 
   note "d: sandbox-manager on $ip:8200"
-  on "$sbx" "set -e; f=$SANDBOX_CALLERS_PATH; sed -i 's/^SANDBOX_MANAGER_ADDR=.*/SANDBOX_MANAGER_ADDR=$ip:8200/' \$f; chgrp vha-sandbox \$f; chmod 0640 \$f; systemctl restart vha-sandbox-manager; for _ in \$(seq 50); do curl -fsS http://$ip:8200/health >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'sandbox-manager: no /health on $ip:8200' >&2; exit 1"
+  on "$sbx" "for _ in \$(seq 50); do curl -fsS http://$ip:8200/health >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'sandbox-manager: no /health on $ip:8200' >&2; exit 1"
 
   local dest; dest=$(cfg SANDBOX_MANAGER_TOKEN_FILE)
   note "e: runner's token: sandbox:$ETC/runner-token -> control:$dest (0600)"

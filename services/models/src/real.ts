@@ -3,7 +3,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { z } from 'zod';
 import { MODELS, type CompleteBody, type ModelRole } from '@app/contracts';
-import { createLogger, HttpError, logEntry, type Bus, type Handlers, type Logger } from '@app/service-kit';
+import { createLogger, HttpError, logEntry, secretFile, type Bus, type Handlers, type Logger } from '@app/service-kit';
 import { KeyGuard } from './keyguard.ts';
 import { CapError, DEFAULT_CAPS, MemoryUsageStore, Meter, PgUsageStore, type UsageStore } from './meter.ts';
 import { costUsd, PRICES } from './prices.ts';
@@ -13,7 +13,7 @@ import { createVultrClient, UpstreamError, type VultrChat } from './vultr.ts';
 /** models' own config (MODELS_*), on top of the template's. */
 export const ModelsConfig = z.object({
   /** The Vultr Inference key, one line. Checked on each call until found, so it can appear after start. */
-  VULTR_KEY_FILE: z.string().default('/run/secrets/vultr-inference'),
+  VULTR_KEY_FILE: z.string().default(secretFile('vultr-inference')),
   VULTR_BASE_URL: z.string().url().default('https://api.vultrinference.com/v1'),
   TIMEOUT_MS: z.coerce.number().int().min(1000).default(60_000),
   DAILY_CAP_USD: z.coerce.number().min(0).default(DEFAULT_CAPS.daily_usd),
