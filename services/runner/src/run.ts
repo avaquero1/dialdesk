@@ -55,7 +55,7 @@ import {
   type SandboxClient,
 } from '@app/service-kit';
 import { z } from 'zod';
-import { allowedOps, biggestMoveNumbers, isBiggestMove, defaultPlan, gapNumbers, marketNumbers, numberKeys, pickBiggest, planProblem, positionNumbers, runnablePlan, sinceInputs, splitSince, type MarketNumbers } from './plans.ts';
+import { allowedOps, biggestMoveNumbers, isBiggestMove, defaultPlan, gapNumbers, marketNumbers, numberKeys, pickBiggest, planProblem, positionNumbers, runnablePlan, sinceInputs, splitSince, tonightPlan, type MarketNumbers } from './plans.ts';
 import { toRunState, type RunRecord, type Store } from './store.ts';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
@@ -405,6 +405,10 @@ class Run {
       use = bn.plan;
       mn = bn.mn;
       asked = bn.ids.length;
+    } else if (spec.type === 'events') {
+      // Tonight: fixed math, every game's chance, move and small line (no planner's plan holds that many ops).
+      use = tonightPlan(spec);
+      mn = await marketNumbers(this.d.markets, spec, use);
     } else mn = await marketNumbers(this.d.markets, spec, plan);
     if (asked && mn.down.length === asked) {
       await this.step({ step: 'math', status: 'failed', note: 'every exchange is down and nothing is cached' }, t0);

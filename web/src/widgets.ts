@@ -275,7 +275,9 @@ function events(w: Widget, s: Display, c: RenderCtx) {
     const q = quoteOf(w, m);
     const p = pctOf(numFor(w, 'implied_probability', m, i)) ?? q?.yes_price_cents ?? null;
     const d = moveOf(w, { market: m, i })?.d ?? move(q);
-    return `<div class="game"><span class="g-n">${esc(eventLabel(k, c.titles))}</span><span class="g-s">${spark(line2(q), { area: false, end: false })}</span><span class="g-p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '<span class="mv mv--flat num">—</span>' : mvEl(d)}</div>`;
+    // The game's small 7-day line from the engine's price_at numbers, else first paint's two prices.
+    const line = m ? lineOf(w, m) : [];
+    return `<div class="game"><span class="g-n">${esc(eventLabel(k, c.titles))}</span><span class="g-s">${spark(line.length ? line : line2(q), { area: false, end: false })}</span><span class="g-p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '<span class="mv mv--flat num">—</span>' : mvEl(d)}</div>`;
   });
   return (
     head(s.title, `${keys.length} ${keys.length === 1 ? 'game' : 'games'}`) +

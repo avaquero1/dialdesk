@@ -50,6 +50,9 @@ export function numberKeys(spec: DisplaySpec): string[] {
   return keys;
 }
 
+/** Tonight's games with numbers, at most. */
+export const MAX_TONIGHT = 6;
+
 /** The default plan for a type, from its catalog ops. positions builds its plan from the connection (positionNumbers). */
 export function defaultPlan(spec: DisplaySpec): EnginePlan {
   const ops: Op[] = [];
@@ -57,7 +60,7 @@ export function defaultPlan(spec: DisplaySpec): EnginePlan {
   const n = spec.market_ids.length;
   const type: DisplayType = spec.type;
   if (type === 'events') {
-    for (let i = 1; i <= Math.min(n, 6); i++) {
+    for (let i = 1; i <= Math.min(n, MAX_TONIGHT); i++) {
       add('implied_probability', { price_cents: `price_${i}` });
       add('movement', { series: `series_${i}`, window_s: 'window_s' });
     }
@@ -94,6 +97,18 @@ export function defaultPlan(spec: DisplaySpec): EnginePlan {
 }
 
 const has = (spec: DisplaySpec, ex: string) => spec.market_ids.some((m) => m.startsWith(`${ex}:`));
+
+/**
+ * Tonight's plan, always (fixed math, like Biggest move's): each game's chance and move (defaultPlan), then each game's
+ * small 7-day line, the Market's points, oldest first. Lines last, so the plan never equals Biggest move's: a receipt
+ * id is the plan's hash and the op id, and two widgets with one plan would share receipt ids.
+ */
+export function tonightPlan(spec: DisplaySpec): EnginePlan {
+  const { ops } = defaultPlan(spec);
+  for (let i = 1; i <= Math.min(spec.market_ids.length, MAX_TONIGHT); i++)
+    for (const k of LINE_KEYS) ops.push({ id: `n${ops.length + 1}`, op: 'price_at', args: { series: `series_${i}`, ago_s: k } });
+  return { plan_version: 1, ops };
+}
 
 /** Why a plan is refused, or null when it fits the catalog entry and reads only known keys. */
 export function planProblem(spec: DisplaySpec, plan: unknown): string | null {
@@ -181,8 +196,9 @@ export async function marketNumbers(markets: Call, spec: DisplaySpec, plan: Engi
   const origins: Origins = { window_s: 'user' };
   const provenance: Provenance = {};
   // Fixed spans by code: untagged numbers (no op takes a probability from them).
-  // The line spans window_s; a Market (a folder's card names none) draws 7 days.
-  const lineWindow = spec.params.window_s ?? (spec.type === 'probability' ? 7 * DAY : DAY);
+  // The line spans window_s; a Market (a folder's card names none) draws 7 days. Tonight's window_s is its move's
+  // ("up 4" since yesterday), and its rows' small lines draw the Market's 7 days.
+  const lineWindow = spec.type === 'events' ? 7 * DAY : (spec.params.window_s ?? (spec.type === 'probability' ? 7 * DAY : DAY));
   if (!want || want.has('day_s')) numbers.day_s = DAY;
   lineAgo(lineWindow).forEach((ago, j) => {
     if (!want || want.has(LINE_KEYS[j]!)) numbers[LINE_KEYS[j]!] = ago;

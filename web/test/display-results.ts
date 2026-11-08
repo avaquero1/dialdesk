@@ -12,7 +12,7 @@ import { createClient } from '@app/service-kit';
 import { TEST_TOKENS, fakeApp, sampleResult } from '@app/testkit';
 import { fake as markets } from '../../services/markets/src/fake.ts';
 import { merge, slice } from '../../services/runner/src/batch.ts';
-import { biggestMoveNumbers, defaultPlan, gapNumbers, isBiggestMove, marketNumbers, pickBiggest, runnablePlan, type MarketNumbers } from '../../services/runner/src/plans.ts';
+import { biggestMoveNumbers, defaultPlan, gapNumbers, isBiggestMove, marketNumbers, pickBiggest, runnablePlan, tonightPlan, type MarketNumbers } from '../../services/runner/src/plans.ts';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
 const ROOT = join(import.meta.dirname, '../..');
@@ -34,7 +34,10 @@ async function inputFor(spec: DisplaySpec): Promise<{ input: EngineInput; mn: Ma
     if ('skip' in g) return { words: g.skip };
     ({ plan, mn } = g);
   } else if (isBiggestMove(spec)) ({ plan, mn } = await biggestMoveNumbers(call, spec));
-  else mn = await marketNumbers(call, spec, plan);
+  else if (spec.type === 'events') {
+    plan = tonightPlan(spec);
+    mn = await marketNumbers(call, spec, plan);
+  } else mn = await marketNumbers(call, spec, plan);
   const p = runnablePlan(plan, mn.numbers);
   if (!p.ops.length) return null;
   return { input: { plan: p, numbers: mn.numbers, origins: mn.origins, ...(mn.provenance ? { provenance: mn.provenance } : {}) }, mn };
