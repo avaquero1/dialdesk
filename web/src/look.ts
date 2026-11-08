@@ -2,7 +2,7 @@
  * The look: theme, mode and hue on <html> (the design kit's contract). It is applied live and saved to accounts
  * through edge; look.changed from another tab or the chat agent applies here without a save.
  */
-import type { Look } from '@app/contracts';
+import { DEFAULT_LOOK, type Look } from '@app/contracts';
 import { cssNum, raf2, root } from './dom.ts';
 
 declare const __THEMES__: { id: string; name: string }[];
@@ -10,7 +10,7 @@ declare const __THEMES__: { id: string; name: string }[];
 export const THEMES: { id: string; name: string }[] = __THEMES__;
 export const hasTheme = (id: string) => THEMES.some((t) => t.id === id);
 
-export const L: Look = { theme: (THEMES[0]?.id ?? 'agent-mail') as Look['theme'], mode: 'system', hue: null };
+export const L: Look = { ...DEFAULT_LOOK };
 export const mqDark = matchMedia('(prefers-color-scheme: dark)');
 export const resolveMode = () => (L.mode === 'system' ? (mqDark.matches ? 'dark' : 'light') : L.mode);
 export const themeHue = () => cssNum('--hue-default', 220);

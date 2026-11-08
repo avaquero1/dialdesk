@@ -24,7 +24,7 @@ export function showAuth(onIn: (a: Account) => void) {
     setHtml(
       host,
       `<div class="auth-card">
-        <h1 class="auth-title">My board</h1>
+        <h1 class="auth-title">DialDesk</h1>
         <p class="auth-sub">Research for trading prediction markets. Live prices, articles read in sealed boxes, and the math shown.</p>
         <div class="seg auth-tabs" role="tablist" aria-label="Sign up or log in">
           <button type="button" role="tab" data-mode="signup" aria-pressed="${mode === 'signup'}">Sign up</button>

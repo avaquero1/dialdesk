@@ -159,7 +159,7 @@ describe('accounts (real): the look', () => {
   it('a new account has the plan "free" (shown, not billed) and the default look', async () => {
     const { app } = realAccounts();
     const out: any = await (await post(app, '/accounts', { email: 'pat@example.test', password: 'correct horse battery' })).json();
-    expect(out.account).toMatchObject({ plan: 'free', guest: false, look: { theme: 'agent-mail', mode: 'system', hue: null } });
+    expect(out.account).toMatchObject({ plan: 'free', guest: false, look: { theme: 'stadium-night', mode: 'dark', hue: null } });
   });
 });
 

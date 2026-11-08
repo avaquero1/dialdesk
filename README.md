@@ -1,4 +1,4 @@
-# (name to come)
+# DialDesk
 
 **A friend who does the research for your prediction-market trading.**
 

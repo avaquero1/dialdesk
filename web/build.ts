@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { build, transform } from 'esbuild';
+import { DEFAULT_LOOK } from '@app/contracts';
 import { BASE_CSS, listThemes, stripComments } from '@app/design-kit';
 
 const HERE = import.meta.dirname;
@@ -68,7 +69,8 @@ export async function buildWeb() {
   };
   put('@@JS@@', jsName);
   put('@@CSS@@', cssName);
-  put('@@THEME0@@', themes[0]!.id);
+  put('@@THEME0@@', DEFAULT_LOOK.theme);
+  put('@@MODE0@@', DEFAULT_LOOK.mode === 'system' ? 'light' : DEFAULT_LOOK.mode);
   const bad = checkHtml(html);
   if (bad.length) throw new Error(`index.html breaks the policy: ${bad.join(', ')}`);
 
