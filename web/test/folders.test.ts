@@ -251,6 +251,8 @@ describe.each(CASES)('folders by drag and drop on a phone, $theme ($mode)', ({ t
     const c = (await page.locator('.fo-grid .card').first().boundingBox())!;
     await drag({ x: c.x + c.width / 2, y: c.y + c.height / 2 }, { x: toX, y: toY }, async () => {
       expect(await page.locator('.card-ghost').count()).toBe(1);
+      // Solid, so the board's text doesn't read through the card in the finger.
+      expect(await page.locator('.card-ghost').evaluate((g) => getComputedStyle(g).backgroundColor)).not.toMatch(/transparent|rgba\(0, 0, 0, 0\)/);
       await shot('6-dragging-out');
       // A slow drag: the sheet has finished draining and the finger is still down.
       await page.waitForTimeout(1300);
