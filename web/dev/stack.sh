@@ -87,6 +87,11 @@ case "${1:-}" in
     rm -rf "${run:?}/audit-heads"
     compose up -d --wait postgres valkey
     envs
+    # audit never migrates itself (svc_audit may only SELECT and INSERT): apply its migrations as audit_owner first,
+    # through the admin login, the way the deploy does (services/audit/src/migrate.ts).
+    ( cd "$repo" && AUDIT_MIGRATE_DATABASE_URL="postgres://postgres:${PG_SUPERUSER_PASSWORD}@127.0.0.1:${WEB_PG_PORT}/app" \
+        node --import tsx services/audit/src/migrate.ts ) > "$run/audit-migrate.log" 2>&1 \
+      || { echo "audit migrations failed (see $run/audit-migrate.log)"; tail -5 "$run/audit-migrate.log"; exit 1; }
     for s in $FAKE; do start "$s" 1; done
     for s in $REAL; do start "$s" 0; done
     wait_health
