@@ -1637,7 +1637,7 @@
             },
             "id": {
               "type": "string",
-              "description": "\"r-\" + first 8 hex of sha256(plan_hash + op id)."
+              "description": "\"r-\" + first 8 hex of sha256(plan_hash + input_hash + op id)."
             },
             "input_hash": {
               "type": "string"
@@ -2284,7 +2284,7 @@
                 },
                 "id": {
                   "type": "string",
-                  "description": "\"r-\" + first 8 hex of sha256(plan_hash + op id)."
+                  "description": "\"r-\" + first 8 hex of sha256(plan_hash + input_hash + op id)."
                 },
                 "input_hash": {
                   "type": "string"

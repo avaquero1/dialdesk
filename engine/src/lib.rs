@@ -190,7 +190,7 @@ pub struct NumberOut {
 /// How one number was computed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Receipt {
-    /// "r-" + first 8 hex of sha256(plan_hash + op id).
+    /// "r-" + first 8 hex of sha256(plan_hash + input_hash + op id).
     pub id: String,
     pub op_id: String,
     pub op: OpName,

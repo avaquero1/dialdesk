@@ -333,7 +333,7 @@ export interface Receipt {
   formula: string;
   git_hash: string;
   /**
-   * "r-" + first 8 hex of sha256(plan_hash + op id).
+   * "r-" + first 8 hex of sha256(plan_hash + input_hash + op id).
    */
   id: string;
   input_hash: string;
