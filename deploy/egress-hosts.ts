@@ -1,5 +1,6 @@
 /**
- * The egress table: the hosts each control container may reach on 443 (architecture.md, "Control's outbound traffic").
+ * The egress table: the hosts each control container should reach on 443 (architecture.md, "Control's outbound traffic").
+ * The live deploy is log-only: a call off a list is logged and still goes out (deploy/README.md).
  * deploy/nftables/control.nft has one set per container (`allow_<name>`); deploy/nftables/egress-refresh.sh (a timer)
  * resolves the hosts in the file this script writes and refills those sets.
  *

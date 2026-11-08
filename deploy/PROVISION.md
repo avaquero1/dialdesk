@@ -41,7 +41,7 @@ The account's limits: at most 5 instances, plans under $200 a month together; th
 
 ## 2. Firewall groups
 
-Vultr Firewall filters inbound traffic only. Outbound is the job of each machine's own nftables rules.
+Vultr Firewall filters inbound traffic only. Outbound is the job of each machine's own nftables rules: the sandbox machine's are enforced, and control's log and don't block (`README.md`, "Deploying control").
 
 **`vha-control`**, for control:
 

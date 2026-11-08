@@ -22,7 +22,7 @@ export interface Caps {
   kill: boolean;
 }
 
-export const DEFAULT_CAPS: Caps = { daily_usd: 5, account_daily_usd: 0.25, account_daily_tokens: 200_000, account_rpm: 30, kill: false };
+export const DEFAULT_CAPS: Caps = { daily_usd: 5, account_daily_usd: 0.25, account_daily_tokens: 2_000_000, account_rpm: 30, kill: false };
 
 export interface UsageRow {
   day: string;

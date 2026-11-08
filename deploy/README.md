@@ -71,7 +71,7 @@ Afterwards, on control: `docker compose -p vha-control ps` and `journalctl -k --
 
 Before `--enforce-egress`: a host behind a CDN that rotates per query (Kalshi's and Polymarket's APIs are on CloudFront) keeps
 showing up in the would-drop log even though it is in the table, because `egress-refresh.sh` samples DNS every 3 minutes and the
-container's lookup gets a different answer. Enforcing drops those calls until that is solved.
+container's lookup gets a different answer. Enforcing drops those calls until that is solved, so control stays log-only.
 
 ## Deploying control
 
@@ -94,8 +94,10 @@ buckets, the secrets, `db-init.sql` over TLS, `docker compose up --wait`, and th
   services/audit` in a one-off app container, as an admin login that may `SET ROLE audit_owner`
   (`AUDIT_MIGRATE_DATABASE_URL`, `sslmode=require`). The URL is built inside that container from the admin pgpass file and
   is never in audit's env: audit itself never migrates, and it refuses to start while a migration is pending.
-- **Egress starts log-only.** Read `journalctl -k | grep vha-egress-would-drop` on control, add what's missing to
-  `egress-hosts.ts`, then deploy again with `--enforce-egress` (`--log-only-egress` goes back).
+- **Control's egress is log-only, and the live deploy stays that way.** A call off a container's list is logged and still
+  goes out. Read `journalctl -k | grep vha-egress-would-drop` on control to see them, and add what's missing to
+  `egress-hosts.ts`. `--enforce-egress` exists but isn't used, for the CloudFront reason above (`--log-only-egress` goes
+  back). The sandbox machine's firewall and egress proxy are always enforced and don't depend on this.
 - **The sandbox machine** (`deploy/sandbox-host`): with `VHA_SANDBOX_HOST=root@<it>` set, `push` does it first, and
   `deploy.sh sandbox` does it alone. The VPC must already be attached (`PROVISION.md`, step 4). It checks the VPC address
   is on `SANDBOX_VPC_IF`, runs `setup.sh` with `--vpc-if`, `--control-vpc-ip`, `--vpc-subnet` and `--manager-addr

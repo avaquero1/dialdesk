@@ -101,7 +101,7 @@ call an off-list host and the metadata address.
 | **Cloud Compute** (`vc2-4c-8gb`) | The control machine: the web app, nine of the ten services, Valkey and Caddy. |
 | **VX1** (`vx1-g-2c-8g`, dedicated CPU) | The sandbox machine: `sandbox-manager`, the egress proxy and the gVisor sandboxes. It holds no keys and no database. |
 | **VPC** | The private network between control, the sandbox machine and the database. |
-| **Firewall** | Inbound rules for both machines: control takes 443 only, and the sandbox machine takes nothing public. nftables on each host controls outbound traffic. |
+| **Firewall** | Inbound rules for both machines: control takes 443 only, and the sandbox machine takes nothing public. On the sandbox machine, nftables enforces outbound traffic. On control, it logs outbound traffic and does not block it (see "Outbound traffic from control"). |
 | **Managed PostgreSQL** | One schema and one login per data-storing service, TLS required, reachable from control's VPC address only. |
 | **Object Storage** | Two buckets: screenshots (board) and the signed audit-log heads (audit). The heads bucket uses object lock. |
 
@@ -178,8 +178,12 @@ then asks a model as a second layer. It checks chat replies too.
 - **Valkey** carries the job queues (BullMQ), the events and one log stream. Each service has its own Valkey user that
   can reach only its own queues and channels.
 - **Postgres:** each data-storing service has its own schema and login. No service reads another's tables.
-- **Outbound traffic from control** is limited per container. For example, only `models` may reach Vultr Serverless
-  Inference. The deploy starts this in log-only mode, then enforces it.
+- **Outbound traffic from control** is logged per container and is not blocked. Each container has a list of the hosts
+  it should reach (for example, only `models` should reach Vultr Serverless Inference). A call to a host off the list
+  goes to the kernel log and still goes out, so a control container can reach any public address. It stays log-only
+  because Kalshi's and Polymarket's APIs sit behind CloudFront addresses that rotate faster than an address list can
+  follow, and blocking could break market data. The sandbox's containment does not depend on this: the firewall and the
+  egress proxy on the sandbox machine are enforced there.
 
 ### Where the secrets live
 
