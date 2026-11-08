@@ -78,6 +78,8 @@ const screenshotParams = z.object({ widget_id: WidgetId, run_id: RunId, candidat
 const acc = z.object({ account_id: AccountId });
 const wid = z.object({ widget_id: WidgetId });
 const accQuery = z.object({ account_id: AccountId });
+/** On a refresh answer: true when it joined the run of the same kind already asked for in this minute ("Updated just now"). */
+export const Joined = z.boolean().optional().describe('true: joined the run already asked for in this minute');
 
 export const BOARD = api('board', {
   getBoard: {
@@ -187,10 +189,10 @@ export const BOARD = api('board', {
     callers: ['edge'],
     params: wid,
     body: acc.strict(),
-    response: z.object({ job_id: z.string() }).strict(),
+    response: z.object({ job_id: z.string(), joined: Joined }).strict(),
     status: 202,
     errors: [404, 429],
-    summary: 'Refresh now: enqueue a run.',
+    summary: 'Refresh now: enqueue a run, or join the run of the same kind already asked for in this minute.',
   },
   addSource: {
     method: 'POST',
@@ -259,5 +261,15 @@ export const BOARD = api('board', {
     response: EngineReceipt,
     errors: [404],
     summary: "A receipt already on this account's board.",
+  },
+  lastOpened: {
+    method: 'POST',
+    path: '/last-opened',
+    callers: ['runner'],
+    body: z.object({ account_ids: z.array(AccountId).min(1).max(200) }).strict(),
+    response: z
+      .object({ boards: z.array(z.object({ account_id: AccountId, last_opened_at: Timestamp.nullable() }).strict()).max(200) })
+      .strict(),
+    summary: "When each board was last read by its owner (edge's getBoard). runner's scheduler runs only boards opened recently.",
   },
 });

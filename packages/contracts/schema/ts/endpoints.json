@@ -210,7 +210,7 @@
       404,
       429
     ],
-    "summary": "Menu: Refresh now."
+    "summary": "Menu: Refresh now. `joined`: a run of the same kind was already asked for in this minute (\"Updated just now\")."
   },
   {
     "service": "edge",
@@ -650,7 +650,7 @@
       404,
       429
     ],
-    "summary": "Refresh now: enqueue a run."
+    "summary": "Refresh now: enqueue a run, or join the run of the same kind already asked for in this minute."
   },
   {
     "service": "board",
@@ -740,6 +740,18 @@
       404
     ],
     "summary": "A receipt already on this account's board."
+  },
+  {
+    "service": "board",
+    "name": "lastOpened",
+    "method": "POST",
+    "path": "/last-opened",
+    "callers": [
+      "runner"
+    ],
+    "status": 200,
+    "errors": [],
+    "summary": "When each board was last read by its owner (edge's getBoard). runner's scheduler runs only boards opened recently."
   },
   {
     "service": "agent",

@@ -12,7 +12,7 @@ import { EngineReceipt } from '../rust.ts';
 import { RunTraceStep } from '../result.ts';
 import { Account, Email, Password } from './accounts.ts';
 import { ChatReply, ChatTurn } from './agent.ts';
-import { Board, Proposal, Widget } from './board.ts';
+import { Board, Joined, Proposal, Widget } from './board.ts';
 import { Connection } from './connections.ts';
 import { Spend } from './models.ts';
 import { SignedHead, TrustCounts } from './audit.ts';
@@ -136,10 +136,10 @@ export const EDGE = api('edge', {
     callers: ['browser'],
     params: wid,
     body: z.object({}).strict(),
-    response: z.object({ job_id: z.string() }).strict(),
+    response: z.object({ job_id: z.string(), joined: Joined }).strict(),
     status: 202,
     errors: [404, 429],
-    summary: 'Menu: Refresh now.',
+    summary: 'Menu: Refresh now. `joined`: a run of the same kind was already asked for in this minute ("Updated just now").',
   },
   addSource: {
     method: 'POST',
