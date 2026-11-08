@@ -407,6 +407,10 @@ export interface PageOut {
    */
   text: string;
   url: string;
+  /**
+   * What a person sees on the page (`document.body.innerText`), cut to the output limit. Absent from a backend that has no browser.
+   */
+  visible_text?: string | null;
 }
 /**
  * One connection the sandbox asked the egress proxy for.

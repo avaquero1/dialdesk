@@ -290,7 +290,8 @@ describe('e2e on the real pieces (live markets and news, Vultr models, real Chro
       saw.numbers = r.numbers.map((n) => n.op);
       saw.blocked = r.blocked.map((b) => b.domain);
       saw.state = w.state;
-      expect(r.numbers[0]).toMatchObject({ op: 'implied_probability' });
+      // The order of numbers is not a contract: the UI finds them by op (A1.4.5; C2.3's check was numbers[0], a different test).
+      expect(r.numbers.some((n) => n.op === 'implied_probability')).toBe(true);
       for (const n of r.numbers) expect(r.receipts.some((x) => x.id === n.receipt_id)).toBe(true);
       expect(reads.map((x) => x.source!.url), 'the planner picked our poisoned page').toContain(poisoned.url);
       const ours = boxes.find((b) => b.ours)!;

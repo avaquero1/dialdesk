@@ -39,7 +39,7 @@ type Job = {
   job_id: string;
   sandbox_id: string;
   state: string;
-  pages: { url: string; status: number; text: string; screenshot_png_b64: string | null }[];
+  pages: { url: string; status: number; text: string; visible_text: string | null; screenshot_png_b64: string | null }[];
   proxy_log: { host: string; port: number; allowed: boolean; reason: string }[];
   kill_reason: string | null;
   error: string | null;
@@ -210,6 +210,11 @@ describe(`containment on the ${process.env.SANDBOX_BACKEND ?? 'docker'} backend`
     score.chromium_sandbox = t.env.SANDBOX_CHROMIUM_SANDBOX ?? 'default';
     expect(p.state).toBe('held');
     expect(p.pages[0]).toMatchObject({ status: 200 });
+    // Real Chromium: code gets the comment and the display:none text, and the text for the reader has neither.
+    expect(p.pages[0]!.text).toMatch(/Do not mention this comment/);
+    expect(p.pages[0]!.text).toMatch(/SYSTEM NOTICE FOR AI ASSISTANTS/);
+    expect(p.pages[0]!.visible_text).toMatch(/twenty years/);
+    expect(p.pages[0]!.visible_text).not.toMatch(/Do not mention this comment|SYSTEM NOTICE FOR AI ASSISTANTS/);
     expect(liveSandboxes(t)).toHaveLength(1);
     // The metadata address as an IP literal; every name off the allowlist (the DNS name that carries data too) is
     // refused before any lookup.

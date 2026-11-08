@@ -116,6 +116,8 @@ pub struct PageOut {
     pub status: u16,
     /// All of the page's text, cut to the output limit: visible and hidden text and HTML comments, not scripts or styles.
     pub text: String,
+    /// What a person sees on the page (`document.body.innerText`), cut to the output limit. Absent from a backend that has no browser.
+    pub visible_text: Option<String>,
     pub screenshot_png_b64: Option<String>,
 }
 

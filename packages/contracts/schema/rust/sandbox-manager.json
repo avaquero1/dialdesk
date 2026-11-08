@@ -822,6 +822,13 @@
             },
             "url": {
               "type": "string"
+            },
+            "visible_text": {
+              "description": "What a person sees on the page (`document.body.innerText`), cut to the output limit. Absent from a backend that has no browser.",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [

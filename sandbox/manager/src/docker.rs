@@ -222,6 +222,7 @@ enum Event {
         url: String,
         status: u16,
         text: String,
+        visible_text: Option<String>,
         screenshot_png_b64: Option<String>,
         error: Option<String>,
     },
@@ -769,6 +770,7 @@ impl Backend for DockerBackend {
                         url,
                         status,
                         text,
+                        visible_text,
                         screenshot_png_b64,
                         error,
                     }) => {
@@ -779,6 +781,7 @@ impl Backend for DockerBackend {
                             url,
                             status,
                             text,
+                            visible_text,
                             screenshot_png_b64,
                         });
                     }

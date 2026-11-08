@@ -2,7 +2,7 @@
 
 - `browse/`: the browse sandbox. Debian's Chromium (the real binary, not Debian's wrapper, which exports Google API
   keys into the environment; no setuid helper) and `app/driver.mjs`, which opens the job's URLs through the egress
-  proxy, returns their text (hidden text and comments too, so the guard sees planted orders) and screenshots, and
+  proxy, returns their text (`text`: everything, hidden text and comments too, so code checks it all; `visible_text`: what a person sees, the only part a reader model gets) and screenshots, and
   holds the browser until release or kill. Target `probe` adds `app/probes.mjs` for the containment tests only.
 - The compute image is the engine's: `engine/Dockerfile`, built by `make engine-image` (a static binary on scratch).
 

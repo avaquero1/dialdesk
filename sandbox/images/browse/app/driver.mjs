@@ -1,12 +1,13 @@
 /* global process, setTimeout, URL, document, NodeFilter, Node */
-// The browse sandbox's driver. It opens each URL in Chromium through the egress proxy, reads the page's text
-// (hidden text and comments too, so the guard sees planted orders) and, if asked, takes a screenshot. It does
+// The browse sandbox's driver. It opens each URL in Chromium through the egress proxy, reads the page's text twice
+// (`text`: everything, hidden text and comments too, so code can check all of it; `visible_text`: what a person sees,
+// the only part a reader model gets) and, if asked, takes a screenshot. It does
 // nothing else: no forms, no logins, no downloads, no clicks. Then it holds the browser open until the manager
 // releases or kills the sandbox (or --max-life passes).
 //
 // One JSON event per line on stdout, read by sandbox-manager:
 //   {"ev":"launched","chromium":"…","sandbox":"on"|"off","fallback":bool}
-//   {"ev":"page","url":"…","status":200,"text":"…","screenshot_png_b64":"…"|null,"error":null}
+//   {"ev":"page","url":"…","status":200,"text":"…","visible_text":"…","screenshot_png_b64":"…"|null,"error":null}
 //   {"ev":"ready"}                       every page is read; the sandbox is now held
 //   {"ev":"error","stage":"…","message":"…"}
 //
@@ -99,6 +100,9 @@ function pageText() {
   return parts.join(' ').replace(/\s+/g, ' ').trim();
 }
 
+// What a person sees: the rendered text, so no comments and nothing under display:none.
+const visibleText = () => document.body?.innerText ?? '';
+
 let budget = outputBytes - 4096;
 const textCap = Math.max(1024, Math.floor(budget / urls.length / 2));
 const pages = [];
@@ -123,6 +127,14 @@ for (const url of urls) {
     error = error || `extract: ${short(e)}`;
   }
   budget -= text.length * 2 + 512;
+  // On an error this stays empty: the reader gets nothing rather than the whole text.
+  let visible = '';
+  try {
+    visible = (await page.evaluate(visibleText)).replace(/\s+/g, ' ').trim().slice(0, Math.max(0, Math.min(textCap, Math.floor(budget / 2))));
+  } catch (e) {
+    error = error || `extract: ${short(e)}`;
+  }
+  budget -= visible.length * 2;
   let shot = null;
   if (flag('screenshot') && !error) {
     try {
@@ -135,7 +147,7 @@ for (const url of urls) {
       error = `screenshot: ${short(e)}`;
     }
   }
-  await emit({ ev: 'page', url, status, text, screenshot_png_b64: shot, error });
+  await emit({ ev: 'page', url, status, text, visible_text: visible, screenshot_png_b64: shot, error });
   pages.push(page);
 }
 await emit({ ev: 'ready' });
