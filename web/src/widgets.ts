@@ -216,29 +216,55 @@ function news(w: Widget, s: Display) {
   return head(s.title, `${n} ${n === 1 ? 'item' : 'items'}`) + `<div class="items">${items.join('')}${blocked.join('')}</div>`;
 }
 
+/**
+ * "Your account": the linked connection's balance and positions, read only. Every number is the engine's (runner's
+ * positionNumbers): `balance`, and per position `value_<i>`, `pnl_<i>` and `today_<i>` (today's change, against the
+ * price 24 h ago). The numbers show only while the user still shares them (consent on, connection there).
+ */
 function positions(w: Widget, s: Display) {
-  const v = nums(w, 'position_value')[0];
-  const pnl = nums(w, 'pnl')[0];
-  if (s.params.connection_id && w.result)
+  const c = connections().find((x) => x.connection_id === s.params.connection_id) ?? (s.params.connection_id ? undefined : connections()[0]);
+  const byId = new Map((w.result?.numbers ?? []).map((n) => [n.id, n]));
+  if (c && c.share_numbers && w.result && byId.size) {
+    const bal = byId.get('balance');
+    const rows: string[] = [];
+    for (let i = 1; byId.has(`value_${i}`); i++) {
+      const v = byId.get(`value_${i}`)!;
+      const pnl = byId.get(`pnl_${i}`);
+      const today = byId.get(`today_${i}`);
+      const mkt = w.result.receipts.find((r) => r.op_id === `value_${i}`)?.provenance?.price_cents?.source ?? '';
+      rows.push(
+        `<div class="pos-row"><span class="pos-mkt">${esc(mkt.replace(/^[a-z]+:/, ''))}</span><span class="num">${esc(fmtNum(v))}</span>` +
+          (pnl ? `<span class="mv mv--${mvCls(pnl.value)} num">${esc(signedUsd(pnl.value))}</span>` : '') +
+          (today ? `<span class="mv mv--${mvCls(today.value)} num">${esc(signedUsd(today.value))} today</span>` : '') +
+          '</div>',
+      );
+    }
+    const n = rows.length;
     return (
-      head(s.title) +
-      '<div class="who">Connected <span class="pillnote">read only</span></div>' +
-      `<div class="bal num">${v ? esc(fmtNum(v)) : '—'}</div>` +
-      `<div class="pos-meta">${pnl ? `<span class="mv mv--${mvCls(pnl.value)} num">${esc(signedUsd(pnl.value))} today</span>` : ''}</div>`
+      head(s.title, `as of ${fmtTime(w.result.as_of)}`) +
+      `<div class="who">${esc(exchangeName(c.exchange))} <span class="pillnote">read only</span></div>` +
+      `<div class="bal num">${bal ? esc(fmtNum(bal)) : '—'}</div>` +
+      `<div class="pos-meta">${bal ? 'Balance · ' : ''}${n ? `${n} open ${n === 1 ? 'position' : 'positions'}` : 'No open positions'}</div>` +
+      (n ? `<div class="pos-list">${rows.join('')}</div>` : '')
     );
-  const c = connections().find((x) => x.connection_id === s.params.connection_id) ?? connections()[0];
+  }
   if (!c)
     return (
       head(s.title) +
       '<button class="acc-open" type="button" data-open-accounts><span class="who">Not connected</span>' +
       '<span class="w-empty">Tap to connect Kalshi or Polymarket, read only, in Accounts. The agent never trades.</span></button>'
     );
-  // Connected, but no numbers on this display yet (none have been read for it).
+  // Connected, but no numbers here yet: not linked, not shared, or the first read is on its way.
+  const why = !c.share_numbers
+    ? 'Turn on "Let my widgets use its numbers" in Accounts to see the balance and positions here.'
+    : s.params.connection_id
+      ? 'Reading the balance and positions…'
+      : 'No balance or positions on this display yet.';
   return (
     head(s.title) +
     `<div class="who">${esc(exchangeName(c.exchange))} <span class="pillnote">read only</span></div>` +
     `<div class="w-empty">${esc(c.exchange === 'kalshi' && c.checked_at ? `Checked with Kalshi at ${fmtTime(c.checked_at)}. We can look, never trade.` : 'Public wallet. We can look, never trade.')}</div>` +
-    '<div class="w-empty">No balance or positions on this display yet.</div>'
+    `<button class="acc-open" type="button" data-open-accounts><span class="w-empty">${esc(why)}</span></button>`
   );
 }
 

@@ -6,7 +6,7 @@
  * moment it is read, whatever happens next; the key is never stored, logged or kept in a variable after the send.
  * connections proves read scope with Kalshi and refuses a key that can trade (403); the sheet says why in plain words.
  */
-import type { Account, Connection } from '@app/contracts';
+import type { Account, Connection, Widget } from '@app/contracts';
 import { seal, sealAad } from '../../services/connections/src/seal.ts';
 import { api, ApiError } from './api.ts';
 import { connections, onConnections, setConnections } from './conns.ts';
@@ -75,6 +75,48 @@ const KALSHI_STEPS = [
   'Tap Connect. We check with Kalshi that the key can only read. You can delete the file after.',
 ];
 
+// ---------- "Your account": which display shows which account ----------
+
+/** The board's "Your account" displays (positions), in board order. */
+const yourAccountDisplays = (): Widget[] =>
+  [...S.widgets.values()].filter((w) => w.spec.kind === 'display' && w.spec.type === 'positions');
+const linkedTo = (w: Widget) => (w.spec.kind === 'display' ? w.spec.params.connection_id : undefined);
+
+/** board links the account to the display (it checks both are this account's) and asks for its first numbers. */
+async function link(widget_id: string, connection_id: string) {
+  const w = await api.linkConnection(widget_id, connection_id);
+  S.widgets.set(widget_id, w);
+  refreshTile(widget_id);
+}
+
+/**
+ * After the user shares an account's numbers: a board with one "Your account" display shows it there at once, unless
+ * that display already shows another shared account. Otherwise the account's row offers each display (linkOffer).
+ */
+async function linkAfterShare(connection_id: string) {
+  const ds = yourAccountDisplays();
+  if (ds.length !== 1) return;
+  const now = linkedTo(ds[0]!);
+  if (now === connection_id) return;
+  if (now && connections().some((c) => c.connection_id === now && c.share_numbers)) return;
+  await link(ds[0]!.spec.widget_id, connection_id);
+}
+
+/** In a shared account's row: where it shows, and a button for each "Your account" display that shows something else. */
+function linkOffer(c: Connection) {
+  if (!c.share_numbers) return '';
+  const ds = yourAccountDisplays();
+  const on = ds.filter((w) => linkedTo(w) === c.connection_id);
+  const off = ds.filter((w) => linkedTo(w) !== c.connection_id);
+  const name = (w: Widget) => (ds.length > 1 ? `${w.spec.title} (${ds.indexOf(w) + 1})` : w.spec.title);
+  return (
+    (on.length ? `<div class="s ac-shown">Shown on ${esc(on.map(name).join(', '))}.</div>` : '') +
+    off
+      .map((w) => `<button class="btn ac-link" type="button" data-link="${esc(w.spec.widget_id)}" data-link-conn="${esc(c.connection_id)}">Show on ${esc(name(w))}</button>`)
+      .join('')
+  );
+}
+
 function connRow(c: Connection, i: number) {
   const name = c.exchange === 'kalshi' ? `Kalshi · key ${c.label}` : `Polymarket · ${c.label}`;
   return (
@@ -82,7 +124,9 @@ function connRow(c: Connection, i: number) {
     `<div class="rowitem"><span class="ic ok">${IC.check}</span><div class="grow"><div class="t">${esc(name)}</div><div class="s">${esc(checkedLine(c))}</div></div>` +
     `<button class="btn ac-off" type="button" data-disconnect="${esc(c.connection_id)}">Disconnect</button></div>` +
     `<div class="rowitem ac-share"><div class="grow"><div class="t">Let my widgets use its numbers</div><div class="s">Balance and positions only. Turn it off any time.</div></div>` +
-    `<button class="toggle" type="button" data-share="${esc(c.connection_id)}" aria-pressed="${c.share_numbers}" aria-label="Let my widgets use its numbers"></button></div></div>`
+    `<button class="toggle" type="button" data-share="${esc(c.connection_id)}" aria-pressed="${c.share_numbers}" aria-label="Let my widgets use its numbers"></button></div>` +
+    linkOffer(c) +
+    '</div>'
   );
 }
 
@@ -197,8 +241,22 @@ function bind(s: HTMLElement, tab: 'kalshi' | 'polymarket') {
         await api.consent(b.dataset.share!, on);
         b.setAttribute('aria-pressed', String(on));
         await loadConnections();
+        if (on) await linkAfterShare(b.dataset.share!).catch(() => toast('Shared. Couldn’t show it on Your account yet.'));
+        return redraw();
       } catch {
         toast('Couldn’t save that. Try again.');
+      }
+      b.disabled = false;
+    };
+  for (const b of s.querySelectorAll<HTMLButtonElement>('[data-link]'))
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await link(b.dataset.link!, b.dataset.linkConn!);
+        toast('It shows there now, read only.');
+        return redraw();
+      } catch {
+        toast('Couldn’t show it there. Try again.');
       }
       b.disabled = false;
     };

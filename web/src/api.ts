@@ -124,4 +124,5 @@ export const api = {
   connect: (body: Record<string, unknown>) => call<Connection>('POST', '/api/connections', body, { quiet: true }),
   consent: (id: string, share_numbers: boolean) => call<Connection>('PUT', `/api/connections/${encodeURIComponent(id)}/consent`, { share_numbers }),
   disconnect: (id: string) => call<{ ok: true }>('DELETE', `/api/connections/${encodeURIComponent(id)}`),
+  linkConnection: (widget_id: string, connection_id: string) => call<Widget>('PUT', `/api/widgets/${encodeURIComponent(widget_id)}/connection`, { connection_id }),
 };

@@ -152,6 +152,14 @@ describe('Accounts at phone size', () => {
     const share = row.locator('[data-share]');
     await share.tap();
     await expect.poll(() => share.getAttribute('aria-pressed')).toBe('true');
+    // Sharing links the account to the board's one Your account display (D1.3.1): board checked both are this account's.
+    await expect.poll(() => row.locator('.ac-shown').innerText().catch(() => '')).toContain(`Shown on ${accountTitle}.`);
+    const linked = await page.evaluate(async () => {
+      const b = (await (await fetch('/api/board')).json()) as { widgets: { spec: { type?: string; params?: { connection_id?: string } } }[] };
+      const c = (await (await fetch('/api/connections')).json()) as { connections: { connection_id: string }[] };
+      return { on: b.widgets.find((w) => w.spec.type === 'positions')?.spec.params?.connection_id, con: c.connections[0]?.connection_id };
+    });
+    expect(linked.on).toBe(linked.con);
     await settled();
     await page.waitForTimeout(400);
     await shot('accounts-kalshi-connected');
@@ -180,6 +188,8 @@ describe('Accounts at phone size', () => {
     expect(text).toContain('Kalshi');
     expect(text).toContain('read only');
     expect(text).toMatch(/Checked with Kalshi at \d{1,2}:\d\d/);
+    // The web stack's runner is a fake, so no run reads the numbers here (e2e/milestone-d1-3.test.ts runs one).
+    expect(text).toContain('Reading the balance and positions');
     await tile(accountTitle).scrollIntoViewIfNeeded();
     await shot('board-connected');
   });
