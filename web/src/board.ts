@@ -8,6 +8,38 @@ import { IC } from './icons.ts';
 import { DESKTOP_COLS, PHONE_COLS, canonical, dimsOf, orderFromBoard, pack, placesFor, type Rect } from './layout.ts';
 import { displayHtml, miniHtml, tileName, type RenderCtx } from './widgets.ts';
 
+type Place = Widget['spec']['place'];
+
+/** A folder change the board shows before the server has it. */
+export interface LocalChange {
+  /** Where tiles go, by widget id. */
+  places: Map<string, Place>;
+  /** A folder made here: it has a temporary id until the server makes it. */
+  folder?: Widget;
+  /** A folder whose last card left. */
+  gone?: string;
+  /** A folder's new name. */
+  title?: { id: string; title: string };
+}
+
+/** The server's board with the changes still waiting laid over it. */
+export function withLocal(server: readonly Widget[], local: readonly LocalChange[]): readonly Widget[] {
+  if (!local.length) return server;
+  let out = [...server];
+  for (const c of local) {
+    if (c.folder) out.push(c.folder);
+    out = out
+      .filter((w) => w.spec.widget_id !== c.gone)
+      .map((w) => {
+        const place = c.places.get(w.spec.widget_id);
+        const title = c.title?.id === w.spec.widget_id ? c.title.title : undefined;
+        if (!place && title === undefined) return w;
+        return { ...w, spec: { ...w.spec, ...(place && { place }), ...(title !== undefined && { title }) } } as Widget;
+      });
+  }
+  return out;
+}
+
 export interface Placed extends Rect {
   x: number;
   y: number;
@@ -33,6 +65,10 @@ export const S = {
   hidden: new Set<string>(),
   /** The last board from the server, so a change here (hide, undo) can redraw without a fetch. */
   last: [] as readonly Widget[],
+  /** Folder changes shown here and not answered yet (their Undo offer, then the call), laid over every board from the server. */
+  local: [] as LocalChange[],
+  /** A make-folder is on its way: a board from the server may already hold the new folder, which the answer will bring. */
+  sending: 0,
 };
 /** The tile elements by widget id (grid tiles only; folder children live inside their folder). */
 export const EL = new Map<string, HTMLElement>();
@@ -52,6 +88,21 @@ export interface BoardHooks {
   closeSurface: (instant?: boolean) => void;
 }
 let hooks: BoardHooks;
+
+/** What a folder drag asks for; actions.ts answers, with Undo. */
+export interface FolderHooks {
+  /** A card dropped on a card (a new folder) or on a folder. */
+  drop: (card: string, target: string) => void;
+  /** A card dragged out of an open folder, to this place in the grid's order. */
+  takeOut: (card: string, folder: string, index: number) => void;
+  rename: (folder: string, title: string) => void;
+  /** Save a grid order while a folder change is still waiting, after that change. */
+  saveOrder: (order: string[]) => void;
+}
+export let folderHooks: FolderHooks;
+export const bindFolders = (h: FolderHooks) => {
+  folderHooks = h;
+};
 
 const dims = (id: string) => dimsOf(S.widgets.get(id)!.spec, S.cols);
 const dims8 = (id: string) => dimsOf(S.widgets.get(id)!.spec, DESKTOP_COLS);
@@ -172,9 +223,12 @@ export function place(o: { stagger?: boolean } = {}) {
   const dr = D?.active ? D.id : null;
   board.style.width = S.cols * S.cell + (S.cols - 1) * S.gap + 'px';
   board.style.height = Math.max(S.rows * step - S.gap, 0) + 'px';
+  const prev = S.rects;
   S.rects = new Map();
   for (const [id, r] of rects) S.rects.set(id, { ...r, x: r.c * step, y: r.r * step, W: r.w * S.cell + (r.w - 1) * S.gap, H: r.h * S.cell + (r.h - 1) * S.gap });
   const sl = dr ? S.rects.get(dr) : null;
+  // A phone during a drag: only the two tiles nearest the gap glide (design.md section 13); the others go straight there.
+  const glide = S.phone && sl ? nearestMoving(sl, prev) : null;
   for (const [id, r] of S.rects) {
     const w = EL.get(id);
     if (!w) continue;
@@ -184,6 +238,7 @@ export function place(o: { stagger?: boolean } = {}) {
     w.style.height = r.H + 'px';
     if (id === dr) continue;
     if (o.stagger && sl) w.style.setProperty('--delay', Math.min(170, Math.hypot(r.x - sl.x, r.y - sl.y) * 0.18).toFixed(0) + 'ms');
+    if (glide && !glide.has(id)) w.classList.add('no-glide');
     w.style.transform = `translate3d(${r.x}px,${r.y}px,0)`;
   }
   if (o.stagger) {
@@ -192,6 +247,17 @@ export function place(o: { stagger?: boolean } = {}) {
   }
   if (D?.active) moveSlot();
   S.brect = null;
+  if (glide) raf2(() => EL.forEach((w) => w.classList.remove('no-glide')));
+}
+
+/** The two tiles nearest the gap whose place changes on this reflow. */
+function nearestMoving(sl: Placed, prev: Map<string, Placed>) {
+  const moving = [...S.rects].filter(([id, r]) => {
+    const p = prev.get(id);
+    return id !== D!.id && p && (p.x !== r.x || p.y !== r.y);
+  });
+  moving.sort(([, a], [, b]) => Math.hypot(a.x - sl.x, a.y - sl.y) - Math.hypot(b.x - sl.x, b.y - sl.y));
+  return new Set(moving.slice(0, 2).map(([id]) => id));
 }
 
 export function layoutAll() {
@@ -242,7 +308,7 @@ export function refreshTile(id: string) {
   const el = EL.get(id);
   const w = S.widgets.get(id);
   if (!el || !w) return;
-  const keep = ['is-lifted', 'is-settling', 'is-new', 'is-hot', 'is-morph', 'is-out', 'has-live', 'is-running'].filter((c) => el.classList.contains(c));
+  const keep = ['is-lifted', 'is-settling', 'is-new', 'is-hot', 'is-morph', 'is-out', 'is-merge', 'has-live', 'is-running'].filter((c) => el.classList.contains(c));
   if (w.spec.kind === 'display') {
     const inner = el.querySelector('.w-in');
     if (inner) setHtml(inner, displayHtml(w, renderCtx()));
@@ -283,8 +349,9 @@ export function mount(widgets: readonly Widget[]) {
 
 function setData(widgets: readonly Widget[]) {
   S.last = widgets;
-  S.widgets = new Map(widgets.map((w) => [w.spec.widget_id, w]));
-  const { order, kids } = orderFromBoard(widgets);
+  const view = withLocal(widgets, S.local);
+  S.widgets = new Map(view.map((w) => [w.spec.widget_id, w]));
+  const { order, kids } = orderFromBoard(view);
   S.order = order.filter((id) => !S.hidden.has(id));
   S.kids = kids;
 }
@@ -293,12 +360,12 @@ function setData(widgets: readonly Widget[]) {
 export function hideTile(id: string, hide: boolean) {
   if (hide) S.hidden.add(id);
   else S.hidden.delete(id);
-  reconcile(S.last);
+  applyBoard(S.last);
 }
 
 /** One widget changed on the server (a resize answers with it): redraw with it. */
 export function upsert(w: Widget) {
-  reconcile(S.last.map((o) => (o.spec.widget_id === w.spec.widget_id ? w : o)));
+  applyBoard(S.last.map((o) => (o.spec.widget_id === w.spec.widget_id ? w : o)));
 }
 
 /** Save the grid as it now packs (after a size change), so a reload rebuilds this board. */
@@ -307,15 +374,69 @@ export function saveLayout() {
   const moved = order.join() !== S.order.join();
   S.order = order;
   if (moved) place({ stagger: true });
-  hooks.saveOrder(order);
+  persist(order);
+}
+
+/** Save an order: straight away, or behind the folder change still waiting (it may name a folder with no id yet). */
+function persist(order: string[]) {
+  if (S.local.length) folderHooks.saveOrder(order);
+  else hooks.saveOrder(order);
+}
+
+/** Show a change now. */
+export function showLocal(c: LocalChange) {
+  S.local.push(c);
+  applyBoard(S.last);
+}
+
+/** Take a shown change back (Undo, or the call failed). */
+export function dropLocal(c: LocalChange) {
+  const i = S.local.indexOf(c);
+  if (i < 0) return;
+  S.local.splice(i, 1);
+  applyBoard(S.last);
+}
+
+/** The server answered a change: its board replaces the change. */
+export function settleLocal(c: LocalChange, server: readonly Widget[]) {
+  const i = S.local.indexOf(c);
+  if (i >= 0) S.local.splice(i, 1);
+  applyBoard(server);
+}
+
+/** The server made a folder: everything that names the temporary id names the real one, and the tile stays as it is. */
+export function adoptFolder(tmp: string, real: string) {
+  const fix = (id: string) => (id === tmp ? real : id);
+  const el = EL.get(tmp);
+  if (el) {
+    EL.delete(tmp);
+    EL.set(real, el);
+    el.dataset.id = real;
+  }
+  S.order = S.order.map(fix);
+  if (D) {
+    D.id = fix(D.id);
+    D.startOrder = D.startOrder.map(fix);
+    if (D.hover) D.hover = fix(D.hover);
+    if (D.merge) D.merge = fix(D.merge);
+  }
+  for (const c of S.local) {
+    c.places = new Map([...c.places].map(([k, p]) => [fix(k), 'folder_id' in p ? { ...p, folder_id: fix(p.folder_id) } : p]));
+    if (c.gone) c.gone = fix(c.gone);
+    if (c.title) c.title.id = fix(c.title.id);
+  }
+}
+
+/** A fresh board from the server. Waits while a make-folder is on its way: the answer brings the new folder. */
+export function reconcile(widgets: readonly Widget[]) {
+  if (!S.sending) applyBoard(widgets);
 }
 
 /**
- * A fresh board from the server (a live event, a reconnect, the answer to a save). Tiles whose data changed are
- * re-rendered in place; new tiles pour in, removed ones drain away; a different order (another tab) glides.
- * While the user drags, the server's order waits: the drop saves the user's own.
+ * Tiles whose data changed are re-rendered in place; new tiles pour in, removed ones drain away; a different order
+ * (another tab) glides. While the user drags, the server's order waits: the drop saves the user's own.
  */
-export function reconcile(widgets: readonly Widget[]) {
+function applyBoard(widgets: readonly Widget[]) {
   const before = new Map(S.widgets);
   const prevOrder = S.order;
   setData(widgets);
@@ -369,10 +490,35 @@ interface Drag {
   cx: number;
   cy: number;
   hover: string | null;
+  /** The pointer is over the middle of the hover tile: this tile would become a folder. */
+  middle: boolean;
+  /** The tile the drop would merge with (armed after a short hover). */
+  merge: string | null;
   lastSwap: { x: number; y: number } | null;
   startOrder: string[];
 }
 let D: Drag | null = null;
+/** The hover that makes a folder, then the wait before a card under an edge swaps (a card or folder target). */
+const MERGE_MS = 260;
+const SWAP_MS = 240;
+/** How much of a target counts as "over the middle": this share of it, at most 80 px across, so a big card's edges still reorder. */
+const MIDDLE = 0.64;
+const MIDDLE_MAX = 80;
+
+function canMerge(card: string, target: string) {
+  const a = S.widgets.get(card);
+  const b = S.widgets.get(target);
+  if (a?.spec.kind !== 'display' || !b) return false;
+  return b.spec.kind === 'display' || (b.spec.kind === 'folder' && (S.kids.get(target)?.length ?? 0) < 24);
+}
+
+/** Show (or stop showing) that the hovered tile will become a folder. */
+function arm(d: Drag, id: string | null) {
+  if (d.merge === id) return;
+  if (d.merge) EL.get(d.merge)?.classList.remove('is-merge');
+  d.merge = id;
+  if (id) EL.get(id)?.classList.add('is-merge');
+}
 let suppressUntil = 0;
 export const isDragging = () => !!D?.active;
 
@@ -391,6 +537,8 @@ function startDrag() {
   d.cx = r.x;
   d.cy = r.y;
   d.hover = null;
+  d.middle = false;
+  d.merge = null;
   d.lastSwap = null;
   d.startOrder = [...S.order];
   d.w.classList.add('is-lifted');
@@ -434,6 +582,8 @@ function dragFrame() {
   const s = S.rects.get(d.id)!;
   if (px >= s.x && px <= s.x + s.W && py >= s.y && py <= s.y + s.H) {
     d.hover = null;
+    d.middle = false;
+    arm(d, null);
     clearTimeout(d.dwell);
   } else {
     let hit: string | null = null;
@@ -442,10 +592,15 @@ function dragFrame() {
         hit = id;
         break;
       }
-    if (hit !== d.hover) {
+    const merges = !!hit && canMerge(d.id, hit);
+    const r = hit ? S.rects.get(hit)! : null;
+    const middle = merges && Math.abs(px - (r!.x + r!.W / 2)) < Math.min(r!.W * MIDDLE, MIDDLE_MAX) / 2 && Math.abs(py - (r!.y + r!.H / 2)) < Math.min(r!.H * MIDDLE, MIDDLE_MAX) / 2;
+    if (hit !== d.hover || middle !== d.middle) {
       d.hover = hit;
+      d.middle = middle;
+      arm(d, null);
       clearTimeout(d.dwell);
-      if (hit) d.dwell = window.setTimeout(() => commitSwap(hit), 110);
+      if (hit) d.dwell = window.setTimeout(() => (middle ? arm(d, hit) : commitSwap(hit)), middle ? MERGE_MS : merges ? SWAP_MS : 110);
     }
   }
   const edge = d.ly < d.wrect!.top + 56 ? -1 : d.ly > d.wrect!.bottom - 56 ? 1 : 0;
@@ -470,6 +625,8 @@ function commitSwap(hit: string) {
   S.order.splice(to, 0, d.id);
   d.lastSwap = { x: d.lx, y: d.ly };
   d.hover = null;
+  d.middle = false;
+  arm(d, null);
   place({ stagger: true });
 }
 
@@ -498,6 +655,22 @@ function endDrag() {
   suppressUntil = performance.now() + 350;
   const w = d.w;
   const r = S.rects.get(d.id)!;
+  const target = d.merge;
+  if (target) {
+    // It merges into the target where the drop was, and the rest of the board goes back to where it was.
+    EL.get(target)?.classList.remove('is-merge');
+    const t = S.rects.get(target)!;
+    board.classList.remove('is-dragging');
+    slotEl.classList.remove('on');
+    EL.delete(d.id);
+    w.classList.remove('is-lifted');
+    w.classList.add('is-merging');
+    w.style.transform = `translate3d(${t.x + t.W / 2 - r.W / 2}px,${t.y + t.H / 2 - r.H / 2}px,0)`;
+    setTimeout(() => w.remove(), reduced() ? 220 : 340);
+    S.order = d.startOrder;
+    folderHooks.drop(d.id, target);
+    return;
+  }
   const dist = Math.hypot(r.x - d.cx, r.y - d.cy);
   board.classList.remove('is-dragging');
   slotEl.classList.remove('on');
@@ -517,13 +690,35 @@ function endDrag() {
     const moved = order.join() !== S.order.join();
     S.order = order;
     if (moved) place({ stagger: true });
-    hooks.saveOrder(order);
+    persist(order);
   }
 }
 
 export const desktopPlaces = (order: string[]) => placesFor(order, dims8);
 /** The grid's places without one tile (it moves into a folder), in the order that reads back as itself. */
 export const placesWithout = (id: string) => placesFor(canonical(S.order.filter((o) => o !== id), dims8), dims8);
+/** The grid's places for an order, in the order that reads back as itself. */
+export const placesOf = (order: string[]) => placesFor(canonical(order, dims8), dims8);
+
+/** Where in the grid's order a card dropped at this screen point goes: before the nearest tile, or after it if past its middle. */
+export function indexAt(x: number, y: number) {
+  const b = board.getBoundingClientRect();
+  const px = x - b.left;
+  const py = y - b.top;
+  let best = S.order.length;
+  let nearest = Infinity;
+  S.order.forEach((id, i) => {
+    const r = S.rects.get(id);
+    if (!r) return;
+    const cx = r.x + r.W / 2;
+    const cy = r.y + r.H / 2;
+    const dist = Math.hypot(px - cx, py - cy);
+    if (dist >= nearest) return;
+    nearest = dist;
+    best = i + (py > r.y + r.H || (py >= r.y && px > cx) ? 1 : 0);
+  });
+  return best;
+}
 
 // ---------- events ----------
 
@@ -565,6 +760,8 @@ export function bindBoard(h: BoardHooks) {
       cx: 0,
       cy: 0,
       hover: null,
+      middle: false,
+      merge: null,
       lastSwap: null,
       startOrder: [],
     };

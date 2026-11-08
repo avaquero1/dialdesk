@@ -7,7 +7,7 @@
  */
 import type { Account, Widget, WidgetResult } from '@app/contracts';
 import { $, $$, clamp, css, cssNum, esc, mk, reduced, root, setHtml } from './dom.ts';
-import { EL, S } from './board.ts';
+import { EL, S, folderHooks, indexAt } from './board.ts';
 import { IC, type IconName } from './icons.ts';
 import { L, THEMES, mqDark, resolveMode, setLook, themeHue } from './look.ts';
 import { cardHtml, fmtNum, fmtTime, tileName } from './widgets.ts';
@@ -59,6 +59,7 @@ export function initSurfaces(h: SurfaceHooks) {
   });
   $('#look-btn').addEventListener('click', () => (lookOpen() ? closeSurface() : openLook()));
   $('#avatar').addEventListener('click', () => openAccount());
+  bindCardDrag();
 }
 
 export const surfaceOpen = () => !!SF;
@@ -140,7 +141,13 @@ export function closeSurface(instant?: boolean) {
   s.classList.remove('is-open');
   s.classList.add('is-closing');
   s._set(s._from());
-  setTimeout(() => s.remove(), reduced() ? 260 : 1100);
+  setTimeout(() => {
+    // A finger still on a card of this folder: the page stops getting its touch if the card leaves the DOM.
+    if (CD && s.contains(CD.el)) {
+      s.classList.add('is-gone');
+      CD.sheet = s;
+    } else s.remove();
+  }, reduced() ? 260 : 1100);
 }
 
 export function panel(kind: string, html: string, o: { w?: number; at?: 'right'; clear?: boolean; from: Box; fromFn?: () => Box; after?: (s: Surface) => void }) {
@@ -287,10 +294,182 @@ export function openFolder(id: string) {
   const cards = kids.map((k, i) => cardHtml(k, i + 2)).join('');
   panel(
     'folder-open',
-    `<div class="sh-head${rz(0)}><h2 class="fo-title">${esc(f.spec.title)}</h2>${closeBtn(0)}</div>` +
+    `<div class="sh-head${rz(0)}><h2 class="fo-title" tabindex="0" role="button" aria-label="Rename ${esc(f.spec.title)}">${esc(f.spec.title)}</h2>${closeBtn(0)}</div>` +
       `<div class="sh-sub${rz(1)}>${kids.length} ${kids.length === 1 ? 'market' : 'markets'} · the chance and the move since yesterday</div><div class="fo-grid">${cards}</div>`,
-    { w: 540, from: tileFrom(id), fromFn: () => tileFrom(id) },
+    {
+      w: 540,
+      from: tileFrom(id),
+      fromFn: () => tileFrom(id),
+      after: (s) => {
+        s.dataset.fid = id;
+        $$('.fo-grid .card', s).forEach((c, i) => {
+          c.dataset.id = kids[i]!.spec.widget_id;
+        });
+        s.addEventListener('click', (e) => {
+          if ((e.target as Element).closest('h2.fo-title')) editTitle(s);
+        });
+        s.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && (e.target as Element).matches('h2.fo-title')) editTitle(s);
+        });
+        s.addEventListener('pointerdown', (e) => pressCard(s, e));
+      },
+    },
   );
+}
+
+/** The open folder keeps up with a change shown or taken back: its name, or it closes when the folder has gone. */
+export function syncFolder() {
+  const s = SF;
+  const id = s?.dataset.fid;
+  if (!s || !id) return;
+  const f = S.widgets.get(id);
+  if (f?.spec.kind !== 'folder') return closeSurface();
+  const h = s.querySelector('h2.fo-title');
+  if (h) h.textContent = f.spec.title;
+}
+
+/** The server gave the open folder its real id. */
+export function adoptFolderSheet(tmp: string, real: string) {
+  if (SF?.dataset.fid === tmp) SF.dataset.fid = real;
+}
+
+/** The name, edited in place: Enter or leaving the field saves, Escape keeps the old name. */
+const BAD_TITLE = /[<>\p{Cc}]/gu;
+function editTitle(s: Surface) {
+  const h = s.querySelector<HTMLElement>('h2.fo-title');
+  const f = S.widgets.get(s.dataset.fid ?? '');
+  if (!h || f?.spec.kind !== 'folder') return;
+  const old = f.spec.title;
+  const input = mk('input', 'fo-title fo-title-in');
+  input.type = 'text';
+  input.maxLength = 60;
+  input.value = old;
+  input.enterKeyHint = 'done';
+  input.setAttribute('aria-label', 'Folder name');
+  h.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = (save: boolean) => {
+    if (done) return;
+    done = true;
+    const name = input.value.trim();
+    input.replaceWith(h);
+    if (save && name && name !== old) folderHooks.rename(s.dataset.fid!, name);
+  };
+  input.addEventListener('input', () => {
+    const clean = input.value.replace(BAD_TITLE, '');
+    if (clean !== input.value) input.value = clean;
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finish(true);
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
+}
+
+// A card dragged out of the open folder. Long press (or 5 px with a mouse) lifts it; past 24 px the folder drains and
+// the drop puts the card on the board where it falls. One moving layer: a solid copy of the card.
+interface CardDrag {
+  el: HTMLElement;
+  folder: string;
+  pid: number;
+  type: string;
+  x0: number;
+  y0: number;
+  lx: number;
+  ly: number;
+  gx: number;
+  gy: number;
+  active: boolean;
+  out: boolean;
+  timer: number;
+  ghost: HTMLElement | null;
+  /** The folder's closed sheet, kept hidden until the finger comes up. */
+  sheet?: Surface;
+}
+let CD: CardDrag | null = null;
+
+function pressCard(s: Surface, e: PointerEvent) {
+  if (CD || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const el = (e.target as Element).closest<HTMLElement>('.fo-grid .card');
+  if (!el?.dataset.id) return;
+  const d: CardDrag = { el, folder: s.dataset.fid!, pid: e.pointerId, type: e.pointerType, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, gx: 0, gy: 0, active: false, out: false, timer: 0, ghost: null };
+  CD = d;
+  if (d.type !== 'mouse') d.timer = window.setTimeout(() => CD === d && liftCard(d), 380);
+}
+
+function liftCard(d: CardDrag) {
+  d.active = true;
+  clearTimeout(d.timer);
+  const b = d.el.getBoundingClientRect();
+  d.gx = d.x0 - b.left;
+  d.gy = d.y0 - b.top;
+  const g = d.el.cloneNode(true) as HTMLElement;
+  g.className = 'card card-ghost';
+  g.style.width = b.width + 'px';
+  g.style.height = b.height + 'px';
+  layer.appendChild(g);
+  d.ghost = g;
+  moveCard(d);
+  d.el.classList.add('is-lifting');
+  if (d.type !== 'mouse' && navigator.vibrate) navigator.vibrate(10);
+}
+
+function moveCard(d: CardDrag) {
+  d.ghost!.style.transform = `translate3d(${d.lx - d.gx}px,${d.ly - d.gy}px,0)`;
+  if (!d.out && Math.hypot(d.lx - d.x0, d.ly - d.y0) > 24) {
+    d.out = true;
+    closeSurface();
+  }
+}
+
+function endCard(drop: boolean) {
+  const d = CD;
+  if (!d) return;
+  CD = null;
+  clearTimeout(d.timer);
+  d.sheet?.remove();
+  if (!d.active) return;
+  d.el.classList.remove('is-lifting');
+  const g = d.ghost!;
+  g.classList.add('is-gone');
+  setTimeout(() => g.remove(), reduced() ? 120 : 200);
+  if (drop && d.out) folderHooks.takeOut(d.el.dataset.id!, d.folder, indexAt(d.lx, d.ly));
+}
+
+function bindCardDrag() {
+  addEventListener('pointermove', (e) => {
+    const d = CD;
+    if (!d || e.pointerId !== d.pid) return;
+    d.lx = e.clientX;
+    d.ly = e.clientY;
+    if (d.active) return moveCard(d);
+    const dist = Math.hypot(d.lx - d.x0, d.ly - d.y0);
+    if (d.type === 'mouse') {
+      if (dist > 5) liftCard(d);
+    } else if (dist > 10) {
+      clearTimeout(d.timer);
+      CD = null;
+    }
+  });
+  addEventListener('pointerup', (e) => {
+    if (CD && e.pointerId === CD.pid) endCard(true);
+  });
+  addEventListener('pointercancel', (e) => {
+    if (CD && e.pointerId === CD.pid) endCard(false);
+  });
+  addEventListener('touchmove', (e) => {
+    if (CD?.active) e.preventDefault();
+  }, { passive: false });
+  layer.addEventListener('contextmenu', (e) => {
+    if (CD) e.preventDefault();
+  });
 }
 
 // ---------- apps ----------

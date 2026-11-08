@@ -87,7 +87,11 @@ export const api = {
   /** auth: false, so boot can ask "is there a session?" without the session-lost path. */
   me: (o: { auth?: boolean } = {}) => call<Account>('GET', '/api/me', undefined, o),
   board: () => call<Board>('GET', '/api/board'),
-  setLayout: (places: Places) => call<Board>('PUT', '/api/board/layout', { places }),
+  setLayout: (places: Places, o: { keepalive?: boolean } = {}) => call<Board>('PUT', '/api/board/layout', { places }, o),
+  /** No title: board names it the way the first board names its folders. */
+  makeFolder: (widget_ids: string[], place: { col: number; row: number }, o: { keepalive?: boolean } = {}) =>
+    call<Board>('POST', '/api/folders', { widget_ids, place }, o),
+  setTitle: (id: string, title: string, o: { keepalive?: boolean } = {}) => call<Widget>('PATCH', `/api/widgets/${encodeURIComponent(id)}/title`, { title }, o),
   setLook: (look: Look) => call<Look>('PUT', '/api/look', look),
   // The ⋯ menu. keepalive: an Undo offer still waiting when the page goes away is sent anyway.
   resize: (id: string, size: 'S' | 'M' | 'L' | 'XL') => call<Widget>('PATCH', `/api/widgets/${encodeURIComponent(id)}/size`, { size }),
