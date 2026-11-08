@@ -90,6 +90,18 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
   as svc_audit and svc-audit: the chain from `log:actions`, signed and pushed heads, `verify` catching a tampered row, a rewritten
   chain and a cut tail, UPDATE/DELETE/TRUNCATE refused, XAUTOCLAIM from a dead consumer, and the trust numbers. Not part of
   `make check` (Docker, `make dev-secrets`). `PG_DEV_PORT` moves the dev Postgres port the same way `VALKEY_DEV_PORT` does.
+- `make e2e-real`: the same journey on the **real** services, only the model faked (meeting point 1). Compose project
+  `vha-e2e-real` (Postgres :55441, Valkey :56441, the fixture site on :8300, which the catalog's fixture rows name); the test
+  (`e2e/real/journey.test.ts`) starts sandbox-manager on the docker backend on its own dev topology and the nine services with
+  tsx on :18440-18448 (`e2e/real/stack.ts`, models with `MODELS_FAKE=1`), then drives edge's browser API: sign up, the first
+  board on this weekend's games, the chat (Hi, a league, a team, two proposals, the taps), the runs on BullMQ, the research
+  run with the poisoned page's box killed, a refresh that keeps the clean numbers, the trust counts and audit's verify.
+  markets runs from `e2e/real/markets-recorded.ts`: the real service on the recording of this weekend
+  (`fixtures/markets/live/weekend`); every other host is refused, so nothing reaches the internet. Logs:
+  `.logs/e2e-real/<service>.log`. Everything is removed afterwards. Not part of `make check` (Docker, `make dev-secrets`,
+  `make images`). `E2E_REAL_PORT_BASE`, `E2E_REAL_PG_PORT` and `E2E_REAL_VALKEY_PORT` move the ports.
+- `make agent-pg-test`: agent's Postgres conversation store (`services/agent/test/pg-store.test.ts`) on a throwaway
+  Postgres 17 (Compose project `vha-agent-pg-test`, port 55436), as the superuser, removed afterwards.
 - **The trust page's numbers** come from log actions named in `TRUST_ACTIONS` (packages/contracts/src/api/audit.ts), with the
   ids, sizes and hashes listed there. Log them with those names or the trust page won't count them.
 - Your own unit tests: `services/<name>/test/*.test.ts` (picked up by the contracts project) or Rust `#[test]`s.

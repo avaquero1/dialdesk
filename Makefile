@@ -2,7 +2,7 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check shellcheck deploy-dry-run
+.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check shellcheck deploy-dry-run e2e-real agent-pg-test
 
 check: rust gen-check typecheck lint shellcheck contracts web e2e
 	@echo "make check: all green"
@@ -123,6 +123,27 @@ shellcheck:
 	  sc="docker run --rm --network none -v $$PWD:/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) --external-sources" && \
 	  $$sc --severity=warning $$files && $$sc --severity=style $$deploy && \
 	  echo "shellcheck: $$(echo $$files | wc -w) scripts pass (warning), $$(echo $$deploy | wc -w) in the deploy kit pass every note"
+
+# Meeting point 1 on this machine: the whole journey (e2e/real/journey.test.ts) on the nine real services, only the model
+# faked. Compose project vha-e2e-real (Postgres, Valkey, the fixture site on :8300); the test starts sandbox-manager on the
+# docker backend and the services with tsx on :18440-18448 (e2e/real/stack.ts). Everything is removed afterwards.
+E2E_REAL_PG_PORT ?= 55441
+E2E_REAL_VALKEY_PORT ?= 56441
+E2E_REAL := PG_DEV_PORT=$(E2E_REAL_PG_PORT) VALKEY_DEV_PORT=$(E2E_REAL_VALKEY_PORT) docker compose -p vha-e2e-real -f deploy/compose.dev.yml --env-file .env
+e2e-real: rust images engine-image
+	$(E2E_REAL) up -d --wait postgres valkey fixtures
+	E2E_REAL_PG_PORT=$(E2E_REAL_PG_PORT) E2E_REAL_VALKEY_PORT=$(E2E_REAL_VALKEY_PORT) npx vitest run --project e2e-real; \
+	  s=$$?; $(E2E_REAL) down -v; exit $$s
+
+# agent's Postgres conversation store (services/agent/test/pg-store.test.ts) on a throwaway Postgres 17: its own Compose
+# project and port, removed afterwards.
+AGENT_PG_TEST_PORT ?= 55436
+AGENT_PG_TEST := PG_DEV_PORT=$(AGENT_PG_TEST_PORT) docker compose -p vha-agent-pg-test -f deploy/compose.dev.yml --env-file .env
+agent-pg-test:
+	$(AGENT_PG_TEST) up -d --wait postgres
+	AGENT_TEST_DATABASE_URL=postgres://postgres:$$(sed -n 's/^PG_SUPERUSER_PASSWORD=//p' .env)@127.0.0.1:$(AGENT_PG_TEST_PORT)/app \
+	  npx vitest run --project contracts services/agent/test/pg-store.test.ts; \
+	  s=$$?; $(AGENT_PG_TEST) down -v; exit $$s
 
 # Local infra only (Postgres, Valkey, fixtures). The services run natively with tsx.
 infra-up:

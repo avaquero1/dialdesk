@@ -5,7 +5,9 @@ export default defineConfig({
     projects: [
       { test: { name: 'contracts', include: ['tests/**/*.test.ts', 'packages/*/test/**/*.test.ts', 'services/*/test/**/*.test.ts', 'web/test/unit/**/*.test.ts'] } },
       { test: { name: 'web', include: ['web/test/*.test.ts'], testTimeout: 240_000, hookTimeout: 60_000, fileParallelism: false } },
-      { test: { name: 'e2e', include: ['e2e/**/*.test.ts'], testTimeout: 60_000, hookTimeout: 120_000 } },
+      { test: { name: 'e2e', include: ['e2e/*.test.ts'], testTimeout: 60_000, hookTimeout: 120_000 } },
+      // The same journey on the real services, only the model faked: `make e2e-real` (Compose, Docker, `make dev-secrets`).
+      { test: { name: 'e2e-real', include: ['e2e/real/*.test.ts'], testTimeout: 120_000, hookTimeout: 240_000, fileParallelism: false } },
       // Real sandboxes on Docker: `make containment-local` (needs `make images`).
       { test: { name: 'containment', include: ['sandbox/test/**/*.test.ts'], testTimeout: 60_000, hookTimeout: 120_000 } },
     ],
