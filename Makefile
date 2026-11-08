@@ -2,9 +2,9 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check
+.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check shellcheck deploy-dry-run
 
-check: rust gen-check typecheck lint contracts web e2e
+check: rust gen-check typecheck lint shellcheck contracts web e2e
 	@echo "make check: all green"
 
 install:
@@ -108,6 +108,20 @@ nft-check:
 # run in it (exit 0, no value printed). Needs Docker; through build-slot on a dev PC.
 deploy-image-check:
 	deploy/images/check-app-image.sh
+
+# The whole control deploy, printed, with the example settings (changes nothing; tests/deploy/deploy-script.test.ts checks it).
+deploy-dry-run:
+	deploy/scripts/deploy.sh control --dry-run --env-file deploy/deploy.env.example
+
+# Every shell script in the repo (tracked or new), through the pinned shellcheck image (no network, the repo read-only):
+# warnings and errors fail it everywhere; under deploy/ (run as root on the servers) every note fails it too.
+SHELLCHECK_IMAGE := koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+shellcheck:
+	@files=$$(git ls-files --cached --others --exclude-standard '*.sh') && \
+	  deploy=$$(git ls-files --cached --others --exclude-standard 'deploy/*.sh') && \
+	  sc="docker run --rm --network none -v $$PWD:/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) --external-sources" && \
+	  $$sc --severity=warning $$files && $$sc --severity=style $$deploy && \
+	  echo "shellcheck: $$(echo $$files | wc -w) scripts pass (warning), $$(echo $$deploy | wc -w) under deploy/ pass every note"
 
 # Local infra only (Postgres, Valkey, fixtures). The services run natively with tsx.
 infra-up:

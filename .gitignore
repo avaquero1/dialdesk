@@ -11,3 +11,4 @@ coverage/
 .logs/
 .data/
 containment-out/
+deploy/deploy.env
