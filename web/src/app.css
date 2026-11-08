@@ -370,13 +370,21 @@ html[data-theme][data-mode] :is(.mv--up, .mv--down) { text-shadow: none; }
 .c-ex, .c-foot, .c-base { margin-top: calc(var(--u) * 3px); }
 .w--m .c-base .w-note { line-height: 1.25; }
 /* A move and a base rate are words: the text font, with even-width digits. */
-.mv, .w-note.num { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+.mv, .w-note.num, .ev .num { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
 /* A small tile's title stays whole. A small Two prices names its game on its own line, whole. */
 .w--s .w-title { flex: none; }
 .w--s .w-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .g-game { margin-top: calc(var(--u) * -3px); font: 600 calc(var(--u) * 12.5px)/1.25 var(--font-ui); color: var(--text-2); overflow-wrap: anywhere; }
 /* The ⋯ on a folder or app tile is fully opaque: at .92 it drew yellow pixels along its edge where it crosses the tile (agent-mail light). */
 .w--app > .a-tile > .w-menu-btn, .w--folder > .f-tile > .w-menu-btn { opacity: 1; }
+/* A medium Market's base rate on a phone: two whole lines, not an ellipsis, when your own number isn't taking the room. */
+html[data-layout="phone"] .w--m:not(:has(.c-foot .ev)) .c-base .w-note:first-child { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: clip; }
+/* A large Market on a phone keeps one base rate at the larger text; the second is in How we got this. */
+html[data-layout="phone"] .w--l .c-base .w-note.num:nth-child(n+2) { display: none; }
+/* A small Market's "7 days" has its own line under the chart, so it can't run past the tile. */
+.w--s .c-chart { display: flex; flex-direction: column; min-height: 0; }
+.w--s .c-chart .spark { flex: 1; height: auto; }
+.w--s .c-chart .c-span { position: static; align-self: flex-end; line-height: 1; margin: 1px 2px 3px 0; }
 /* A folder's small tiles: the % on one line with its number. */
 .mini { display: grid; grid-auto-flow: column; place-content: center; align-items: baseline; gap: 0; white-space: nowrap; }
 

@@ -484,7 +484,7 @@ function receiptsBody() {
     const first = r ? leadNumber(r) : undefined;
     const sub = r ? `${first ? fmtNum(first) + ' · ' : ''}updated ${fmtTime(r.created_at)}` : 'Exchange prices until its first run';
     rows.push(
-      `<button class="rowitem how-row${rz(i++)} type="button" data-how="${esc(w.spec.widget_id)}"><span class="ic">${IC.receipts}</span><div class="grow"><div class="t">${esc(w.spec.title)}</div><div class="s">${esc(sub)}</div></div><span class="caret">${IC.caret}</span></button>`,
+      `<button class="rowitem how-row${rz(i++)} type="button" data-how="${esc(w.spec.widget_id)}"><span class="ic">${IC.receipts}</span><div class="grow"><div class="t">${esc(tileName(w))}</div><div class="s">${esc(sub)}</div></div><span class="caret">${IC.caret}</span></button>`,
     );
   }
   return (

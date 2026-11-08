@@ -316,6 +316,18 @@ function events(w: Widget, s: Display, c: RenderCtx) {
 /** "Kalshi 61 cents, Polymarket 63 cents". */
 const pricesSaid = (a: number | null, b: number | null) => lineWords(a != null && spoken(`Kalshi ${a}¢`), b != null && spoken(`Polymarket ${b}¢`));
 
+/**
+ * "You think 65%: that's 4 points above the market." `ev` is the engine's expected_value, probability × 100 minus the
+ * price, so its size is the distance from the market in points. The full math is in How we got this.
+ */
+function yourNumberLine(up: number, ev: number) {
+  const pts = Math.round(Math.abs(ev));
+  const you = `You think ${Math.round(up * 100)}%:`;
+  if (!pts) return `<span class="ev"${says(spoken(`${you} that's the same as the market.`))}>${you} that's the same as the market.</span>`;
+  const side = `${ev > 0 ? 'above' : 'below'} the market.`;
+  return `<span class="ev"${says(spoken(`${you} that's ${points(pts)} ${side}`))}>${you} that's <b class="num">${esc(points(pts))}</b> ${side}</span>`;
+}
+
 function probability(w: Widget, s: Display) {
   const k = quoteOn(w, 'kalshi');
   const p = quoteOn(w, 'polymarket');
@@ -330,12 +342,9 @@ function probability(w: Widget, s: Display) {
   const said = lineWords(chanceWords(big), day ? moveSaid(day.d, day.since) : moveSaid(qd, sinceWords(DAY_S)), big != null && 'the market says');
   const ev = nums(w, 'expected_value')[0];
   const up = s.params.user_probability;
-  const evLine =
-    up == null
-      ? ''
-      : ev
-        ? `<span class="ev"${says(spoken(`You think ${Math.round(up * 100)}%: by the math, a YES at this price is worth ${fmtNum(ev)} per contract.`))}>You think ${Math.round(up * 100)}%: by the math, a YES at this price is worth <b class="num">${esc(fmtNum(ev))}</b> per contract.</span>`
-        : `<span class="ev">You think ${Math.round(up * 100)}%. The math for it comes with the first run.</span>`;
+  // The sentence stays true of the number it reports: the "you think" the engine used, from its own receipt.
+  const evUp = argNum(recOf(w, ev), 'probability') ?? up;
+  const evLine = up == null ? '' : ev && evUp != null ? yourNumberLine(evUp, ev.value) : `<span class="ev">You think ${Math.round(up * 100)}%. The math for it comes with the first run.</span>`;
   const ex = [kc != null ? `<span>Kalshi <b class="num">${esc(kc)}¢</b></span>` : '', pc != null ? `<span>Polymarket <b class="num">${esc(pc)}¢</b></span>` : ''].filter(Boolean).join('<span class="sep">·</span>');
   const line = lineOf(w);
   const chart = line.length ? spark(line) : line2(k).length ? spark(line2(k), { extra: [line2(k), line2(p)] }) : '';
@@ -346,7 +355,8 @@ function probability(w: Widget, s: Display) {
     .map((t) => `<div class="w-note num">${esc(t)}</div>`)
     .join('');
   return (
-    head(s.title, [kc != null && 'Kalshi', pc != null && 'Polymarket'].filter(Boolean).join(' + ') || undefined) +
+    // A small tile has no room for the exchanges beside the title; they are named from medium up, and in How we got this.
+    head(s.title, s.size === 'S' ? undefined : [kc != null && 'Kalshi', pc != null && 'Polymarket'].filter(Boolean).join(' + ') || undefined) +
     `<div class="c-main"><div class="c-left"${says(said)}><div class="big-row"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div><span class="lbl">the market says</span><div class="c-mv">${mv}</div></div><div class="c-chart">${chart}${span ? `<span class="lbl c-span">${esc(span)}</span>` : ''}</div></div>` +
     (ex ? `<div class="c-ex from-m"${says(`${pricesSaid(kc, pc)}, for a YES that pays 1 dollar`)}>${ex}<span class="lbl">for a YES that pays $1</span></div>` : '') +
     (evLine ? `<div class="c-foot from-m">${evLine}</div>` : '') +
