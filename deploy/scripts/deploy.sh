@@ -222,6 +222,9 @@ control_main() {
     [[ $(cfg S3_ENDPOINT) =~ ^https://[a-z0-9.-]+/?$ ]] || die "S3_ENDPOINT must be https://<host>" 2
   fi
   local k; for k in PG_ADMIN_PASSFILE S3_SCREENSHOTS_CREDENTIALS S3_HEADS_CREDENTIALS VULTR_INFERENCE_KEY_FILE BRAVE_KEY_FILE; do input "$k"; done
+  if ((!DRY)) && [[ $LOCAL_DB != 1 && ! -s $(cfg PG_ADMIN_PASSFILE) ]]; then
+    die "no database admin pgpass file at $(cfg PG_ADMIN_PASSFILE) (deploy/PROVISION.md, \"What comes back\")" 2
+  fi
   note "source $SRC, rev $REV"
 
   step "images (built here: vha/app:$REV, vha/caddy:$REV)"
