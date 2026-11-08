@@ -175,7 +175,7 @@ export const tileFrom = (id: string) => {
 // ---------- the ⋯ menu: the same rows on every tile; what doesn't apply is greyed, never hidden ----------
 
 const ACT_ICON: Record<MenuAction, IconName> = { agent: 'chat', refresh: 'refresh', size: 'size', how: 'doc', move: 'folder', clear: 'drop', remove: 'trash' };
-const MENU_NOTE = 'Change it with the agent comes in the next build.';
+const MENU_NOTE = 'Tip: tap any number on a widget to see how we got it.';
 
 function menuHTML(w: Widget) {
   let i = 0;

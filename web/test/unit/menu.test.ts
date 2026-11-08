@@ -26,13 +26,13 @@ describe('the ⋯ menu rows', () => {
     for (const l of labels) expect(l).toEqual(Object.values(LABELS));
   });
 
-  it('keeps "How we got this" greyed everywhere until its step wires it', () => {
-    for (const w of board) for (const r of menuRows(w, board)) if (NOT_YET.has(r.action)) expect(r.on).toBe(false);
+  it('has no row left greyed for a later step', () => {
+    expect(NOT_YET.size).toBe(0);
   });
 
-  it('a display: change it with the agent, refresh, size, move, clear and remove are on', () => {
+  it('a display: every row is on (change it with the agent, refresh, size, how we got this, move, clear, remove)', () => {
     const on = menuRows(byKind('display'), board).filter((r) => r.on).map((r) => r.action);
-    expect(on).toEqual(['agent', 'refresh', 'size', 'move', 'clear', 'remove']);
+    expect(on).toEqual(['agent', 'refresh', 'size', 'how', 'move', 'clear', 'remove']);
   });
 
   it('an app: only move and remove; a folder: only remove (folders don\'t nest)', () => {

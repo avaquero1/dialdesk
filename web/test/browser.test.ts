@@ -132,7 +132,7 @@ describe('web app on the local stack', () => {
       await page.locator('#board > .w[aria-label="Chiefs beat the Bills"] .w-menu-btn').click();
       await page.locator('.surface.menu.is-open').waitFor();
       await settled(page);
-      await expect(page.locator('.surface.menu').innerText()).resolves.toContain('next build');
+      await expect(page.locator('.surface.menu').innerText()).resolves.toContain('How we got this');
       await page.screenshot({ path: join(SHOTS, `menu-${theme}-${mode}.png`) });
       await page.keyboard.press('Escape');
       await settled(page);
