@@ -2,6 +2,19 @@
 COMPOSE := docker compose -f deploy/compose.dev.yml --env-file .env
 SERVICES := edge accounts board agent runner markets connections models audit
 
+# The sandbox images each worktree builds and its tests run: tagged <worktree>-<HEAD>, so two worktrees' checks never
+# run each other's images (a shared :dev tag can be retagged by another check mid-run). Set SANDBOX_*_IMAGE to override;
+# every target here (images, engine-image, e2e, e2e-real, containment-local) and sandbox/dev/topology.ts use these.
+IMAGE_WT := $(shell basename "$$(git rev-parse --show-toplevel)" | tr -c 'A-Za-z0-9_.\n-' '_')
+IMAGE_TAG := $(IMAGE_WT)-$(shell git rev-parse --short=12 HEAD)
+export SANDBOX_BROWSE_IMAGE ?= vha-browse:$(IMAGE_TAG)
+export SANDBOX_PROBE_IMAGE ?= vha-probe:$(IMAGE_TAG)
+export SANDBOX_COMPUTE_IMAGE ?= vha-engine-compute:$(IMAGE_TAG)
+# $(call prune-tags,VAR,repo): after a build, untag this worktree's older <worktree>-<hash> tags of one image. Only when
+# VAR is the Makefile's own tag; never :dev (manual runs still use it) and never another worktree's tag.
+prune-tags = $(if $(filter file,$(origin $(1))),docker image ls --format '{{.Repository}}:{{.Tag}}' $(2) | \
+  grep -x '$(2):$(IMAGE_WT)-[0-9a-f]\{12\}' | grep -vx '$($(1))' | xargs -r docker image rm || true,true)
+
 .PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check shellcheck deploy-dry-run e2e-real agent-pg-test
 
 check: rust gen-check typecheck lint shellcheck contracts web e2e
@@ -50,8 +63,10 @@ e2e: rust images engine-image
 
 # The sandbox images. Docker's cache makes this a no-op when sandbox/images is unchanged.
 images:
-	docker build -q --target browse -t vha-browse:dev sandbox/images/browse
-	docker build -q --target probe -t vha-probe:dev sandbox/images/browse
+	docker build -q --target browse -t $(SANDBOX_BROWSE_IMAGE) -t vha-browse:dev sandbox/images/browse
+	docker build -q --target probe -t $(SANDBOX_PROBE_IMAGE) -t vha-probe:dev sandbox/images/browse
+	@$(call prune-tags,SANDBOX_BROWSE_IMAGE,vha-browse)
+	@$(call prune-tags,SANDBOX_PROBE_IMAGE,vha-probe)
 
 # The containment tests on this PC's Docker (runc): caps, network, secrets, fresh sandboxes, kill and release.
 containment-local: rust images engine-image
@@ -185,11 +200,13 @@ containment:
 	  cat $(CONTAINMENT_OUT)/scoreboard.md; [ $$s -eq 0 ] && [ $$b -eq 0 ]
 
 # The compute sandbox image (engine/Dockerfile): the static engine binary alone, run with --network none.
+# Tagged $(SANDBOX_COMPUTE_IMAGE) (this worktree's own, see the top) and :dev.
 ENGINE_IMAGE := vha-engine-compute
 engine-image:
 	DOCKER_BUILDKIT=1 docker build -q -f engine/Dockerfile --build-arg GIT_HASH=$$(git rev-parse --short=12 HEAD) \
-	  -t $(ENGINE_IMAGE):$$(git rev-parse --short=12 HEAD) -t $(ENGINE_IMAGE):dev .
-	@docker image inspect $(ENGINE_IMAGE):dev --format '$(ENGINE_IMAGE):dev {{.Id}} {{.Size}} bytes'
+	  -t $(SANDBOX_COMPUTE_IMAGE) -t $(ENGINE_IMAGE):dev .
+	@$(call prune-tags,SANDBOX_COMPUTE_IMAGE,$(ENGINE_IMAGE))
+	@docker image inspect $(SANDBOX_COMPUTE_IMAGE) --format '$(SANDBOX_COMPUTE_IMAGE) {{.Id}} {{.Size}} bytes'
 
 engine-image-check: engine-image
-	engine/image-check.sh $(ENGINE_IMAGE):dev
+	engine/image-check.sh $(SANDBOX_COMPUTE_IMAGE)

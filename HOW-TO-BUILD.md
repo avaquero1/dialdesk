@@ -81,6 +81,9 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
   with numbers and receipts, a poisoned page gets its sandbox killed. Pending steps are `it.todo`: turn yours into a
   real step when your piece lands. It needs Docker, the sandbox images (`make images`) and the Rust binaries (`make rust`);
   `E2E_SANDBOX=stub make e2e` runs it without Docker.
+- **Sandbox image tags:** `make` builds and runs this worktree's own `vha-engine-compute`, `vha-browse` and `vha-probe`
+  tags (`<worktree>-<HEAD>`, older ones of this worktree removed; `:dev` is still written for manual runs), because a
+  shared `:dev` let one worktree's `make check` run another's engine mid-run. `SANDBOX_*_IMAGE` overrides them.
 - `make valkey-test`: the bus on a real Valkey 8.1 in its own Compose project (`vha-valkey-test`, port 56393): pub/sub, the log
   stream's consumer group, BullMQ retries, every service's ACL allow and deny, and runner's real worker running the
   scheduler's enqueues on the fakes (`services/runner/test/valkey-worker.test.ts`). Not part of `make check` (it needs Docker
