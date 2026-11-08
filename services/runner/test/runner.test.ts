@@ -253,8 +253,18 @@ describe.skipIf(!have)('runner', () => {
     const yes = await handleRun(d, jobFor(w, 'numbers', 'refresh', Date.now() + 5000), ctx());
     expect(yes.steps.map((x) => x.step)).toEqual(['math', 'guard', 'publish']);
     const r = (await current(w)).result!;
-    expect(r.numbers.map((n) => n.op).slice(0, 2)).toEqual(['position_value', 'pnl']);
-    for (const x of r.receipts) expect([...x.origins!].sort()).toEqual(['connection', 'market']);
+    // The balance, then each position's value, P&L and today's change: every one from the engine, with a receipt.
+    expect(r.numbers.map((n) => n.id).slice(0, 4)).toEqual(['balance', 'value_1', 'pnl_1', 'today_1']);
+    expect(r.numbers.find((n) => n.id === 'balance')).toMatchObject({ op: 'position_value', unit: 'dollars' });
+    const rc = new Map(r.receipts.map((x) => [x.op_id, x]));
+    for (const n of r.numbers) expect(rc.get(n.id)?.id).toBe(n.receipt_id);
+    expect([...rc.get('balance')!.origins!]).toEqual(['connection']);
+    for (const x of r.receipts.filter((x) => x.op_id !== 'balance')) expect([...x.origins!].sort()).toEqual(['connection', 'market']);
+    // Provenance: the account's numbers say the exchange, read only, and connections' time.
+    const bal = rc.get('balance')!;
+    expect(JSON.stringify(bal)).toContain('Kalshi account, read only');
+    const today = rc.get('today_1')!;
+    expect(today.refs).toMatchObject({ avg_price_cents: 'prev_price_1', price_cents: 'pos_price_1' });
   });
 
   it('a research run: the poisoned page is killed live, the clean ones released, the summary filled by code', async () => {

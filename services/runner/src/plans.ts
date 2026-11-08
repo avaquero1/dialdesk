@@ -386,9 +386,14 @@ export function pickBiggest(er: EngineResult): EngineResult | null {
 export const MAX_POSITIONS = 6;
 
 /**
- * A positions widget's inputs: the user's positions from connections (only with the user's consent: 403 otherwise,
- * which means "not connected", not an error) and each position's current price from markets. count_<i> and
- * avg_price_<i> are tagged `connection`, pos_price_<i> `market`. `skip` says why there is nothing to compute.
+ * A "Your account" (positions) widget's inputs: the user's balance and positions from connections (only with the
+ * user's consent: 403 otherwise, which means "not connected", not an error) and each position's current and 24 h old
+ * price from markets. Every shown number comes out of the engine with a receipt:
+ * - `balance`: position_value of balance_cents at 1¢ a cent (cents to dollars).
+ * - `value_<i>` and `pnl_<i>`: the position's value now and its P&L against the average price paid.
+ * - `today_<i>`: today's change, the same pnl against the price 24 h ago (when markets has one).
+ * The account's numbers are tagged `connection`, with provenance "<exchange> account, read only" and connections'
+ * time; prices are tagged `market`, with their market and quote time.
  */
 export async function positionNumbers(
   connections: Call | undefined,
@@ -406,9 +411,28 @@ export async function positionNumbers(
   }
   const numbers: Record<string, Value> = {};
   const origins: Origins = {};
+  const provenance: Provenance = {};
   const ops: Op[] = [];
   const quotes: Market[] = [];
   const down: string[] = [];
+  // Only Kalshi reports a cash balance; a wallet's positions name their exchange in the market id.
+  const exchange = pos.positions[0]?.market_id.split(':')[0] ?? (pos.balance_cents !== null ? 'kalshi' : 'exchange');
+  const account = { source: `${exchange === 'kalshi' ? 'Kalshi' : exchange === 'polymarket' ? 'Polymarket' : exchange} account, read only`, as_of: pos.as_of };
+  const fromAccount = (key: string, v: number) => {
+    numbers[key] = v;
+    origins[key] = 'connection';
+    provenance[key] = account;
+  };
+  const fromMarket = (key: string, v: number, m: Market) => {
+    numbers[key] = v;
+    origins[key] = 'market';
+    provenance[key] = { source: m.market_id, as_of: m.as_of };
+  };
+  if (pos.balance_cents !== null && pos.balance_cents >= 0) {
+    fromAccount('balance_cents', pos.balance_cents);
+    numbers.cents_per_cent = 1; // a constant set by code: untagged
+    ops.push({ id: 'balance', op: 'position_value', args: { count: 'balance_cents', price_cents: 'cents_per_cent' } });
+  }
   let i = 0;
   for (const p of pos.positions) {
     if (i >= MAX_POSITIONS || p.count === 0) continue;
@@ -424,17 +448,18 @@ export async function positionNumbers(
     }
     i++;
     quotes.push(m);
-    const price = p.side === 'yes' ? m.yes_price_cents : 100 - m.yes_price_cents;
-    numbers[`count_${i}`] = p.count;
-    origins[`count_${i}`] = 'connection';
-    numbers[`avg_price_${i}`] = p.avg_price_cents;
-    origins[`avg_price_${i}`] = 'connection';
-    numbers[`pos_price_${i}`] = price;
-    origins[`pos_price_${i}`] = 'market';
-    ops.push({ id: `n${ops.length + 1}`, op: 'position_value', args: { count: `count_${i}`, price_cents: `pos_price_${i}` } });
-    ops.push({ id: `n${ops.length + 1}`, op: 'pnl', args: { count: `count_${i}`, avg_price_cents: `avg_price_${i}`, price_cents: `pos_price_${i}` } });
+    const side = (c: number) => (p.side === 'yes' ? c : 100 - c);
+    fromAccount(`count_${i}`, p.count);
+    fromAccount(`avg_price_${i}`, p.avg_price_cents);
+    fromMarket(`pos_price_${i}`, side(m.yes_price_cents), m);
+    ops.push({ id: `value_${i}`, op: 'position_value', args: { count: `count_${i}`, price_cents: `pos_price_${i}` } });
+    ops.push({ id: `pnl_${i}`, op: 'pnl', args: { count: `count_${i}`, avg_price_cents: `avg_price_${i}`, price_cents: `pos_price_${i}` } });
+    if (m.previous_price_cents !== null) {
+      fromMarket(`prev_price_${i}`, side(m.previous_price_cents), m);
+      ops.push({ id: `today_${i}`, op: 'pnl', args: { count: `count_${i}`, avg_price_cents: `prev_price_${i}`, price_cents: `pos_price_${i}` } });
+    }
   }
-  if (!ops.length) return { skip: pos.positions.length ? 'no position has a price' : 'no open positions' };
+  if (!ops.length) return { skip: pos.positions.length ? 'no position has a price' : 'no balance and no open positions' };
   const as_of = [pos.as_of, ...quotes.map((q) => q.as_of)].sort()[0]!;
-  return { plan: { plan_version: 1, ops }, mn: { numbers, origins, quotes, as_of, stale: quotes.some((q) => q.stale), down } };
+  return { plan: { plan_version: 1, ops }, mn: { numbers, origins, provenance, quotes, as_of, stale: quotes.some((q) => q.stale), down } };
 }
