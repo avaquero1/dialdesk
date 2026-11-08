@@ -84,6 +84,22 @@ describe('deploy/prod-secrets.ts', () => {
     expect(readFileSync(join(out, 'sandbox-manager/env'), 'utf8')).not.toMatch(/TOKEN/);
   });
 
+  it("runner's sandbox-manager token can come from the sandbox machine (SANDBOX_MANAGER_TOKEN_FILE)", () => {
+    const o = join(base, 'sbx-token');
+    const file = join(base, 'runner-token');
+    const token = 'ab'.repeat(32);
+    writeFileSync(file, token + '\n');
+    const r = dry(o, [], { ...ENV, SANDBOX_MANAGER_TOKEN_FILE: file });
+    expect(r.code).toBe(0);
+    expect(kv(join(o, 'runner/env')).get('RUNNER_TOKEN_SANDBOX_MANAGER')).toBe(token);
+    expect(kv(join(o, 'sandbox-manager/env')).get('SANDBOX_MANAGER_CALLERS')).toBe(`runner:${hashToken(token)}`);
+    expect(r.printed).not.toContain(token);
+    writeFileSync(file, 'short\n');
+    const bad = dry(join(base, 'sbx-token-bad'), [], { ...ENV, SANDBOX_MANAGER_TOKEN_FILE: file });
+    expect(bad.code).not.toBe(0);
+    expect(bad.printed).toMatch(/SANDBOX_MANAGER_TOKEN_FILE: .* is not a token/);
+  });
+
   it('DB URLs use TLS and the passwords db-init gets; Valkey URLs match the ACL', () => {
     const pg = kv(join(out, 'postgres/env'));
     for (const s of DATA_SERVICES) {

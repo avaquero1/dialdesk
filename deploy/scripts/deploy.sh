@@ -3,7 +3,7 @@
 #
 #   deploy.sh push [control options]      from a dev PC: copy HEAD to control and run `control` there (see below)
 #   deploy.sh control [options]           on control, as root, from a copy of the repo (push makes it)
-#   deploy.sh sandbox                     from a dev PC: the sandbox machine's part (the hook for S1.3.1's script)
+#   deploy.sh sandbox                     from a dev PC: the sandbox machine's part (deploy/sandbox-host), see sandbox_part
 #
 # Control options:
 #   --dry-run               print every step, every command and every file it would write; change nothing
@@ -28,11 +28,11 @@
 #    8 services     docker compose up -d --wait
 #    9 health       every container healthy, https://<VHA_HOSTNAME>/ through Caddy, the egress sets filled, the timer,
 #                   the would-drop count, and runner's line to sandbox-manager
-#   10 sandbox      what `deploy.sh sandbox` does next (the sandbox machine is set up from the dev PC)
+#   10 sandbox      runner's line to the sandbox machine (set up from the dev PC by `sandbox`, or by push first)
 #
 # push and sandbox read the machines from the environment, never from the repo:
-#   VHA_CONTROL_HOST=root@<control>  VHA_SANDBOX_HOST=root@<sandbox, VPC address>  VHA_SSH_KEY=<key file>
-#   VHA_SANDBOX_VIA_CONTROL=1 (default): reach the sandbox machine through control (ssh -J); 0: directly
+#   VHA_CONTROL_HOST=root@<control>  VHA_SANDBOX_HOST=root@<sandbox machine>  VHA_SSH_KEY=<key file>
+# With VHA_SANDBOX_HOST set, push does the sandbox machine first, then control.
 set -euo pipefail
 
 ETC=/etc/vha
@@ -43,7 +43,7 @@ STATE=/var/lib/vha
 UNITS=/etc/systemd/system
 SBIN=/usr/local/sbin
 PG_IMAGE=postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
-SANDBOX_CALLERS_PATH=$ETC/sandbox-manager.env   # where the sandbox machine reads runner's token hash (step 10)
+SANDBOX_CALLERS_PATH=$ETC/sandbox-manager.env   # sandbox-manager's settings on the sandbox machine (setup.sh writes it)
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 DRY=0; ENV_FILE=$ETC/deploy.env; EGRESS_MODE=""; ROLLBACK=300; ROTATE=0
@@ -221,7 +221,10 @@ control_main() {
     need S3_BUCKET_SCREENSHOTS S3_BUCKET_HEADS S3_SCREENSHOTS_CREDENTIALS
     [[ $(cfg S3_ENDPOINT) =~ ^https://[a-z0-9.-]+/?$ ]] || die "S3_ENDPOINT must be https://<host>" 2
   fi
-  local k; for k in PG_ADMIN_PASSFILE S3_SCREENSHOTS_CREDENTIALS S3_HEADS_CREDENTIALS VULTR_INFERENCE_KEY_FILE BRAVE_KEY_FILE; do input "$k"; done
+  local k; for k in PG_ADMIN_PASSFILE S3_SCREENSHOTS_CREDENTIALS S3_HEADS_CREDENTIALS VULTR_INFERENCE_KEY_FILE BRAVE_KEY_FILE SANDBOX_MANAGER_TOKEN_FILE; do input "$k"; done
+  if ((!DRY)) && [[ -n $(cfg SANDBOX_MANAGER_TOKEN_FILE) && ! -s $(cfg SANDBOX_MANAGER_TOKEN_FILE) ]]; then
+    die "no runner token at $(cfg SANDBOX_MANAGER_TOKEN_FILE): set up the sandbox machine first (deploy.sh sandbox, or push with VHA_SANDBOX_HOST)" 2
+  fi
   if ((!DRY)) && [[ $LOCAL_DB != 1 && ! -s $(cfg PG_ADMIN_PASSFILE) ]]; then
     die "no database admin pgpass file at $(cfg PG_ADMIN_PASSFILE) (deploy/PROVISION.md, \"What comes back\")" 2
   fi
@@ -273,9 +276,12 @@ control_main() {
   step "health"
   health
 
-  step "sandbox machine (next: deploy.sh sandbox, from the dev PC)"
-  note "runner's token hash is in $SECRETS/sandbox-manager/env. \`deploy.sh sandbox\` copies it to $SANDBOX_CALLERS_PATH"
-  note "on the sandbox machine and runs its own setup (deploy/sandbox-host, S1.3.1). runner reaches it at $(cfg SANDBOX_VPC_IP):8200."
+  step "sandbox machine (deploy/sandbox-host, from the dev PC: deploy.sh sandbox, or push with VHA_SANDBOX_HOST)"
+  if [[ -n $(cfg SANDBOX_MANAGER_TOKEN_FILE) ]]; then
+    note "runner's token for sandbox-manager is the sandbox machine's own ($(cfg SANDBOX_MANAGER_TOKEN_FILE)); runner calls $(cfg SANDBOX_VPC_IP):8200"
+  else
+    note "WARNING: no SANDBOX_MANAGER_TOKEN_FILE: runner has a token made here, which the sandbox machine doesn't know"
+  fi
   say ""
   if ((DRY)); then say "deploy: dry run done ($STEPS steps), nothing changed"; else say "deploy: control is up at https://$(cfg VHA_HOSTNAME)/ (rev $REV)"; fi
 }
@@ -377,7 +383,7 @@ health() {
   if compose exec -T runner wget -q -T 5 -O /dev/null "http://$(cfg SANDBOX_VPC_IP):8200/health"; then
     note "runner reaches sandbox-manager at $(cfg SANDBOX_VPC_IP):8200"
   else
-    note "WARNING: runner can't reach sandbox-manager at $(cfg SANDBOX_VPC_IP):8200 yet (set up the sandbox machine: deploy.sh sandbox)"
+    die "runner can't reach sandbox-manager at $(cfg SANDBOX_VPC_IP):8200 (deploy.sh sandbox sets it up; check the VPC and both tables)"
   fi
 }
 
@@ -388,26 +394,38 @@ ssh_setup() {
   # ControlPath=none: every call is a NEW connection (vha-nft-confirm must prove a fresh login works).
   SSH_OPTS=(-i "$key" -o IdentitiesOnly=yes -o ConnectTimeout=15 -o ControlMaster=no -o ControlPath=none -o ServerAliveInterval=30)
 }
-ssh_control() { run ssh "${SSH_OPTS[@]}" "${VHA_CONTROL_HOST:?set VHA_CONTROL_HOST=root@<control>}" "$@"; }
+# on HOST CMD: run CMD on HOST over a new ssh connection (dry run: print it).
+on() {
+  local host=$1; shift
+  # shellcheck disable=SC2029 # the command is built here on purpose
+  if ((DRY)); then say "   + ssh $host $(quote "$*")"; else ssh "${SSH_OPTS[@]}" "$host" "$@"; fi
+}
+copy_head() {   # copy_head HOST: HEAD as a git archive to HOST:/opt/vha/src/<rev> (nothing is pushed anywhere)
+  local unpack="set -e; d=/opt/vha/src/$REV; rm -rf \$d; mkdir -p \$d; tar -x -C \$d; echo $REV > \$d/.vha-rev; ln -sfn \$d /opt/vha/src/current"
+  if ((DRY)); then say "   + git archive --format=tar HEAD | ssh $1 $(quote "$unpack")"
+  else
+    # shellcheck disable=SC2029 # $unpack is built here on purpose (its \$d expands there)
+    git archive --format=tar HEAD | ssh "${SSH_OPTS[@]}" "$1" "$unpack"
+  fi
+}
 
 push_main() {
-  STEPS=3
   ssh_setup
   local host=${VHA_CONTROL_HOST:?set VHA_CONTROL_HOST=root@<control>}
-  local rev; rev=$(git rev-parse --short=12 HEAD)
-  [[ -z $(git status --porcelain --untracked-files=no) ]] || say "push: uncommitted changes are NOT copied (HEAD $rev is)" >&2
-  step "copy HEAD ($rev) to control:/opt/vha/src/$rev"
-  local unpack="set -e; d=/opt/vha/src/$rev; rm -rf \$d; mkdir -p \$d; tar -x -C \$d; echo $rev > \$d/.vha-rev; ln -sfn \$d /opt/vha/src/current"
-  if ((DRY)); then say "   + git archive --format=tar HEAD | ssh $host $(quote "$unpack")"
-  else
-    # shellcheck disable=SC2029 # $unpack is built here on purpose (its \$d expands on control)
-    git archive --format=tar HEAD | ssh "${SSH_OPTS[@]}" "$host" "$unpack"
+  REV=$(git rev-parse --short=12 HEAD)
+  [[ -z $(git status --porcelain --untracked-files=no) ]] || say "push: uncommitted changes are NOT copied (HEAD $REV is)" >&2
+  STEPS=2; [[ -n ${VHA_SANDBOX_HOST:-} ]] && STEPS=3
+  step "copy HEAD ($REV) to control:/opt/vha/src/$REV"
+  copy_head "$host"
+  if [[ -n ${VHA_SANDBOX_HOST:-} ]]; then
+    step "the sandbox machine first (deploy.sh sandbox): runner's token must be on control before its secrets are written"
+    sandbox_part
   fi
 
   step "run deploy.sh control on control (it waits for vha-nft-confirm; this script sends it over a NEW connection)"
   local args=(); ((DRY)) && args+=(--dry-run)
   args+=("${PASS[@]}")
-  local cmd; cmd="cd /opt/vha/src/$rev && deploy/scripts/deploy.sh control $(quote "${args[@]}")"
+  local cmd; cmd="cd /opt/vha/src/$REV && deploy/scripts/deploy.sh control $(quote "${args[@]}")"
   if ((DRY)); then say "   + ssh $host $(quote "$cmd")"; say "   + (on \"vha-nft: waiting for confirm\") ssh $host vha-nft-confirm   # a new connection"
   else
     local rc line
@@ -424,39 +442,63 @@ push_main() {
     wait
     ((rc == 0)) || die "deploy.sh control failed on control (exit $rc)" "$rc"
   fi
-
-  step "next"
-  note "the sandbox machine: deploy.sh sandbox (copies runner's token hash and runs its setup)"
 }
 
 sandbox_main() {
-  STEPS=2
   ssh_setup
-  local control=${VHA_CONTROL_HOST:?set VHA_CONTROL_HOST=root@<control>} sbx=${VHA_SANDBOX_HOST:?set VHA_SANDBOX_HOST=root@<sandbox VPC address>}
-  local via=()
-  [[ ${VHA_SANDBOX_VIA_CONTROL:-1} == 1 ]] && via=(-o "ProxyCommand=ssh $(quote "${SSH_OPTS[@]}") -W %h:%p $control")
-  step "copy runner's token hash: control:$SECRETS/sandbox-manager/env -> sandbox:$SANDBOX_CALLERS_PATH (root, 0400)"
-  # Through this PC's pipe only: never on this PC's disk, never on a command line.
-  local put_cmd="set -e; install -d -m 0755 $ETC; umask 077; cat > $SANDBOX_CALLERS_PATH.new; chmod 0400 $SANDBOX_CALLERS_PATH.new; mv $SANDBOX_CALLERS_PATH.new $SANDBOX_CALLERS_PATH"
-  if ((DRY)); then say "   + ssh $control cat $SECRETS/sandbox-manager/env | ssh ${via[*]:+(via control) }$sbx $(quote "$put_cmd")"
+  REV=$(git rev-parse --short=12 HEAD)
+  STEPS=1
+  step "the sandbox machine"
+  sandbox_part
+  note "next: deploy.sh push (or control on control), so runner gets the token"
+}
+
+# The sandbox machine's part (deploy/sandbox-host/setup.sh, S1.3.1), from the dev PC. The VPC must already be attached
+# to it (deploy/PROVISION.md, step 4: the Vultr side is done by whoever holds the API key, never by this script).
+#   a  the settings: control's /etc/vha/deploy.env (or --env-file here)
+#   b  its VPC interface holds SANDBOX_VPC_IP
+#   c  HEAD copied there and setup.sh run with --ssh-from, --vpc-if, --control-vpc-ip and --vpc-subnet, then
+#      vha-nft-confirm over a NEW connection (setup.sh's firewall has its own timed rollback)
+#   d  SANDBOX_MANAGER_ADDR in /etc/vha/sandbox-manager.env set to SANDBOX_VPC_IP:8200 (setup.sh writes 127.0.0.1),
+#      the manager restarted and its /health read on that address
+#   e  its runner token (/etc/vha/runner-token, made by setup.sh) copied to control as SANDBOX_MANAGER_TOKEN_FILE:
+#      through this PC's pipe only, never on its disk or a command line. prod-secrets.ts gives it to runner.
+sandbox_part() {
+  local control=${VHA_CONTROL_HOST:?set VHA_CONTROL_HOST=root@<control>} sbx=${VHA_SANDBOX_HOST:?set VHA_SANDBOX_HOST=root@<sandbox machine>}
+  if [[ $ENV_FILE == "$ETC/deploy.env" ]]; then
+    note "settings: control:$ETC/deploy.env"
+    if ((DRY)); then die "a dry run of the sandbox part needs --env-file (it doesn't read control's settings)" 2; fi
+    local tmp; tmp=$(mktemp); ssh "${SSH_OPTS[@]}" "$control" cat "$ETC/deploy.env" > "$tmp"; read_env "$tmp"; rm -f "$tmp"
+  else
+    read_env "$ENV_FILE"
+  fi
+  need ADMIN_IP SANDBOX_VPC_IP SANDBOX_VPC_IF CONTROL_VPC_IP VPC_SUBNET SANDBOX_MANAGER_TOKEN_FILE
+  ipv4 ADMIN_IP "$(cfg ADMIN_IP)"; ipv4 SANDBOX_VPC_IP "$(cfg SANDBOX_VPC_IP)"; ipv4 CONTROL_VPC_IP "$(cfg CONTROL_VPC_IP)"
+  ifname SANDBOX_VPC_IF "$(cfg SANDBOX_VPC_IF)"
+  [[ $(cfg VPC_SUBNET) =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$ ]] || die "VPC_SUBNET must look like 10.1.96.0/20" 2
+  input SANDBOX_MANAGER_TOKEN_FILE
+  local ip; ip=$(cfg SANDBOX_VPC_IP)
+  local setup=$SCRIPT_DIR/../sandbox-host/push.sh
+  [[ -x $setup ]] || die "deploy/sandbox-host/push.sh is missing" 2
+
+  note "b: the VPC interface"
+  on "$sbx" "ip -4 -o addr show dev $(cfg SANDBOX_VPC_IF) | grep -qw $ip || { echo 'no $ip on $(cfg SANDBOX_VPC_IF): attach the VPC first (PROVISION.md step 4)' >&2; exit 1; }"
+
+  note "c: setup.sh (deploy/sandbox-host), then vha-nft-confirm over a new connection"
+  run env "VHA_SANDBOX_HOST=$sbx" "VHA_SANDBOX_SSH_KEY=$VHA_SSH_KEY" "$setup" --ssh-from "$(cfg ADMIN_IP)" \
+    --vpc-if "$(cfg SANDBOX_VPC_IF)" --control-vpc-ip "$(cfg CONTROL_VPC_IP)" --vpc-subnet "$(cfg VPC_SUBNET)"
+  on "$sbx" vha-nft-confirm
+
+  note "d: sandbox-manager on $ip:8200"
+  on "$sbx" "set -e; f=$SANDBOX_CALLERS_PATH; sed -i 's/^SANDBOX_MANAGER_ADDR=.*/SANDBOX_MANAGER_ADDR=$ip:8200/' \$f; chgrp vha-sandbox \$f; chmod 0640 \$f; systemctl restart vha-sandbox-manager; for _ in \$(seq 50); do curl -fsS http://$ip:8200/health >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'sandbox-manager: no /health on $ip:8200' >&2; exit 1"
+
+  local dest; dest=$(cfg SANDBOX_MANAGER_TOKEN_FILE)
+  note "e: runner's token: sandbox:$ETC/runner-token -> control:$dest (0600)"
+  local put_cmd="set -e; install -d -m 0700 $INPUTS; umask 077; cat > $dest.new; mv $dest.new $dest"
+  if ((DRY)); then say "   + ssh $sbx cat $ETC/runner-token | ssh $control $(quote "$put_cmd")"
   else
     # shellcheck disable=SC2029 # fixed paths, built here on purpose
-    ssh "${SSH_OPTS[@]}" "$control" cat "$SECRETS/sandbox-manager/env" | ssh "${SSH_OPTS[@]}" "${via[@]}" "$sbx" "$put_cmd"
-  fi
-
-  step "the sandbox machine's own setup (S1.3.1: deploy/sandbox-host)"
-  # THE HOOK. S1.3.1's script plugs in here. What it must do with what this script gives it:
-  #   - read SANDBOX_MANAGER_CALLERS from $SANDBOX_CALLERS_PATH (runner's token hash, made on control by prod-secrets.ts)
-  #     instead of making its own runner token;
-  #   - have sandbox-manager listen on the VPC address (SANDBOX_VPC_IP:8200), where runner calls it, and let only
-  #     control's VPC address reach that port (sandbox.nft).
-  local setup=$SCRIPT_DIR/../sandbox-host/push.sh
-  if [[ -x $setup ]]; then
-    # It reaches the machine directly (no jump through control yet): andre's address must be allowed SSH there.
-    run env "VHA_SANDBOX_HOST=$sbx" "VHA_SANDBOX_SSH_KEY=$VHA_SSH_KEY" "$setup" "${PASS[@]}"
-  else
-    note "deploy/sandbox-host isn't on this branch yet (S1.3.1). Until it lands, set the sandbox machine up from its"
-    note "own branch; it must read $SANDBOX_CALLERS_PATH."
+    ssh "${SSH_OPTS[@]}" "$sbx" cat "$ETC/runner-token" | ssh "${SSH_OPTS[@]}" "$control" "$put_cmd"
   fi
 }
 
@@ -467,7 +509,8 @@ PASS=()
 while [[ $# -gt 0 ]]; do
   case $1 in
     --dry-run) DRY=1 ;;
-    --env-file) ENV_FILE=${2:?--env-file needs a file}; PASS+=("$1" "$2"); shift ;;
+    # push and sandbox read it here (dry runs, tests); control on control always reads its own.
+    --env-file) ENV_FILE=${2:?--env-file needs a file}; shift ;;
     --enforce-egress) EGRESS_MODE=enforce; PASS+=("$1") ;;
     --log-only-egress) EGRESS_MODE=log-only; PASS+=("$1") ;;
     --rollback-seconds) ROLLBACK=${2:?}
@@ -475,7 +518,7 @@ while [[ $# -gt 0 ]]; do
                         PASS+=("$1" "$2"); shift ;;
     --rotate) ROTATE=1; PASS+=("$1") ;;
     -h|--help) sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
-    *) if [[ $CMD == sandbox ]]; then PASS+=("$1"); else die "unknown option $1 (deploy.sh --help)" 2; fi ;;
+    *) die "unknown option $1 (deploy.sh --help)" 2 ;;
   esac
   shift
 done

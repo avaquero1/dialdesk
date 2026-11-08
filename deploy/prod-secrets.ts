@@ -21,6 +21,9 @@
  *   S3_SCREENSHOTS_CREDENTIALS, S3_HEADS_CREDENTIALS, VULTR_INFERENCE_KEY_FILE, BRAVE_KEY_FILE
  *                                                   files to copy in (when set); else an existing copy is kept, or an
  *                                                   empty file is written and named in the output
+ *   SANDBOX_MANAGER_TOKEN_FILE                      runner's token for sandbox-manager, made on the sandbox machine
+ *                                                   (deploy/sandbox-host/setup.sh, /etc/vha/runner-token; deploy.sh
+ *                                                   copies it here). Without it, a token is made here as for the others
  * Every value it makes is kept in <out>/_state/values (root, 0600), so a second run changes nothing unless --rotate.
  * Before it prints, it checks its own output against every value it wrote, and exits 1 instead of printing one.
  */
@@ -107,6 +110,13 @@ export function run(argv: string[], env: Env, print: (s: string) => void): numbe
     const callers: Record<string, string[]> = {};
 
     const vpcIp = need('SANDBOX_VPC_IP', '192.0.2.10');
+    // The sandbox machine makes runner's token and keeps only its hash; runner gets the token from its file.
+    const sbxTokenFile = env.SANDBOX_MANAGER_TOKEN_FILE;
+    if (sbxTokenFile) {
+      const t = existsSync(sbxTokenFile) ? readFileSync(sbxTokenFile, 'utf8').trim() : '';
+      if (/^[A-Za-z0-9_-]{32,}$/.test(t)) state.set('token.runner.sandbox-manager', t);
+      else problems.push(`SANDBOX_MANAGER_TOKEN_FILE: ${sbxTokenFile} ${t ? 'is not a token (32+ letters, digits, - or _)' : 'is missing or empty'}`);
+    }
     for (const [caller, callees] of Object.entries(graph)) {
       if (caller === 'browser' || caller === 'public') continue;
       for (const callee of callees) {
