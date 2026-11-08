@@ -3,7 +3,7 @@ import { AccountId, CandidateId, Cents, ConnectionId, Domain, Exchange, MarketId
 import { DisplaySize, DisplayType } from '../catalog.ts';
 import { api } from '../endpoint.ts';
 import { ResultSince, RunTraceStep, WidgetResult } from '../result.ts';
-import { EngineReceipt } from '../rust.ts';
+import { EnginePlan, EngineReceipt } from '../rust.ts';
 import { Verdict } from '../verdict.ts';
 import { Place, WidgetDraft, WidgetProfile, WidgetSpec, WidgetState } from '../widget.ts';
 
@@ -299,6 +299,7 @@ export const BOARD = api('board', {
         verdict: Verdict,
         trace: z.array(RunTraceStep),
         phase: z.enum(['numbers', 'summary']),
+        math_plan: EnginePlan.optional().describe("a model's plan that computed with no engine errors; kept in the profile if none is there yet"),
       })
       .strict(),
     response: z.object({ result_id: ResultId }).strict(),
