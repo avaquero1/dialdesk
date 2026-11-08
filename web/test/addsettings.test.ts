@@ -177,7 +177,7 @@ describe('Add, Settings, screenshots and the article count at phone size', () =>
     expect(shots[0]).toContain(`/${seeded.clean}`);
     expect(shots.some((u) => u.includes(seeded.bad))).toBe(false);
     const text = await sheet().innerText();
-    expect(text).toMatch(/Blocked: a page on extra\.fixture\.test tried to trick the agent\. Its sealed box was destroyed at .+\. Nothing from it was used\./);
+    expect(text).toMatch(/Blocked: a page on extra\.fixture\.test had text aimed at the agent\. Its sealed box was destroyed at .+\. Nothing from it was used\./);
     expect(text).not.toContain(TRAP);
     expect(text).not.toContain('Ignore your instructions');
     await btn.scrollIntoViewIfNeeded();

@@ -49,12 +49,28 @@ function mvEl(d: number, o: { long?: boolean; since?: string } = {}) {
   const words = o.long ? moveWords(d, o.since) : d === 0 ? 'no change' : `${c} ${Math.abs(d)}`;
   return `<span class="mv mv--${c} num"><span class="mv-a" aria-hidden="true">${ARROW[c]}</span> ${esc(words)}</span>`;
 }
+/** What a screen reader says for a number's line (design.md section 12), on an element whose text is replaced by it. */
+const says = (words: string) => ` role="img" aria-label="${esc(words)}"`;
+/** A line's numbers in words: "61%" as "61 percent", "61¢" as "61 cents", a sign as a word. */
+export const spoken = (t: string) =>
+  t
+    .replace(/(^|[\s(])\+(?=[\d$])/g, '$1plus ')
+    .replace(/−/g, 'minus ')
+    .replace(/(\d+(?:\.\d+)?)%/g, '$1 percent')
+    .replace(/(\d+(?:\.\d+)?)¢/g, (_m, n: string) => (n === '1' ? '1 cent' : `${n} cents`));
+const chanceWords = (p: number | null) => (p == null ? 'No price yet' : `${p} percent chance`);
+/** "Chiefs at Bills, 62 percent chance, up 4 points since yesterday". */
+const lineWords = (...parts: (string | null | false | undefined)[]) => parts.filter(Boolean).join(', ');
+const moveSaid = (d: number | null | undefined, since = '') => (d == null ? '' : moveWords(d, since).toLowerCase());
 const usd = (v: number) => (v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 /** A money move with its arrow and words, never a color (design.md section 8): "▲ Up $2.40 since you bought", "▼ Down $1.10 today". */
+const moneyWords = (v: number, tail: string) => {
+  const c = mvCls(Math.round(v * 100));
+  return `${c === 'flat' ? 'No change' : `${c === 'up' ? 'Up' : 'Down'} ${usd(Math.abs(v))}`} ${tail}`;
+};
 function moneyMv(v: number, tail: string) {
   const c = mvCls(Math.round(v * 100));
-  const words = c === 'flat' ? 'No change' : `${c === 'up' ? 'Up' : 'Down'} ${usd(Math.abs(v))}`;
-  return `<span class="mv mv--${c} num"><span class="mv-a" aria-hidden="true">${ARROW[c]}</span> ${esc(`${words} ${tail}`)}</span>`;
+  return `<span class="mv mv--${c} num"><span class="mv-a" aria-hidden="true">${ARROW[c]}</span> ${esc(moneyWords(v, tail))}</span>`;
 }
 
 /** One engine number in its unit, in plain words ("62%", "4 points", "61¢"). */
@@ -75,6 +91,9 @@ export function fmtNum(n: Num): string {
       return String(Math.round(n.value * 1000) / 1000);
   }
 }
+
+/** The number a result leads with: its chance when it has one. The order of numbers isn't a contract, so find it by op. */
+export const leadNumber = (r: WidgetResult): Num | undefined => r.numbers.find((n) => n.op === 'implied_probability') ?? r.numbers[0];
 
 const head = (t: string, sub?: string, dot?: string) =>
   `<div class="w-head"><i class="w-dot${dot ? ' ' + dot : ''}"></i><span class="w-title">${esc(DISPLAY_NAMES[t] ?? t)}</span>${sub ? `<span class="w-sub num">${esc(sub)}</span>` : ''}</div>`;
@@ -168,9 +187,10 @@ function priceOn(w: Widget, ex: Quote['exchange']): number | null {
 /** A result's sentence with no numbers in it (a game that isn't paired says why), when it has one. */
 const plainSummary = (w: Widget) => (w.result?.summary && !Object.keys(w.result.summary.slots).length ? w.result.summary.template : null);
 /** The result's notes, as plain sentences. */
-const notesHtml = (w: Widget, skip: string | null = null) =>
+const notesHtml = (w: Widget, skip: string | null = null, cap = Infinity) =>
   (w.result?.notes ?? [])
     .filter((n) => n !== skip)
+    .slice(0, cap)
     .map((n) => `<div class="w-note">${esc(n)}</div>`)
     .join('');
 
@@ -268,24 +288,33 @@ export interface RenderCtx {
 
 // ---------- the six display types ----------
 
+/** How many games a medium Tonight has room for; its subtitle says so when there are more. */
+const TONIGHT_M_ROWS = 4;
+
 function events(w: Widget, s: Display, c: RenderCtx) {
   const keys = s.params.event_keys ?? [];
-  const rows = keys.map((k, i) => {
+  const shown = s.size === 'M' ? keys.slice(0, TONIGHT_M_ROWS) : keys;
+  const rows = shown.map((k, i) => {
     const m = s.market_ids[i];
     const q = quoteOf(w, m);
     const p = pctOf(numFor(w, 'implied_probability', m, i)) ?? q?.yes_price_cents ?? null;
-    const d = moveOf(w, { market: m, i })?.d ?? move(q);
+    const mv = moveOf(w, { market: m, i });
+    const d = mv?.d ?? move(q);
+    const name = eventLabel(k, c.titles);
     // The game's small 7-day line from the engine's price_at numbers, else first paint's two prices.
     const line = m ? lineOf(w, m) : [];
-    return `<div class="game"><span class="g-n">${esc(eventLabel(k, c.titles))}</span><span class="g-s">${spark(line.length ? line : line2(q), { area: false, end: false })}</span><span class="g-p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '<span class="mv mv--flat num">—</span>' : mvEl(d)}</div>`;
+    return `<div class="game"${says(lineWords(name, chanceWords(p), moveSaid(d, mv ? mv.since : sinceWords(DAY_S))))}><span class="g-n">${esc(name)}</span><span class="g-s">${spark(line.length ? line : line2(q), { area: false, end: false })}</span><span class="g-p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '<span class="mv mv--flat num">—</span>' : mvEl(d)}</div>`;
   });
   return (
-    head(s.title, `${keys.length} ${keys.length === 1 ? 'game' : 'games'}`) +
+    head(s.title, shown.length < keys.length ? `${shown.length} of ${keys.length} games` : `${keys.length} ${keys.length === 1 ? 'game' : 'games'}`) +
     `<div class="games">${rows.join('')}</div>` +
     notesHtml(w) +
     stamp(w)
   );
 }
+
+/** "Kalshi 61 cents, Polymarket 63 cents". */
+const pricesSaid = (a: number | null, b: number | null) => lineWords(a != null && spoken(`Kalshi ${a}¢`), b != null && spoken(`Polymarket ${b}¢`));
 
 function probability(w: Widget, s: Display) {
   const k = quoteOn(w, 'kalshi');
@@ -298,13 +327,14 @@ function probability(w: Widget, s: Display) {
   const day = moveOf(w, { window_s: DAY_S });
   const qd = move(k) ?? move(p);
   const mv = day ? mvEl(day.d, { long: true, since: day.since }) : qd != null ? mvEl(qd, { long: true, since: sinceWords(DAY_S) }) : '';
+  const said = lineWords(chanceWords(big), day ? moveSaid(day.d, day.since) : moveSaid(qd, sinceWords(DAY_S)), big != null && 'the market says');
   const ev = nums(w, 'expected_value')[0];
   const up = s.params.user_probability;
   const evLine =
     up == null
       ? ''
       : ev
-        ? `<span class="ev">You think ${Math.round(up * 100)}%: by the math, a YES at this price is worth <b class="num">${esc(fmtNum(ev))}</b> per contract.</span>`
+        ? `<span class="ev"${says(spoken(`You think ${Math.round(up * 100)}%: by the math, a YES at this price is worth ${fmtNum(ev)} per contract.`))}>You think ${Math.round(up * 100)}%: by the math, a YES at this price is worth <b class="num">${esc(fmtNum(ev))}</b> per contract.</span>`
         : `<span class="ev">You think ${Math.round(up * 100)}%. The math for it comes with the first run.</span>`;
   const ex = [kc != null ? `<span>Kalshi <b class="num">${esc(kc)}¢</b></span>` : '', pc != null ? `<span>Polymarket <b class="num">${esc(pc)}¢</b></span>` : ''].filter(Boolean).join('<span class="sep">·</span>');
   const line = lineOf(w);
@@ -317,8 +347,8 @@ function probability(w: Widget, s: Display) {
     .join('');
   return (
     head(s.title, [kc != null && 'Kalshi', pc != null && 'Polymarket'].filter(Boolean).join(' + ') || undefined) +
-    `<div class="c-main"><div class="c-left"><div class="big-row"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div><span class="lbl">the market says</span><div class="c-mv">${mv}</div></div><div class="c-chart">${chart}${span ? `<span class="lbl c-span">${esc(span)}</span>` : ''}</div></div>` +
-    (ex ? `<div class="c-ex from-m">${ex}<span class="lbl">for a YES that pays $1</span></div>` : '') +
+    `<div class="c-main"><div class="c-left"${says(said)}><div class="big-row"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div><span class="lbl">the market says</span><div class="c-mv">${mv}</div></div><div class="c-chart">${chart}${span ? `<span class="lbl c-span">${esc(span)}</span>` : ''}</div></div>` +
+    (ex ? `<div class="c-ex from-m"${says(`${pricesSaid(kc, pc)}, for a YES that pays 1 dollar`)}>${ex}<span class="lbl">for a YES that pays $1</span></div>` : '') +
     (evLine ? `<div class="c-foot from-m">${evLine}</div>` : '') +
     (rates || w.result?.notes?.length ? `<div class="c-base from-m">${rates}${notesHtml(w)}</div>` : '') +
     stamp(w, 'w-foot from-l')
@@ -330,20 +360,22 @@ function gap(w: Widget, s: Display, c: RenderCtx) {
   const b = priceOn(w, 'polymarket');
   const g = nums(w, 'gap')[0];
   const label = eventLabel(s.params.event_keys?.[0] ?? '', c.titles);
+  // A small tile has no room for the game beside the title: it gets its own line, whole.
+  const top = s.size === 'S' ? head(s.title) + `<div class="g-game num">${esc(label)}</div>` : head(s.title, label);
   // A game that isn't paired: no gap, and the result says why in words.
   const why = !g ? plainSummary(w) : null;
-  if (why) return head(s.title, label) + `<div class="w-note">${esc(why)}</div>` + notesHtml(w, why) + stamp(w);
-  if (a == null || b == null) return head(s.title, label) + '<div class="w-empty">Needs a price from both exchanges.</div>' + notesHtml(w) + stamp(w);
+  if (why) return top + `<div class="w-note">${esc(why)}</div>` + notesHtml(w, why) + stamp(w);
+  if (a == null || b == null) return top + '<div class="w-empty">Needs a price from both exchanges.</div>' + notesHtml(w) + stamp(w);
   const lo = Math.min(a, b) - 4;
   const span = Math.max(Math.abs(b - a) + 8, 8);
   const pos = (v: number) => 16 + ((v - lo) / span) * 68;
   // The gap is a distance: never negative, whichever exchange is higher.
   const gapPts = Math.abs(g ? ptsOf(g)! : b - a);
   return (
-    head(s.title, label) +
+    top +
     `<div class="strand"><i class="track"></i><i class="neck"${css(`left:${pos(Math.min(a, b)).toFixed(1)}%;width:${(pos(Math.max(a, b)) - pos(Math.min(a, b))).toFixed(1)}%`)}></i><i class="bead"${css(`left:${pos(a).toFixed(1)}%`)}></i><i class="bead p"${css(`left:${pos(b).toFixed(1)}%`)}></i></div>` +
-    `<div class="g-lab"><span>Kalshi <b class="num">${esc(a)}¢</b></span><span>Polymarket <b class="num">${esc(b)}¢</b></span></div>` +
-    `<div class="g-big">${gapPts === 0 ? '<span class="lbl">The same price on both</span>' : `<span class="big num">${esc(gapPts)}</span><span class="lbl">${gapPts === 1 ? 'point' : 'points'} apart</span>`}</div>` +
+    `<div class="g-lab"${says(pricesSaid(a, b))}><span>Kalshi <b class="num">${esc(a)}¢</b></span><span>Polymarket <b class="num">${esc(b)}¢</b></span></div>` +
+    `<div class="g-big"${says(gapPts === 0 ? 'The same price on both' : `The two exchanges are ${points(gapPts)} apart`)}>${gapPts === 0 ? '<span class="lbl">The same price on both</span>' : `<span class="big num">${esc(gapPts)}</span><span class="lbl">${gapPts === 1 ? 'point' : 'points'} apart</span>`}</div>` +
     notesHtml(w)
   );
 }
@@ -469,6 +501,14 @@ function readFromWords(w: Widget, team: string | undefined): string {
 const NEWS_ITEMS = 3;
 const cleanCap = (size: Display['size'], blocked: number) => (blocked && size !== 'L' ? 1 : Math.max(1, NEWS_ITEMS - blocked));
 
+/** A news item's "Sports Wire · 2 h" as a screen reader says it. */
+const agoSaid = (meta: string) =>
+  meta
+    .replace(/ · /g, ', ')
+    .replace(/\b(\d+) h$/, (_m, n: string) => (n === '1' ? '1 hour ago' : `${n} hours ago`))
+    .replace(/\b(\d+) min$/, (_m, n: string) => (n === '1' ? '1 minute ago' : `${n} minutes ago`))
+    .replace(/\b(\d+) days?$/, (_m, n: string) => (n === '1' ? '1 day ago' : `${n} days ago`));
+
 function news(w: Widget, s: Display) {
   const team = s.params.team;
   const r = w.result;
@@ -497,7 +537,7 @@ function news(w: Widget, s: Display) {
     const meta = [so.outlet ?? so.domain, agoWords(so.published_at)].filter(Boolean).join(' · ');
     // A tap opens How we got this at this article: its screenshot, outlet and time.
     clean.push(
-      `<button class="item item--tap" type="button" data-cnd="${esc(f.candidate_id)}" aria-label="${esc(`${line}. ${meta}. How we got this`)}"><span class="hl">${esc(line)}</span><span class="meta">${esc(meta)}</span></button>`,
+      `<button class="item item--tap" type="button" data-cnd="${esc(f.candidate_id)}" aria-label="${esc(`${line}. ${agoSaid(meta)}. How we got this`)}"><span class="hl">${esc(line)}</span><span class="meta">${esc(meta)}</span></button>`,
     );
   }
   const blocked = r.blocked.slice(0, s.size === 'L' ? 2 : 1).map(
@@ -505,7 +545,9 @@ function news(w: Widget, s: Display) {
       // Never the page's words, never its picture: the plain line and the time (design.md section 10).
       `<div class="item item--blocked"><span class="x">${IC.blocked}</span><div class="hl"><b>Blocked:</b> this page tried to trick the agent. Its sealed box was destroyed.<div class="meta num">${esc(fmtTime(b.killed_at))}</div></div></div>`,
   );
-  const items = clean.slice(0, cleanCap(s.size, blocked.length)).concat(blocked);
+  // A medium tile keeps its one note (the guard's word on what was left out): the items make room for it.
+  const room = s.size !== 'L' && r.notes?.length ? 2 - blocked.length : cleanCap(s.size, blocked.length);
+  const items = clean.slice(0, Math.max(1, Math.min(room, cleanCap(s.size, blocked.length)))).concat(blocked);
   const sum = summaryWords(r);
   const body = items.length ? items.join('') : '<div class="item"><div class="hl">No news in the articles we read this time.</div></div>';
   return (
@@ -513,10 +555,12 @@ function news(w: Widget, s: Display) {
     `<div class="items">${body}</div>` +
     // The sentence with the numbers, and when those prices are from, need a large tile: a medium one is for the items.
     (sum ? `<div class="w-note news-sum num from-l">${esc(sum)}</div>` : '') +
-    notesHtml(w) +
+    notesHtml(w, null, s.size === 'L' ? Infinity : 1) +
     (sum ? stamp(w, 'w-foot from-l') : '')
   );
 }
+
+const POSITIONS_M_ROWS = 3;
 
 /**
  * "Your account": the linked connection's balance and positions, read only. Every number is the engine's (runner's
@@ -536,19 +580,22 @@ function positions(w: Widget, s: Display, c: RenderCtx) {
       const mkt = w.result.receipts.find((r) => r.op_id === `value_${i}`)?.provenance?.price_cents?.source ?? '';
       const name = (mkt && marketLabel(mkt, c)) || mkt.replace(/^[a-z]+:/, '');
       const mvs = [pnl ? moneyMv(pnl.value, 'since you bought') : '', today ? moneyMv(today.value, 'today') : ''].filter(Boolean).join('');
+      const said = lineWords(name, `worth ${fmtNum(v)}`, pnl && moneyWords(pnl.value, 'since you bought').toLowerCase(), today && moneyWords(today.value, 'today').toLowerCase());
       rows.push(
-        `<div class="pos-item"><div class="pos-row"><span class="pos-mkt">${esc(name)}</span><span class="num">${esc(fmtNum(v))}</span></div>` +
+        `<div class="pos-item"${says(spoken(said))}><div class="pos-row"><span class="pos-mkt">${esc(name)}</span><span class="num">${esc(fmtNum(v))}</span></div>` +
           (mvs ? `<div class="pos-mvs">${mvs}</div>` : '') +
           '</div>',
       );
     }
     const n = rows.length;
+    // A medium tile has room for three whole positions; its count line says when there are more.
+    const shown = s.size === 'M' ? rows.slice(0, POSITIONS_M_ROWS) : rows;
     return (
       head(s.title, `as of ${fmtTime(w.result.as_of)}`) +
       `<div class="pos-top"><div class="who">${esc(exchangeName(con.exchange))} <span class="pillnote">read only</span></div>` +
-      `<div class="bal num">${bal ? esc(fmtNum(bal)) : '—'}</div>` +
-      `<div class="pos-meta"><span>${bal ? 'Balance · ' : ''}${n ? `${n} open ${n === 1 ? 'position' : 'positions'}` : 'No open positions'}</span><span class="num only-s">as of ${esc(fmtTime(w.result.as_of))}</span></div></div>` +
-      (n ? `<div class="pos-list">${rows.join('')}</div>` : '')
+      `<div class="bal num"${bal ? says(spoken(`Balance ${fmtNum(bal)}`)) : ''}>${bal ? esc(fmtNum(bal)) : '—'}</div>` +
+      `<div class="pos-meta"><span>${bal ? 'Balance · ' : ''}${n ? `${n} open ${n === 1 ? 'position' : 'positions'}` : 'No open positions'}${shown.length < n ? ` · ${shown.length} shown` : ''}</span><span class="num only-s">as of ${esc(fmtTime(w.result.as_of))}</span></div></div>` +
+      (n ? `<div class="pos-list">${shown.join('')}</div>` : '')
     );
   }
   if (!con)
@@ -586,7 +633,7 @@ function movement(w: Widget, s: Display, c: RenderCtx) {
   const fresh = w.state === 'new' ? 'is-fresh' : undefined;
   return (
     head(s.title, fresh ? 'new' : undefined, fresh) +
-    `<div class="mvt"><span class="lbl">${esc(game)}</span><div class="row1"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div>${d == null ? '' : `<div class="c-mv">${mvEl(d, { long: true, since })}</div>`}<div class="c-chart">${spark(line.length ? line : line2(q))}</div></div>` +
+    `<div class="mvt"${says(lineWords(game, chanceWords(big), moveSaid(d, since)))}><span class="lbl">${esc(game)}</span><div class="row1"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div>${d == null ? '' : `<div class="c-mv">${mvEl(d, { long: true, since })}</div>`}<div class="c-chart">${spark(line.length ? line : line2(q))}</div></div>` +
     notesHtml(w)
   );
 }
@@ -622,10 +669,10 @@ export function cardNumbers(w: Widget): { p: number | null; d: number | null; li
 
 export function cardHtml(w: Widget, i: number): string {
   const { p, d, line } = cardNumbers(w);
-  return `<div class="card rz"${css(`--i:${i}`)}><div class="top"><span class="p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '' : mvEl(d)}</div><div class="n">${esc(tileName(w))}</div><div class="c-chart">${spark(line, { end: false })}</div></div>`;
+  return `<div class="card rz"${css(`--i:${i}`)}><div class="top"${says(lineWords(chanceWords(p), moveSaid(d)))}><span class="p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '' : mvEl(d)}</div><div class="n">${esc(tileName(w))}</div><div class="c-chart">${spark(line, { end: false })}</div></div>`;
 }
 
 export function miniHtml(w: Widget): string {
   const { p } = cardNumbers(w);
-  return `<span class="mini num">${p == null ? '—' : esc(p)}<s>%</s></span>`;
+  return `<span class="mini num"${says(lineWords(tileName(w), chanceWords(p)))}>${p == null ? '—' : esc(p)}<s>%</s></span>`;
 }

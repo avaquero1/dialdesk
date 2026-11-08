@@ -45,7 +45,7 @@ export function sampleResult(widget_id: string, account_id: string, outcome: 'pa
     ],
     facts: [{ fact_id: 'f1', candidate_id: cnd, claim: 'A starting tackle is questionable.', quote: 'listed as questionable' }],
     summary: {
-      template: 'Implied probability {n1}; the exchanges differ by {n2}. {q1}',
+      template: '{n1} chance; the exchanges differ by {n2}. {q1}',
       slots: {
         n1: { kind: 'number', number_id: 'n1', receipt_id: 'r-0a1b2c3d', format: 'percent' },
         n2: { kind: 'number', number_id: 'n2', receipt_id: 'r-1b2c3d4e', format: 'points' },

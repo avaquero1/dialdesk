@@ -33,7 +33,7 @@ export const PLAIN_LINE = 'Math from public data. Not investment advice.';
 export function addBody() {
   let i = 2;
   return (
-    sheetHead('Add', 'One tap adds a widget with its usual settings. Change it later with the agent.') +
+    sheetHead('Add', 'Tap one to add it to your board. For one game, you pick the game first. Change it later with the agent.') +
     ADD_TYPES.map(
       (t) =>
         `<button class="rowitem add-row${rz(i++)} type="button" data-add="${esc(t.type)}"><span class="ic">${IC.catalog}</span>` +

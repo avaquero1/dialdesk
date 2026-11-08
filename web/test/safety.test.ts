@@ -149,7 +149,7 @@ describe('Safety and How we got this at phone size', () => {
     expect((await stat('tricks')).replace(/\s+/g, ' ')).toBe('1 trick blocked');
     const text = await sheet().innerText();
     expect(text).toContain('extra.fixture.test');
-    expect(text).toContain(`This page tried to trick the agent while it worked on ${T.news}. Its sealed box was destroyed.`);
+    expect(text).toContain(`This page had text aimed at the agent while it worked on ${T.news}. Its sealed box was destroyed.`);
     expect(text).toContain('No accounts connected');
     for (const job of ['Talking with you', 'Planning the research', 'Reading articles', 'Writing the short line', 'The safety check']) expect(text).toContain(job);
     expect(text).toMatch(/Total, of a \$\d+\.\d\d daily limit/);
@@ -202,7 +202,7 @@ describe('Safety and How we got this at phone size', () => {
     await settled(page);
     const text = await sheet().innerText();
     expect(text).toContain('Sports Wire was read in a sealed box');
-    expect(text).toMatch(/Blocked: a page on extra\.fixture\.test tried to trick the agent\. Its sealed box was destroyed at .+\. Nothing from it was used\./);
+    expect(text).toMatch(/Blocked: a page on extra\.fixture\.test had text aimed at the agent\. Its sealed box was destroyed at .+\. Nothing from it was used\./);
     // Never a quote: not the facts' quotes, not the blocked page's outlet line, not its note.
     expect(text).not.toContain('listed as questionable');
     expect(text).not.toContain(TRAP);

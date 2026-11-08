@@ -54,7 +54,7 @@ describe('News', () => {
 
   it("fills the summary's slots from the engine's numbers and the fact's quote", () => {
     const r = sampleResult(newId('wid'), 'acc_x', 'pass').result;
-    expect(W.summaryWords(r)).toBe('Implied probability 61%; the exchanges differ by 2 points. “listed as questionable”');
+    expect(W.summaryWords(r)).toBe('61% chance; the exchanges differ by 2 points. “listed as questionable”');
   });
 
   it('shows no summary when a slot has no engine number, or the template has a digit outside a slot', () => {

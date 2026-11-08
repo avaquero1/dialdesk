@@ -10,7 +10,7 @@ import { $, $$, clamp, css, cssNum, esc, mk, reduced, setHtml } from './dom.ts';
 import { EL, S, folderHooks, indexAt } from './board.ts';
 import { IC, type IconName } from './icons.ts';
 import { L, THEMES, endHueLive, mqDark, resolveMode, setHueLive, setLook, themeHue } from './look.ts';
-import { cardHtml, fmtNum, fmtTime, tileName } from './widgets.ts';
+import { cardHtml, fmtNum, fmtTime, leadNumber, tileName } from './widgets.ts';
 import { foldersFor, menuRows, sizesFor, type MenuAction } from './menu.ts';
 import { openHow, openSafety } from './safety.ts';
 import { openAccounts } from './accounts.ts';
@@ -230,7 +230,7 @@ function askClear(s: HTMLElement, w: Widget, on: boolean) {
   if (!row || !note) return;
   row.classList.toggle('is-asking', on);
   row.querySelector('.grow')!.textContent = on ? 'Yes, clear all' : 'Clear all';
-  note.textContent = on ? `Puts ${w.spec.title} back to its defaults: sources, refresh and settings. Undo stays a few seconds.` : MENU_NOTE;
+  note.textContent = on ? `Puts ${w.spec.title} back to its defaults: what it reads, when it refreshes and its settings. Undo stays a few seconds.` : MENU_NOTE;
 }
 
 function pickFolder(s: HTMLElement, on: boolean) {
@@ -481,7 +481,7 @@ function receiptsBody() {
   for (const w of S.widgets.values()) {
     if (w.spec.kind !== 'display') continue;
     const r: WidgetResult | null = w.result;
-    const first = r?.numbers[0];
+    const first = r ? leadNumber(r) : undefined;
     const sub = r ? `${first ? fmtNum(first) + ' · ' : ''}updated ${fmtTime(r.created_at)}` : 'Exchange prices until its first run';
     rows.push(
       `<button class="rowitem how-row${rz(i++)} type="button" data-how="${esc(w.spec.widget_id)}"><span class="ic">${IC.receipts}</span><div class="grow"><div class="t">${esc(w.spec.title)}</div><div class="s">${esc(sub)}</div></div><span class="caret">${IC.caret}</span></button>`,
@@ -533,7 +533,7 @@ function openAccount() {
     'sheet',
     sheetHead('Account') +
       rowi('user', who, sub, '', 1) +
-      `<div class="sh-sec${rz(2)}><button class="btn" type="button" id="logout-btn"><span class="ic-inline">${IC.logout}</span><span>Log out</span></button></div>`,
+      `<div class="sh-sec${rz(2)}><button class="btn" type="button" id="logout-btn"><span class="ic-inline">${IC.logout}</span><span>Sign out</span></button></div>`,
     {
       w: 420,
       at: 'right',

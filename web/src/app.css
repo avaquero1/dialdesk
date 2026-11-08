@@ -366,9 +366,14 @@ html[data-theme][data-mode] :is(.mv--up, .mv--down) { text-shadow: none; }
 .w--m .c-base .w-note { line-height: 1.25; }
 /* A move and a base rate are words: the text font, with even-width digits. */
 .mv, .w-note.num { font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
-/* A small tile's title stays whole; its game name gives way. */
+/* A small tile's title stays whole. A small Two prices names its game on its own line, whole. */
 .w--s .w-title { flex: none; }
 .w--s .w-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.g-game { margin-top: calc(var(--u) * -3px); font: 600 calc(var(--u) * 12.5px)/1.25 var(--font-ui); color: var(--text-2); overflow-wrap: anywhere; }
+/* The ⋯ on a folder or app tile is fully opaque: at .92 it drew yellow pixels along its edge where it crosses the tile (agent-mail light). */
+.w--app > .a-tile > .w-menu-btn, .w--folder > .f-tile > .w-menu-btn { opacity: 1; }
+/* A folder's small tiles: the % on one line with its number. */
+.mini { display: grid; grid-auto-flow: column; place-content: center; align-items: baseline; gap: 0; white-space: nowrap; }
 
 /* ---- News (W1.2.2): 2–3 short items with outlet and time; a tap on a clean one opens How we got this at that article ---- */
 .item--tap { width: 100%; min-width: 0; margin: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 8px; }
@@ -396,7 +401,6 @@ html[data-theme][data-mode] :is(.mv--up, .mv--down) { text-shadow: none; }
 .w--l .game .mv { grid-row: 1 / -1; grid-column: 3; min-width: 6.5em; }
 /* Medium: one line each, a short line between the name and the chance; four games at most, so the card still fits. */
 .w--m .game { flex: 1 1 0; min-height: 0; grid-template-columns: minmax(0,1fr) auto auto auto; padding: 0; }
-.w--m .game:nth-child(n+5) { display: none; }
 .w--m .game .g-s { display: block; width: calc(var(--u) * 56px); height: calc(var(--u) * 18px); }
 .w--m .game .g-p { font-size: calc(var(--u) * 15px); min-width: 2.6em; }
 .w--m .game .mv { min-width: 6.5em; }

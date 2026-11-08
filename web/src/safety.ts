@@ -139,7 +139,7 @@ function safetyHTML(t: TrustPage | null) {
     for (const b of blocked)
       html.push(
         `<div class="rowitem sf-trick${rz(i++)}><span class="ic">${IC.blocked}</span><div class="grow"><div class="t">${esc(fmtTime(b.at))} · ${esc(b.domain)}</div>` +
-          `<div class="s">${esc(`This page tried to trick the agent while it worked on ${b.widget}. Its sealed box was destroyed.`)}</div></div></div>`,
+          `<div class="s">${esc(`This page had text aimed at the agent while it worked on ${b.widget}. Its sealed box was destroyed.`)}</div></div></div>`,
       );
   else html.push(line('None on your board', 'When a page tries to give the agent orders, it shows here with the time.', i++));
 
@@ -335,14 +335,14 @@ function articlesStep(r: WidgetResult | null, trace: RunTraceStep[], focus?: str
     else if (s.status === 'blocked') {
       const b = r.blocked.find((x) => x.candidate_id === s.candidate_id);
       out.push(
-        `<li class="how-src is-blocked">${IC.blocked}<span><b>Blocked:</b> a page on ${esc(s.domain)} tried to trick the agent. Its sealed box was destroyed${b ? ` at ${esc(fmtTime(b.killed_at))}` : ''}. Nothing from it was used.</span></li>`,
+        `<li class="how-src is-blocked">${IC.blocked}<span><b>Blocked:</b> a page on ${esc(s.domain)} had text aimed at the agent. Its sealed box was destroyed${b ? ` at ${esc(fmtTime(b.killed_at))}` : ''}. Nothing from it was used.</span></li>`,
       );
     } else out.push(`<li class="how-src">${IC.close}<span>${esc(who)} couldn't be read, so nothing from it was used.</span></li>`);
   }
   // A blocked page the sources list doesn't name (it never should): still say so, still without a quote.
   for (const b of r.blocked)
     if (!r.sources.some((s) => s.candidate_id === b.candidate_id))
-      out.push(`<li class="how-src is-blocked">${IC.blocked}<span><b>Blocked:</b> a page on ${esc(b.domain)} tried to trick the agent. Its sealed box was destroyed at ${esc(fmtTime(b.killed_at))}.</span></li>`);
+      out.push(`<li class="how-src is-blocked">${IC.blocked}<span><b>Blocked:</b> a page on ${esc(b.domain)} had text aimed at the agent. Its sealed box was destroyed at ${esc(fmtTime(b.killed_at))}.</span></li>`);
   if (!out.length) return p('No articles: this one is math on the prices only.');
   return `<ul class="how-srcs">${out.join('')}</ul>`;
 }
@@ -366,7 +366,7 @@ const kv = (k: string, v: string) => `<div><dt>${esc(k)}</dt><dd class="mono">${
 function detailsHTML(r: WidgetResult | null, trace: RunTraceStep[], receipts = r?.receipts ?? []) {
   if (!r) return `<dl class="how-kv">${kv('result', 'none yet (first paint from cached quotes)')}</dl>`;
   const rec = (x: Receipt) =>
-    `<dl class="how-kv">${kv('receipt', x.id)}${kv('op', `${x.op} (${unbatch(x.op_id)})`)}${x.refs ? kv('inputs', Object.entries(x.refs).map(([a, r]) => `${a}: ${unbatch(r)}`).join(', ')) : ''}${kv('formula', x.formula)}${kv('args', JSON.stringify(x.args))}${kv('value', `${x.value} ${x.unit}`)}` +
+    `<dl class="how-kv">${kv('id', x.id)}${kv('op', `${x.op} (${unbatch(x.op_id)})`)}${x.refs ? kv('inputs', Object.entries(x.refs).map(([a, r]) => `${a}: ${unbatch(r)}`).join(', ')) : ''}${kv('formula', x.formula)}${kv('args', JSON.stringify(x.args))}${kv('value', `${x.value} ${x.unit}`)}` +
     `${kv('engine', `${x.engine_version} · ${x.git_hash}`)}${kv('plan hash', x.plan_hash)}${kv('input hash', x.input_hash)}</dl>`;
   const steps = trace
     .map((s) => `<li class="mono">${esc(fmtTime(s.at))} ${esc(s.step)} ${esc(s.status)}${s.sandbox ? ` · ${esc(s.sandbox.sandbox_id)} ${esc(s.sandbox.state)}` : ''}${s.proxy ? ` · proxy ${s.proxy.allowed}/${s.proxy.refused}` : ''}</li>`)
