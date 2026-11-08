@@ -62,6 +62,11 @@
             "type": "string"
           },
           {
+            "const": "price_at",
+            "description": "args: series, ago_s. The price ago_s before the series' last point (a point\nof a line, e.g. the 7-day line): the first point with t >= last.t - ago_s.",
+            "type": "string"
+          },
+          {
             "const": "gap",
             "description": "args: a_cents, b_cents. b - a in points.",
             "type": "string"
@@ -328,6 +333,11 @@
             "type": "string"
           },
           {
+            "const": "price_at",
+            "description": "args: series, ago_s. The price ago_s before the series' last point (a point\nof a line, e.g. the 7-day line): the first point with t >= last.t - ago_s.",
+            "type": "string"
+          },
+          {
             "const": "gap",
             "description": "args: a_cents, b_cents. b - a in points.",
             "type": "string"
@@ -412,6 +422,11 @@
           {
             "const": "volatility",
             "description": "args: series. Stddev of point-to-point changes, in points.",
+            "type": "string"
+          },
+          {
+            "const": "price_at",
+            "description": "args: series, ago_s. The price ago_s before the series' last point (a point\nof a line, e.g. the 7-day line): the first point with t >= last.t - ago_s.",
             "type": "string"
           },
           {
@@ -764,6 +779,11 @@
           {
             "const": "volatility",
             "description": "args: series. Stddev of point-to-point changes, in points.",
+            "type": "string"
+          },
+          {
+            "const": "price_at",
+            "description": "args: series, ago_s. The price ago_s before the series' last point (a point\nof a line, e.g. the 7-day line): the first point with t >= last.t - ago_s.",
             "type": "string"
           },
           {

@@ -142,6 +142,9 @@ pub enum OpName {
     Movement,
     /// args: series. Stddev of point-to-point changes, in points.
     Volatility,
+    /// args: series, ago_s. The price ago_s before the series' last point (a point
+    /// of a line, e.g. the 7-day line): the first point with t >= last.t - ago_s.
+    PriceAt,
     /// args: a_cents, b_cents. b - a in points.
     Gap,
     /// args: hits, total. hits / total.

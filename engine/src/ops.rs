@@ -84,6 +84,7 @@ impl OpName {
             OpName::ExpectedValue => &[("price_cents", Num, true), ("probability", Num, true)],
             OpName::Movement => &[("series", Series, true), ("window_s", Num, true)],
             OpName::Volatility => &[("series", Series, true)],
+            OpName::PriceAt => &[("series", Series, true), ("ago_s", Num, true)],
             OpName::Gap => &[("a_cents", Num, true), ("b_cents", Num, true)],
             OpName::BaseRate => &[("hits", Num, true), ("total", Num, true)],
             OpName::BaseRateHistory => &[
@@ -104,7 +105,7 @@ impl OpName {
         match self {
             OpName::ImpliedProbability | OpName::OddsToProbability => Unit::Probability,
             OpName::PriceToOdds => Unit::DecimalOdds,
-            OpName::ExpectedValue => Unit::Cents,
+            OpName::ExpectedValue | OpName::PriceAt => Unit::Cents,
             OpName::Movement | OpName::Volatility | OpName::Gap => Unit::Points,
             OpName::BaseRate | OpName::BaseRateHistory => Unit::Ratio,
             OpName::PositionValue | OpName::Pnl => Unit::Dollars,
@@ -119,6 +120,7 @@ impl OpName {
             OpName::ExpectedValue => "ev = probability * 100 - price_cents",
             OpName::Movement => "move = last.v - v of first point with t >= last.t - window_s",
             OpName::Volatility => "sd = population stddev of (v[i] - v[i-1])",
+            OpName::PriceAt => "price = v of first point with t >= last.t - ago_s",
             OpName::Gap => "gap = b_cents - a_cents",
             OpName::BaseRate => "rate = hits / total",
             OpName::BaseRateHistory => {
@@ -311,10 +313,15 @@ fn compute(op: OpName, args: &BTreeMap<&str, Arg>) -> Result<(f64, Option<u32>),
             if w <= 0.0 {
                 return Err(("out_of_range", format!("window_s {w} must be > 0")));
             }
-            let last = s[s.len() - 1];
-            let from = last.t as f64 - w;
-            let start = s.iter().find(|p| p.t as f64 >= from).unwrap_or(&last);
-            last.v - start.v
+            s[s.len() - 1].v - point_from(s, w).v
+        }
+        OpName::PriceAt => {
+            let s = price_series(series("series"), 1)?;
+            let ago = num("ago_s");
+            if ago.is_nan() || ago < 0.0 {
+                return Err(("out_of_range", format!("ago_s {ago} must be >= 0")));
+            }
+            point_from(s, ago).v
         }
         OpName::Volatility => {
             let s = price_series(series("series"), 2)?;
@@ -406,6 +413,14 @@ fn count(c: f64) -> Result<f64, Fail> {
 }
 
 /// A price series: at least `min` points, sorted by t, every v in 0..=100.
+/// The first point with t >= last.t - ago (the last point when none is older).
+/// movement and price_at both read it, so a move is always the difference of two line points.
+fn point_from(s: &[Point], ago: f64) -> Point {
+    let last = s[s.len() - 1];
+    let from = last.t as f64 - ago;
+    *s.iter().find(|p| p.t as f64 >= from).unwrap_or(&last)
+}
+
 fn price_series(s: &[Point], min: usize) -> Result<&[Point], Fail> {
     if s.len() < min {
         return Err((

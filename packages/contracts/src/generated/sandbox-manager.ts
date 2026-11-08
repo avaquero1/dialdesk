@@ -27,6 +27,7 @@ export type OpName =
   | 'expected_value'
   | 'movement'
   | 'volatility'
+  | 'price_at'
   | 'gap'
   | 'base_rate'
   | 'base_rate_history'
