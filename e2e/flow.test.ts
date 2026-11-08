@@ -340,7 +340,9 @@ describe('e2e on fakes', () => {
     expect(refused('169.254.169.254')).toContain('ip_literal');
     expect(refused('collect.exfil.fixture.test')).toContain('not_on_allowlist');
     expect(refused('tracker.offlist.fixture.test')).toContain('not_on_allowlist');
-    expect(k.proxy_log.filter((e) => e.allowed).map((e) => e.host)).toEqual(['fanpost.fixture.test']);
+    // One log entry per CONNECT: under load Chromium opens a backup connection to the same origin, so the page's own
+    // host can be allowed more than once. What must hold is that it is the only host allowed.
+    expect([...new Set(k.proxy_log.filter((e) => e.allowed).map((e) => e.host))]).toEqual(['fanpost.fixture.test']);
     // In the trust page's shape: killed, one proxy.refused row with the count, then destroyed.
     const rows = k.trust_log ?? [];
     expect(rows.map((r) => r.action)).toEqual(['sandbox.created', 'sandbox.killed', 'proxy.refused', 'sandbox.destroyed']);
