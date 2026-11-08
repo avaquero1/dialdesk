@@ -22,6 +22,8 @@ interface Hooks {
   openSafety: () => void;
 }
 let H: Hooks;
+/** The tap route's id for a strip's move (board.ts's data-cnd opens How we got this at it): a candidate's id starts cnd_. */
+export const SINCE_MOVE = 'since';
 const runs = new Map<string, RunView>();
 const failed = new Map<string, { text: string; tone: 'calm' | 'error'; until: number }>();
 const endT = new Map<string, number>();
@@ -56,6 +58,7 @@ function paint(id: string) {
   if (!line) {
     el.classList.remove('has-live');
     if (L) L.classList.remove('on');
+    L?.querySelector('.wl-open')?.remove();
     return;
   }
   if (!L) {
@@ -69,6 +72,16 @@ function paint(id: string) {
   el.classList.add('has-live');
   L.classList.add('on');
   L.dataset.tone = line.tone;
+  // Only a strip that shows a move has a receipt to open; a run's line, a block or "1 new item" stays a line.
+  let open = L.querySelector<HTMLButtonElement>(':scope > .wl-open');
+  const move = line.tone === 'since' && !!Math.round(w.since?.numbers[0]?.value ?? 0);
+  if (move && !open) {
+    open = mk('button', 'wl-open');
+    open.type = 'button';
+    open.dataset.cnd = SINCE_MOVE;
+    L.appendChild(open);
+  } else if (!move) open?.remove();
+  if (move) open!.setAttribute('aria-label', `${line.text}. How we got this`);
   const icon = L.querySelector<HTMLElement>('.wl-icon')!;
   const iconHtml = line.tone === 'blocked' ? IC.blocked : line.tone === 'since' ? '' : line.tone === 'error' ? IC.blocked : IC.shield;
   if (icon.dataset.k !== line.tone) {

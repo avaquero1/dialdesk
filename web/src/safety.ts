@@ -19,7 +19,8 @@ import { IC } from './icons.ts';
 import { closeBtn, panel, rz, sheetHead, tileFrom, toast } from './surfaces.ts';
 import { loadConnections } from './accounts.ts';
 import { connections } from './conns.ts';
-import { agoWords, factLine, fmtNum, fmtTime, tileName } from './widgets.ts';
+import { agoWords, factLine, fmtNum, fmtTime, moveWords, tileName } from './widgets.ts';
+import { SINCE_MOVE } from './moment.ts';
 
 type Num = WidgetResult['numbers'][number];
 type Receipt = WidgetResult['receipts'][number];
@@ -362,7 +363,7 @@ function checkStep(r: WidgetResult | null, trace: RunTraceStep[]) {
 /** A batched run's receipts keep their batch prefix (b3_n1, b3_kalshi_price): the widget's own names are without it. */
 export const unbatch = (id: string) => id.replace(/^b\d+_/, '');
 const kv = (k: string, v: string) => `<div><dt>${esc(k)}</dt><dd class="mono">${esc(v)}</dd></div>`;
-function detailsHTML(r: WidgetResult | null, trace: RunTraceStep[]) {
+function detailsHTML(r: WidgetResult | null, trace: RunTraceStep[], receipts = r?.receipts ?? []) {
   if (!r) return `<dl class="how-kv">${kv('result', 'none yet (first paint from cached quotes)')}</dl>`;
   const rec = (x: Receipt) =>
     `<dl class="how-kv">${kv('receipt', x.id)}${kv('op', `${x.op} (${unbatch(x.op_id)})`)}${x.refs ? kv('inputs', Object.entries(x.refs).map(([a, r]) => `${a}: ${unbatch(r)}`).join(', ')) : ''}${kv('formula', x.formula)}${kv('args', JSON.stringify(x.args))}${kv('value', `${x.value} ${x.unit}`)}` +
@@ -372,12 +373,50 @@ function detailsHTML(r: WidgetResult | null, trace: RunTraceStep[]) {
     .join('');
   return (
     `<dl class="how-kv">${kv('run', r.run_id)}${kv('result', r.result_id)}${kv('verdict', r.verdict_id)}${kv('as of', r.as_of)}</dl>` +
-    r.receipts.map(rec).join('') +
+    receipts.map(rec).join('') +
     (steps ? `<ol class="how-trace">${steps}</ol>` : '')
   );
 }
 
+const cents = (v: unknown) => (typeof v === 'number' ? `${Math.round(v)}¢` : '');
+
+/** The moves the strip stands for, each with its receipt (board refuses a since number without one). */
+function sinceMoves(s: NonNullable<Widget['since']>) {
+  return s.numbers.flatMap((n) => {
+    const rec = s.receipts.find((x) => x.id === n.receipt_id);
+    return rec ? [{ n, rec }] : [];
+  });
+}
+
+/** One move's two prices, from its receipt: "Kalshi: 62¢ at 3:12 PM, then 66¢ at 3:30 PM." */
+function sincePrices(rec: Receipt) {
+  const then = rec.provenance?.a_cents;
+  const now = rec.provenance?.b_cents;
+  const from = now ?? then;
+  const at = (x: typeof now) => (x ? ` at ${whenWords(x.as_of)}` : '');
+  return `${from ? `${exName(from.source.split(':')[0]!)}: ` : ''}${cents(rec.args.a_cents)}${at(then)}, then ${cents(rec.args.b_cents)}${at(now)}.`;
+}
+
+/** How we got this, opened from the strip: the move since the last visit, in the same plain steps, read from its receipts. */
+function sinceHTML(w: Widget, s: NonNullable<Widget['since']>, trace: RunTraceStep[]) {
+  const r = w.result;
+  const moves = sinceMoves(s);
+  const rows = moves.map(({ n, rec }) => `<li><span>${esc(`${cents(rec.args.b_cents)} minus ${cents(rec.args.a_cents)}`)}</span><b class="num">${esc(moveWords(Math.round(n.value)))}</b></li>`).join('');
+  const v = moves[0]?.rec.engine_version;
+  let i = 2;
+  return (
+    `<div class="sh-head${rz(0)}><h2>How we got this</h2>${closeBtn(0)}</div><p class="sh-sub${rz(1)}>${esc(tileName(w))}${r ? `, updated ${esc(fmtTime(r.created_at))}` : ''}</p>` +
+    `<section class="how-art${rz(i++)} data-since><h3>${esc(`${moveWords(Math.round(s.numbers[0]?.value ?? 0))} since you last looked`)}</h3>${p(`Compared with the numbers you saw from ${whenWords(s.from_at)}.`)}</section>` +
+    step(1, 'Where the prices came from', `<ul class="how-srcs">${moves.map(({ rec }) => `<li class="how-src"><span>${esc(sincePrices(rec))}</span></li>`).join('')}</ul>` + p('For a YES that pays $1.'), i++) +
+    step(2, 'The math', `<ul class="how-math">${rows}</ul>` + p(`Worked out by our math engine${v ? ` (version ${v})` : ''}, never by the AI. The same prices always give the same answer.`), i++) +
+    step(3, 'The safety check', checkStep(r, trace), i++) +
+    `<button class="btn how-toggle${rz(i)} type="button" id="how-toggle" aria-expanded="false" aria-controls="how-details">Details</button>` +
+    `<div class="how-details" id="how-details" hidden>${detailsHTML(r, trace, s.receipts)}</div>`
+  );
+}
+
 function howHTML(w: Widget, trace: RunTraceStep[], article?: string) {
+  if (article === SINCE_MOVE && w.since) return sinceHTML(w, w.since, trace);
   const r = w.result;
   let i = 2;
   const art = articleHTML(r, trace, article, i);
@@ -395,7 +434,7 @@ function howHTML(w: Widget, trace: RunTraceStep[], article?: string) {
   );
 }
 
-/** "How we got this" for one widget: from the ⋯ menu, from tapping one of its numbers, or at one article (a News item). */
+/** "How we got this" for one widget: from the ⋯ menu, from tapping one of its numbers, at one article (a News item), or at the strip's move (SINCE_MOVE). */
 export async function openHow(id: string, article?: string) {
   const w = S.widgets.get(id);
   if (!w || w.spec.kind !== 'display') return;

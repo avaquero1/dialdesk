@@ -188,6 +188,30 @@ html[data-layout="phone"] button.chip--trust { font-size: 12px; }
   background: color-mix(in oklch, var(--danger) 10%, var(--glass-chip-bg)); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--danger) 30%, transparent), var(--glass-chip-shadow); }
 .w-live[data-tone="blocked"] .wl-icon, .w-live[data-tone="error"] .wl-icon { color: var(--danger); }
 .w-live[data-tone="since"] { color: var(--text); }
+/* A strip that shows a move opens its steps: the whole strip is the button, 44 px from the tile's bottom edge up. */
+.wl-open { position: absolute; left: 0; right: 0; bottom: calc(var(--padu) * -.6); height: 100%; min-height: 44px; border: 0; background: none; border-radius: 13px; cursor: pointer; pointer-events: auto; }
+.wl-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* While the strip shows, the tile's words end above it: the room is the strip (two lines on a small tile) and its inset.
+   Layout changes at once; only the strip's own opacity and transform move. */
+.w { --live-lines: 1; }
+.w--s { --live-lines: 2; }
+.w:has(> .w-live.on[data-tone="since"]) > .w-in {
+  height: calc(var(--H) - max(44px, var(--live-lines) * var(--u) * 15px + 14px + var(--padu) * .6) - 4px); padding-bottom: 0; overflow: hidden;
+}
+.w:has(> .w-live.on[data-tone="since"]) > .w-in :is(.w-foot, .c-foot, .c-ex) { display: none; }
+/* The rows sit closer on a small tile, and a Blocked card's padding gives way on a medium one, so nothing is cut. */
+:is(.w--s, .w--m):has(> .w-live.on[data-tone="since"]) > .w-in { gap: calc(var(--padu) * .25); }
+.w--s:has(> .w-live.on[data-tone="since"]) > .w-in .strand { height: calc(var(--u) * 20px); margin-top: 0; }
+.w--s:has(> .w-live.on[data-tone="since"]) > .w-in .mvt .c-chart { display: none; }
+.w--m:has(> .w-live.on[data-tone="since"]) > .w-in .item--blocked { padding-block: calc(var(--u) * 3px); }
+/* A medium News tile keeps a Blocked page and the first note: the card's time moves up beside its words, and the articles and later notes give way. */
+.w--m:has(> .w-live.on[data-tone="since"]) > .w-in .item--blocked .meta { display: inline; margin-left: 6px; }
+.w--m:has(> .w-live.on[data-tone="since"]) > .w-in > .items { gap: calc(var(--u) * 3px); }
+.w--m:has(> .w-live.on[data-tone="since"]) > .w-in > .items > .item--tap { padding-block: 0; }
+.w--m:has(> .w-live.on[data-tone="since"]) > .w-in > .w-note { margin-top: 0; }
+.w--m:has(> .w-live.on[data-tone="since"]) > .w-in > .items ~ .w-note:not(.news-sum) ~ .w-note:not(.news-sum),
+.w--m:has(> .w-live.on[data-tone="since"]) > .w-in > .items:has(~ .w-note:not(.news-sum)) .item--tap:nth-child(n+2),
+.w--m:has(> .w-live.on[data-tone="since"]) > .w-in .items .item--tap:nth-child(n+3) { display: none; }
 
 /* The sealed boxes: one small rounded square per article. Read ones settle to a quiet tick of colour; the one a page
    tried to trick swells once, turns red and is gone (scale and opacity, one soft move: never a blink or a shake). */
