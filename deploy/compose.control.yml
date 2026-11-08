@@ -57,6 +57,10 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      # Empty unless VHA_TESTPAGE_HOSTNAME is set (deploy.sh): the test page's site block.
+      - /etc/vha/testpage:/etc/caddy/testpage:ro
+    environment:
+      VHA_TESTPAGE_HOSTNAME: ${VHA_TESTPAGE_HOSTNAME:-}
     tmpfs: ["/tmp:size=16m"]
     mem_limit: 256m
     pids_limit: 128
@@ -133,7 +137,11 @@ services:
     user: "10105:10105"
     mem_limit: 512m
     command: ["node", "--env-file=/run/secrets/env", "--import", "tsx", "services/runner/src/main.ts"]
-    environment: { NODE_ENV: production, RUNNER_HOST: 0.0.0.0 }
+    environment:
+      NODE_ENV: production
+      RUNNER_HOST: 0.0.0.0
+      # Off when empty: the one non-catalog domain runner's re-check keeps (the test page, offered only by markets).
+      RUNNER_TESTPAGE_DOMAIN: ${VHA_TESTPAGE_HOSTNAME:-}
     secrets: [{ source: runner-env, target: env }]
     networks:
       apps: { aliases: [apps-runner] }
@@ -148,6 +156,9 @@ services:
     environment:
       NODE_ENV: production
       MARKETS_HOST: 0.0.0.0
+      # Off unless deploy.env sets both: one team's News gets our poisoned test page among its candidates.
+      MARKETS_TESTPAGE_URL: ${VHA_TESTPAGE_URL:-}
+      MARKETS_TESTPAGE_TEAM: ${VHA_TESTPAGE_TEAM:-}
       # /run/secrets/brave-search: an empty file = no Brave key, and markets skips Brave with one log line.
     secrets: [{ source: markets-env, target: env }, { source: brave-search, target: brave-search }]
     networks:

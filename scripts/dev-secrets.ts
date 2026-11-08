@@ -72,6 +72,8 @@ lines.push(
   '# MARKETS_SEARCH_TTL_S=1800     (one Brave search per game per 30 min, shared by every follower)',
   '# MARKETS_FEED_MAX_AGE_H=96',
   '# MARKETS_SOURCE_ENV=prod       (fixture: read the fixture rows of the source catalog instead)',
+  '# MARKETS_TESTPAGE_URL= and MARKETS_TESTPAGE_TEAM=   (both set: that team\'s game offers our poisoned test page; off by default)',
+  '# RUNNER_TESTPAGE_DOMAIN=        (empty: runner keeps no non-catalog test page)',
   '# The Brave key file: deploy/.dev/brave-search unless you set another (absent or empty = markets skips Brave).',
 );
 put('MARKETS_BRAVE_KEY_FILE', example ? '' : (process.env.MARKETS_BRAVE_KEY_FILE || join(root, 'deploy/.dev/brave-search')));

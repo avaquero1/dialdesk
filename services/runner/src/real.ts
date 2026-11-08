@@ -106,6 +106,7 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
     },
     store,
     sourceEnv: cfg.SOURCE_ENV === 'fixture' ? 'fixture' : 'prod',
+    testPageDomain: typeof cfg.TESTPAGE_DOMAIN === 'string' ? cfg.TESTPAGE_DOMAIN : '',
     onRunEnd: (w, job) => scheduler.noteRun(w, job),
     onWidgetGone: (id) => scheduler.forget(id),
   };

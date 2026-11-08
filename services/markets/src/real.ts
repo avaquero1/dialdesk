@@ -4,6 +4,7 @@ import { HttpError, createLogger, secretFile, type Handlers, type Logger } from 
 import { braveClient, type BraveClient } from './brave.ts';
 import { TtlCache } from './cache.ts';
 import { parseExtraDomains, toCandidates, type Link } from './candidates.ts';
+import { withTestPage } from './testpage.ts';
 import { mentions, parseFeed } from './feeds.ts';
 import { eventKeyOf, kalshiEventOf, parseEventKey, parseKalshiTicker, polymarketSlugsOf, titleOf, type Game } from './games.ts';
 import { kalshiClient, kalshiPoints, kalshiToMarket, type KalshiEventRaw } from './kalshi.ts';
@@ -34,6 +35,9 @@ export const MarketsConfig = z.object({
   FEED_MAX_AGE_H: z.coerce.number().int().min(6).max(720).default(96),
   BRAVE_KEY_FILE: z.string().default(secretFile('brave-search')),
   SOURCE_ENV: z.enum(['prod', 'fixture']).default('prod'),
+  /** Our poisoned test page for the containment demo: both set, or off. See testpage.ts. */
+  TESTPAGE_URL: z.union([z.literal(''), z.url().startsWith('https://')]).default(''),
+  TESTPAGE_TEAM: z.union([z.literal(''), z.string().regex(/^[a-z0-9]{2,4}$/)]).default(''),
   DATABASE_URL: z.string().optional(),
 });
 export type MarketsConfig = z.infer<typeof MarketsConfig>;
@@ -349,7 +353,8 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
         for (const h of search.hits) links.push({ ...h, via: 'search' });
         receipts.push({ provider: 'brave', query: search.query, cached_at: search.cached_at, shared_key: sharedKey });
       }
-      return { market_id: market.market_id, candidates: toCandidates(links, rows, parseExtraDomains(query.extra_domains)), receipts };
+      const candidates = toCandidates(links, rows, parseExtraDomains(query.extra_domains));
+      return { market_id: market.market_id, candidates: withTestPage(candidates, market, cfg.TESTPAGE_URL, cfg.TESTPAGE_TEAM, iso(now())), receipts };
     },
   };
 }

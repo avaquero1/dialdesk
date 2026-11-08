@@ -145,6 +145,8 @@ export interface RunnerDeps {
   guard?: Guard;
   /** Which source catalog rows count: prod only, or the fixture rows too (dev and tests). */
   sourceEnv: 'prod' | 'fixture';
+  /** The one test page domain (the containment demo) markets may offer outside the catalog. Empty = none. */
+  testPageDomain?: string;
   /** Dev and tests only: a page's text when the sandbox backend opened no browser (the stub returns no pages). */
   pageText?: (url: string) => string | null;
   /** After every run: the scheduler books the next one. */
@@ -592,20 +594,7 @@ class Run {
     let cands: Candidate[] = [];
     try {
       const c = await this.d.markets(MARKETS.candidates, { params: { market_id }, query: added.size ? { extra_domains: [...added].join(',') } : {} });
-      cands = c.candidates.filter((x) => {
-        if (!x.allowed) return false;
-        const d = bare(x.domain);
-        let host: string;
-        try {
-          const u = new URL(x.url);
-          if (u.protocol !== 'https:' && !(this.d.sourceEnv === 'fixture' && u.protocol === 'http:')) return false;
-          host = bare(u.hostname);
-        } catch {
-          return false;
-        }
-        const onDomain = host === d || host.endsWith(`.${d}`);
-        return onDomain && (catalog.has(d) || added.has(d));
-      });
+      cands = c.candidates.filter((x) => keepCandidate(x, { catalog, added, sourceEnv: this.d.sourceEnv, testPageDomain: this.d.testPageDomain }));
     } catch (e) {
       if (!(e instanceof CallError && (e.status === 503 || e.status === 404))) throw e;
     }
@@ -932,6 +921,22 @@ export function fillSlots(t: { template: string } | null, facts: Fact[], er: Eng
 }
 
 /** The planner's input: never page text, titles of pages or past facts. */
+/** runner's own re-check of one candidate from markets: on its domain, https, and in the catalog, the user's added domains or the set test page. */
+export function keepCandidate(x: Candidate, o: { catalog: Set<string>; added: Set<string>; sourceEnv: 'prod' | 'fixture'; testPageDomain?: string }): boolean {
+  if (!x.allowed) return false;
+  const d = bare(x.domain);
+  let host: string;
+  try {
+    const u = new URL(x.url);
+    if (u.protocol !== 'https:' && !(o.sourceEnv === 'fixture' && u.protocol === 'http:')) return false;
+    host = bare(u.hostname);
+  } catch {
+    return false;
+  }
+  const onDomain = host === d || host.endsWith(`.${d}`);
+  return onDomain && (o.catalog.has(d) || o.added.has(d) || (!!o.testPageDomain && d === bare(o.testPageDomain)));
+}
+
 export const plannerInput = (spec: DisplaySpec, user_words: string, src: Pick<NonNullable<Outputs['sources']>, 'quotes' | 'candidates'>) => ({
   widget: { type: spec.type, title: spec.title, market_ids: spec.market_ids, params: spec.params },
   user_words,

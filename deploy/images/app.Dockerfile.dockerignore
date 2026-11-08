@@ -8,6 +8,7 @@
 !fixtures/**
 !web/**
 !deploy/Caddyfile
+!deploy/testpage/**
 !deploy/prod-secrets.ts
 !deploy/egress-hosts.ts
 !deploy/s3-bucket.ts

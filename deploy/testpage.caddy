@@ -1,0 +1,27 @@
+# The test page's own site: its own hostname and certificate, the static page and robots.txt, nothing proxied to the app.
+# deploy.sh copies this file to /etc/vha/testpage/ only when VHA_TESTPAGE_HOSTNAME is set; deploy/Caddyfile imports it.
+https://{$VHA_TESTPAGE_HOSTNAME} {
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
+
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	root * /srv/testpage
+
+	@page path /nfl/week-ten-notes.html /robots.txt
+	handle @page {
+		file_server
+	}
+
+	handle {
+		respond 404
+	}
+}

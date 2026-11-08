@@ -11,6 +11,7 @@
 | `nftables/egress-*.nft`, `egress-refresh.sh`, `vha-egress-refresh.*` | control's egress mode (log-only or enforce) and the timer that refills each container's allow set from `egress-hosts.ts`. |
 | `sandbox-host/` | The sandbox machine in one script: `push.sh` (from a dev PC), `setup.sh`, `smoke.sh`, `run-containment.sh` (`make containment`). See its README. `scripts/deploy.sh sandbox` runs it for the deploy. |
 | `compose.control.yml` | control's containers, with their uids, networks and secret files. |
+| `testpage/`, `testpage.caddy` | A small page, labelled as a test, for the containment demo (off by default). With `VHA_TESTPAGE_HOSTNAME` and `VHA_TESTPAGE_TEAM` set in deploy.env, Caddy serves it on its own hostname with nothing proxied to the app, and markets offers it among that team's game News candidates. |
 | `prod-secrets.ts`, `s3-bucket.ts`, `egress-hosts.ts` | Run on control in the app image by `scripts/deploy.sh`: the secret files, the two buckets, the egress table. |
 | `scripts/deploy.sh` | Deploys control and the sandbox machine (below). `--dry-run` prints every step and changes nothing; `tests/deploy/deploy-script.test.ts` and `make deploy-dry-run` run it. |
 | `deploy.env.example` | control's settings, copied to `/etc/vha/deploy.env` on control. `deploy/deploy.env` is gitignored. |

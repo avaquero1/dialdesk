@@ -198,6 +198,9 @@ control_main() {
   ipv4 ADMIN_IP "$(cfg ADMIN_IP)"; ipv4 SANDBOX_VPC_IP "$(cfg SANDBOX_VPC_IP)"
   [[ $(cfg EGRESS_PREFIX 172.31.250) =~ ^172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}$ ]] || die "EGRESS_PREFIX must look like 172.31.250" 2
   [[ $(cfg VHA_HOSTNAME) =~ ^[a-z0-9.-]+$ ]] || die "VHA_HOSTNAME must be a host name" 2
+  [[ -n $(cfg VHA_TESTPAGE_HOSTNAME) && -n $(cfg VHA_TESTPAGE_TEAM) || -z $(cfg VHA_TESTPAGE_HOSTNAME) && -z $(cfg VHA_TESTPAGE_TEAM) ]] || die "VHA_TESTPAGE_HOSTNAME and VHA_TESTPAGE_TEAM go together" 2
+  [[ -z $(cfg VHA_TESTPAGE_HOSTNAME) || $(cfg VHA_TESTPAGE_HOSTNAME) =~ ^[a-z0-9.-]+$ ]] || die "VHA_TESTPAGE_HOSTNAME must be a host name" 2
+  [[ -z $(cfg VHA_TESTPAGE_TEAM) || $(cfg VHA_TESTPAGE_TEAM) =~ ^[a-z0-9]{2,4}$ ]] || die "VHA_TESTPAGE_TEAM must be a team code like kc" 2
   grep -qxF "https://$(cfg VHA_HOSTNAME) {" "$SRC/deploy/Caddyfile" || die "VHA_HOSTNAME isn't the site in deploy/Caddyfile" 2
   LOCAL_DB=$(cfg VHA_LOCAL_DB 0)
   if [[ $LOCAL_DB == 1 ]]; then
@@ -232,7 +235,11 @@ control_main() {
   step "images (built here: vha/app:$REV, vha/caddy:$REV)"
   run docker build -f "$SRC/deploy/images/app.Dockerfile" --target app --build-arg "GIT_HASH=$REV" -t "vha/app:$REV" "$SRC"
   run docker build -f "$SRC/deploy/images/app.Dockerfile" --target caddy --build-arg "GIT_HASH=$REV" -t "vha/caddy:$REV" "$SRC"
-  printf '# Written by deploy/scripts/deploy.sh: the images Compose runs.\nVHA_TAG=%s\n' "$REV" | put "$ETC/release.env" 0644
+  local tp_url=""; [[ -n $(cfg VHA_TESTPAGE_HOSTNAME) ]] && tp_url="https://$(cfg VHA_TESTPAGE_HOSTNAME)/nfl/week-ten-notes.html"
+  printf '# Written by deploy/scripts/deploy.sh: the images Compose runs.\nVHA_TAG=%s\nVHA_TESTPAGE_URL=%s\n' "$REV" "$tp_url" | put "$ETC/release.env" 0644
+  run install -d -m 0755 "$ETC/testpage"
+  if [[ -n $(cfg VHA_TESTPAGE_HOSTNAME) ]]; then run install -m 0644 "$SRC/deploy/testpage.caddy" "$ETC/testpage/site.caddy"; note "test page on, team $(cfg VHA_TESTPAGE_TEAM)"
+  else run rm -f "$ETC/testpage/site.caddy"; fi
 
   step "firewall (vha-nft.service, timed rollback after ${ROLLBACK}s)"
   firewall
@@ -410,6 +417,11 @@ health() {
     || die "https://$host/ doesn't answer through Caddy: does the A record point here, and is 443 open? (docker logs vha-control-caddy-1)"
   grep -qi '^content-security-policy:' <<< "$headers" || die "https://$host/ answers without its Content-Security-Policy"
   note "https://$host/: 200, with its CSP"
+  local tp; tp=$(cfg VHA_TESTPAGE_HOSTNAME)
+  if [[ -n $tp ]]; then
+    if curl -fsS --retry 12 --retry-delay 5 --retry-all-errors --resolve "$tp:443:127.0.0.1" -o /dev/null "https://$tp/robots.txt"; then note "test page's site answers"
+    else note "WARNING: the test page's site doesn't answer yet (its A record? docker logs vha-control-caddy-1)"; fi
+  fi
   local n; n=$(nft -j list set inet vha allow_models | grep -o '"elem"' | wc -l)
   ((n > 0)) || die "allow_models is empty: did egress-refresh run? (journalctl -u vha-egress-refresh)"
   note "egress sets filled; timer $(systemctl is-active vha-egress-refresh.timer)"

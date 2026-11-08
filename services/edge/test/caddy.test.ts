@@ -36,4 +36,12 @@ describe('deploy/Caddyfile', () => {
     expect(live.match(/reverse_proxy/g)).toHaveLength(2);
     expect(live).toMatch(/max_size 64KB/);
   });
+
+  it('the test page site: off unless deploy.sh adds it, its own host, nothing proxied', () => {
+    const page = readFileSync(new URL('../../../deploy/testpage.caddy', import.meta.url), 'utf8');
+    expect(live).toMatch(/^import \/etc\/caddy\/testpage\/\*\.caddy$/m);
+    expect(page).toContain('https://{$VHA_TESTPAGE_HOSTNAME} {');
+    expect(page).not.toMatch(/reverse_proxy|vaquerothe|edge:/);
+    expect(page).toContain('noindex');
+  });
 });

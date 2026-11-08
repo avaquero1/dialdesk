@@ -62,3 +62,6 @@ https://vultrcontest.vaquerothe.dev {
 		}
 	}
 }
+
+# The test page for the containment demo: a site of its own, only when deploy.sh put it there (off by default).
+import /etc/caddy/testpage/*.caddy

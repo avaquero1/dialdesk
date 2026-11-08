@@ -133,3 +133,16 @@ describe('checkPage: no false kills', () => {
       expect(pageReasons(`${CLEAN_LEAD} ${c}`)).toEqual([]);
     });
 });
+
+describe('the live test page (deploy/testpage)', () => {
+  const html = readFileSync(join(import.meta.dirname, '../../../deploy/testpage/nfl/week-ten-notes.html'), 'utf8');
+
+  it('checkPage poisons it, before any model', () => {
+    expect(checkPage(pageText(html)).outcome).toBe('poison');
+  });
+  it('says what it is, stays out of search, and names only made-up targets', () => {
+    expect(html).toContain("This is a test page for the app's safety demo");
+    expect(html).toContain('noindex, nofollow');
+    expect(html.match(/https?:\/\/[^\s"'<]+/g)!.every((u) => new URL(u).hostname.endsWith('example.invalid'))).toBe(true);
+  });
+});
