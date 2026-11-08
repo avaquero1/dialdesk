@@ -25,7 +25,7 @@ import { CallError, HttpError, MemoryBus, busFromConfig, clientFromEnv, createLo
 import { picksFor } from './picks.ts';
 import { changeTexts, fixWidgetCount, withSaid } from './reply.ts';
 import { RULES, boardForModel, dataBlock, marketsForModel } from './prompt.ts';
-import { Slots, digitsIn, forHistory, strayDigits } from './slots.ts';
+import { Slots, boardMoves, digitsIn, forHistory, strayDigits } from './slots.ts';
 import { MemoryConversationStore, PgConversationStore, connect, type ConversationStore, type StoredTurn } from './store.ts';
 import { runTool, type ProposalChange, type TurnState } from './tools.ts';
 
@@ -101,7 +101,7 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
       () => [],
     );
     const markets = marketsForModel(all, message);
-    return { board, all, data: dataBlock({ board, pending: b.pending.length, markets, tune }), names: [...board.map((w) => w.title), ...markets.map((m) => m.title)] };
+    return { board, moves: boardMoves(b.widgets.map((w) => w.result)), all, data: dataBlock({ board, pending: b.pending.length, markets, tune }), names: [...board.map((w) => w.title), ...markets.map((m) => m.title)] };
   }
 
   async function complete(body: CompleteBody): Promise<Completion | 'cap' | 'down'> {
@@ -187,6 +187,7 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
           account_id,
           widget_id,
           board: ctx.board,
+          moves: ctx.moves,
           userTexts: [...history.filter((t) => t.role === 'user').map((t) => t.text), message],
           slots: new Slots(),
           chips: [],

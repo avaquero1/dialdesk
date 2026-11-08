@@ -4,7 +4,7 @@
  * never the value. The model writes `{n1}`; code fills it after the loop. A digit the model typed itself, outside a
  * slot, blocks the reply (unless it is the user's own number or part of a name it was shown, like "Week 10").
  */
-import type { EngineReceipt, Market } from '@app/contracts';
+import type { EngineReceipt, Market, WidgetResult } from '@app/contracts';
 
 export const SLOT_RE = /\{n([0-9]{1,2})\}/g;
 const DIGITS_RE = /[0-9]+(?:[.,][0-9]+)?/g;
@@ -21,7 +21,37 @@ const pts = (n: number) => {
   const r = Math.round(Math.abs(n) * 10) / 10;
   return `${r} point${r === 1 ? '' : 's'}`;
 };
-const move = (n: number) => (n === 0 ? 'unchanged' : `${n > 0 ? 'up' : 'down'} ${pts(n)}`);
+/** In whole points, as the card shows a move, so the two read the same. */
+const move = (n: number) => {
+  const r = Math.round(n);
+  return r === 0 ? 'unchanged' : `${r > 0 ? 'up' : 'down'} ${pts(r)}`;
+};
+
+const DAY_S = 86400;
+
+/** A card's move since yesterday: the engine's number, from the price history, and its receipt. */
+export interface BoardMove {
+  value: number;
+  receipt_id: string;
+}
+
+/**
+ * "Since yesterday" has one definition: the engine's 24 h movement on the board's own results, by market id (the
+ * newest result when two cards show the game). The exchanges' previous_price_cents is a different figure and can have
+ * the opposite sign, so it is never worded as a move.
+ */
+export function boardMoves(results: (WidgetResult | null)[]): Map<string, BoardMove> {
+  const out = new Map<string, BoardMove>();
+  const newest = results.filter((r): r is WidgetResult => r !== null).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  for (const r of newest)
+    for (const n of r.numbers) {
+      if (n.op !== 'movement') continue;
+      const rec = r.receipts.find((x) => x.id === n.receipt_id);
+      const market = rec?.provenance?.series?.source;
+      if (rec?.args.window_s === DAY_S && market && !out.has(market)) out.set(market, { value: n.value, receipt_id: rec.id });
+    }
+  return out;
+}
 
 /** One turn's numbers. Slot names are given out in order: n1, n2… */
 export class Slots {
@@ -33,12 +63,12 @@ export class Slots {
     return name;
   }
 
-  /** quote_market: the YES price as an implied probability, and the one-day move. Values stay here. Meanings hold no digit (the model copies them). */
-  quote(m: Market): Record<string, unknown> {
+  /** quote_market: the YES price as a chance, and the board's move since yesterday when a card has one. Values stay here. Meanings hold no digit (the model copies them). */
+  quote(m: Market, day?: BoardMove): Record<string, unknown> {
     const slots: Record<string, string> = {};
-    slots[this.add({ text: pct(m.yes_price_cents / 100), source: m.market_id })] = 'implied probability of YES, from the last traded price';
-    if (m.previous_price_cents !== null)
-      slots[this.add({ text: move(m.yes_price_cents - m.previous_price_cents), source: m.market_id })] =
+    slots[this.add({ text: pct(m.yes_price_cents / 100), source: m.market_id })] = 'the chance of YES, from the last traded price';
+    if (day)
+      slots[this.add({ text: move(day.value), source: day.receipt_id })] =
         'the move since yesterday, written with its direction (e.g. "up N points" or "unchanged")';
     return { market_id: m.market_id, exchange: m.exchange, stale: m.stale, slots };
   }
@@ -46,7 +76,7 @@ export class Slots {
   /** read_receipt: the engine's value in its unit. The model gets the op and unit, not the value, nor the formula (it holds digits the model could copy). */
   receipt(r: EngineReceipt): Record<string, unknown> {
     const name = this.add({ text: formatValue(r.op, r.unit, r.value), source: r.id });
-    return { receipt_id: r.id, op: r.op, unit: r.unit, slots: { [name]: `the ${r.op} value` } };
+    return { receipt_id: r.id, op: r.op, unit: r.unit, slots: { [name]: r.op === 'implied_probability' ? 'the chance' : `the ${r.op} value` } };
   }
 
   has(name: string) {

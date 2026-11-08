@@ -73,7 +73,11 @@ beforeAll(async () => {
   board = await boardOf(ACC);
   probWidget = board.widgets.find((w) => w.spec.kind === 'display' && w.spec.type === 'probability' && w.spec.title === 'Chiefs beat the Bills')!.spec.widget_id;
   // A run's result on that widget: receipts the agent may read, and page-derived text it must never see.
-  await as('runner', boardApp)(BOARD.putResult, { params: { widget_id: probWidget }, body: sampleResult(probWidget, ACC, 'pass') });
+  const body = sampleResult(probWidget, ACC, 'pass');
+  // The card's move since yesterday (the engine's, over 24 h): the one the chat must say.
+  body.result.numbers.push({ id: 'n9', op: 'movement', value: -3, unit: 'points', receipt_id: 'r-0a1b2c3e' });
+  body.result.receipts.push({ ...body.result.receipts[0]!, id: 'r-0a1b2c3e', op: 'movement', op_id: 'n9', value: -3, unit: 'points', formula: 'move = now_cents - then_cents', args: { window_s: 86400 }, provenance: { series: { source: KC, as_of: body.result.as_of } } });
+  await as('runner', boardApp)(BOARD.putResult, { params: { widget_id: probWidget }, body });
 });
 afterAll(async () => {
   await vultr.close();
@@ -111,6 +115,7 @@ describe('agent real mode: the rules', () => {
   it('answers a market question with the quote, filled by code, and no call', async () => {
     const r = await chat('should I buy YES on the Chiefs?');
     expect(r.body.turn.text).toMatch(/^I do math, not calls\. The market says \d+(\.\d)?%, (up [\d.]+ points?|down [\d.]+ points?|unchanged) since yesterday\. Want a widget for this market\?$/);
+    expect(r.body.turn.text).toContain('down 3 points since yesterday'); // the card's engine number (A1.4.12), not the quote's own
     expect(r.body.turn.chips[0]).toMatchObject({ tool: 'quote_market', status: 'applied', args: { market_id: KC } });
     // The model got slot names, never the value.
     const price = r.body.turn.text.match(/(\d+(?:\.\d)?)%/)![1]!;

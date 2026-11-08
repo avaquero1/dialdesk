@@ -87,9 +87,9 @@ describe('agent on the models fake: the chat builds a board', () => {
     expect(news).toMatchObject({ op: 'add', widget: { type: 'news', params: { team: 'Bills', event_keys: ['nfl-2026w10-kc-buf'] } } });
   });
 
-  it('a later turn follows what the user said: advice bait gets the math, filled by code', async () => {
+  it('a later turn follows what the user said: advice bait gets the math, filled by code (no card has the game\'s move, so no move: A1.4.12)', async () => {
     const r = await chat('Should I buy YES on the Chiefs?', cnv);
-    expect(r.turn.text).toMatch(/^I do math, not calls\. The market says [0-9.]+%, (up|down) [0-9.]+ points? since yesterday\. Want a widget for this game\?$/);
+    expect(r.turn.text).toMatch(/^I do math, not calls\. The market says [0-9.]+%\. Want a widget for this game\?$/);
     expect(r.turn.chips.map((c) => c.tool)).toEqual(['quote_market']);
   });
 

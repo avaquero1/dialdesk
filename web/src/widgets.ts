@@ -98,7 +98,7 @@ export const leadNumber = (r: WidgetResult): Num | undefined => r.numbers.find((
 const head = (t: string, sub?: string, dot?: string) =>
   `<div class="w-head"><i class="w-dot${dot ? ' ' + dot : ''}"></i><span class="w-title">${esc(DISPLAY_NAMES[t] ?? t)}</span>${sub ? `<span class="w-sub num">${esc(sub)}</span>` : ''}</div>`;
 
-/** A small line chart. Points are real values only (first paint has two: 24 h ago and now). */
+/** A small line chart. Points are real values only. */
 export function spark(v: number[], o: { extra?: number[][]; area?: boolean; end?: boolean } = {}) {
   if (v.length < 2) return '';
   const ex = o.extra ?? [];
@@ -124,8 +124,6 @@ const quotes = (w: Widget) => w.quotes ?? [];
 const quoteOf = (w: Widget, marketId: string | undefined) => (marketId ? quotes(w).find((q) => q.market_id === marketId) : undefined);
 const quoteOn = (w: Widget, ex: Quote['exchange']) => quotes(w).find((q) => q.exchange === ex);
 const nums = (w: Widget, op: Num['op']) => (w.result?.numbers ?? []).filter((n) => n.op === op);
-const move = (q: Quote | undefined) => (q && q.previous_price_cents != null ? q.yes_price_cents - q.previous_price_cents : null);
-const line2 = (q: Quote | undefined) => (q && q.previous_price_cents != null ? [q.previous_price_cents, q.yes_price_cents] : []);
 const pctOf = (n: Num | undefined) => (n && n.unit === 'probability' ? Math.round(n.value * 100) : null);
 const ptsOf = (n: Num | undefined) => (n ? Math.round(n.unit === 'probability' ? n.value * 100 : n.value) : null);
 
@@ -299,11 +297,11 @@ function events(w: Widget, s: Display, c: RenderCtx) {
     const q = quoteOf(w, m);
     const p = pctOf(numFor(w, 'implied_probability', m, i)) ?? q?.yes_price_cents ?? null;
     const mv = moveOf(w, { market: m, i });
-    const d = mv?.d ?? move(q);
+    const d = mv?.d ?? null;
     const name = eventLabel(k, c.titles);
-    // The game's small 7-day line from the engine's price_at numbers, else first paint's two prices.
+    // The game's small 7-day line from the engine's price_at numbers; first paint has none.
     const line = m ? lineOf(w, m) : [];
-    return `<div class="game"${says(lineWords(name, chanceWords(p), moveSaid(d, mv ? mv.since : sinceWords(DAY_S))))}><span class="g-n">${esc(name)}</span><span class="g-s">${spark(line.length ? line : line2(q), { area: false, end: false })}</span><span class="g-p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '<span class="mv mv--flat num">—</span>' : mvEl(d)}</div>`;
+    return `<div class="game"${says(lineWords(name, chanceWords(p), moveSaid(d, mv?.since)))}><span class="g-n">${esc(name)}</span><span class="g-s">${spark(line, { area: false, end: false })}</span><span class="g-p num">${p == null ? '—' : esc(p) + '%'}</span>${d == null ? '<span class="mv mv--flat num">—</span>' : mvEl(d)}</div>`;
   });
   return (
     head(s.title, shown.length < keys.length ? `${shown.length} of ${keys.length} games` : `${keys.length} ${keys.length === 1 ? 'game' : 'games'}`) +
@@ -329,17 +327,14 @@ function yourNumberLine(up: number, ev: number) {
 }
 
 function probability(w: Widget, s: Display) {
-  const k = quoteOn(w, 'kalshi');
-  const p = quoteOn(w, 'polymarket');
   const kc = priceOn(w, 'kalshi');
   const pc = priceOn(w, 'polymarket');
   const ip = pctOf(nums(w, 'implied_probability')[0]);
   const big = ip ?? kc ?? pc ?? null;
-  // "Up 4 points since yesterday": the result's 24 h move, else first paint's (the quote's price 24 h ago).
+  // "Up 4 points since yesterday": the result's 24 h move only. First paint shows the price and no move.
   const day = moveOf(w, { window_s: DAY_S });
-  const qd = move(k) ?? move(p);
-  const mv = day ? mvEl(day.d, { long: true, since: day.since }) : qd != null ? mvEl(qd, { long: true, since: sinceWords(DAY_S) }) : '';
-  const said = lineWords(chanceWords(big), day ? moveSaid(day.d, day.since) : moveSaid(qd, sinceWords(DAY_S)), big != null && 'the market says');
+  const mv = day ? mvEl(day.d, { long: true, since: day.since }) : '';
+  const said = lineWords(chanceWords(big), day && moveSaid(day.d, day.since), big != null && 'the market says');
   const ev = nums(w, 'expected_value')[0];
   const up = s.params.user_probability;
   // The sentence stays true of the number it reports: the "you think" the engine used, from its own receipt.
@@ -347,7 +342,7 @@ function probability(w: Widget, s: Display) {
   const evLine = up == null ? '' : ev && evUp != null ? yourNumberLine(evUp, ev.value) : `<span class="ev">You think ${Math.round(up * 100)}%. The math for it comes with the first run.</span>`;
   const ex = [kc != null ? `<span>Kalshi <b class="num">${esc(kc)}¢</b></span>` : '', pc != null ? `<span>Polymarket <b class="num">${esc(pc)}¢</b></span>` : ''].filter(Boolean).join('<span class="sep">·</span>');
   const line = lineOf(w);
-  const chart = line.length ? spark(line) : line2(k).length ? spark(line2(k), { extra: [line2(k), line2(p)] }) : '';
+  const chart = line.length ? spark(line) : '';
   const span = line.length ? lineSpan(w) : '';
   const rates = nums(w, 'base_rate_history')
     .map((n) => baseRateWords(n, recOf(w, n)))
@@ -637,13 +632,13 @@ function movement(w: Widget, s: Display, c: RenderCtx) {
   const ip = pctOf(nums(w, 'implied_probability')[0]);
   const big = ip ?? (src ? null : (q?.yes_price_cents ?? null));
   const m = moveOf(w);
-  const d = m?.d ?? (src ? null : move(q));
-  const since = m ? m.since : d != null ? sinceWords(DAY_S) : '';
+  const d = m?.d ?? null;
+  const since = m?.since ?? '';
   const line = lineOf(w, src);
   const fresh = w.state === 'new' ? 'is-fresh' : undefined;
   return (
     head(s.title, fresh ? 'new' : undefined, fresh) +
-    `<div class="mvt"${says(lineWords(game, chanceWords(big), moveSaid(d, since)))}><span class="lbl">${esc(game)}</span><div class="row1"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div>${d == null ? '' : `<div class="c-mv">${mvEl(d, { long: true, since })}</div>`}<div class="c-chart">${spark(line.length ? line : line2(q))}</div></div>` +
+    `<div class="mvt"${says(lineWords(game, chanceWords(big), moveSaid(d, since)))}><span class="lbl">${esc(game)}</span><div class="row1"><span class="big num">${big == null ? '—' : esc(big) + '%'}</span>${big == null ? '' : '<span class="big-u">chance</span>'}</div>${d == null ? '' : `<div class="c-mv">${mvEl(d, { long: true, since })}</div>`}<div class="c-chart">${spark(line)}</div></div>` +
     notesHtml(w)
   );
 }
@@ -674,7 +669,7 @@ export function cardNumbers(w: Widget): { p: number | null; d: number | null; li
   const q = quoteOn(w, 'kalshi') ?? quotes(w)[0];
   const ip = pctOf(nums(w, 'implied_probability')[0]);
   const line = lineOf(w);
-  return { p: ip ?? q?.yes_price_cents ?? null, d: moveOf(w, { window_s: DAY_S })?.d ?? ptsOf(nums(w, 'movement')[0]) ?? move(q), line: line.length ? line : line2(q) };
+  return { p: ip ?? q?.yes_price_cents ?? null, d: moveOf(w, { window_s: DAY_S })?.d ?? ptsOf(nums(w, 'movement')[0]) ?? null, line };
 }
 
 export function cardHtml(w: Widget, i: number): string {

@@ -69,6 +69,9 @@ describe('W1.2.1: the displays at phone size', () => {
       await page.keyboard.press('Escape');
       await settled(page);
 
+      // A1.4.12: before any numbers run, the cards show the price and no move (the exchange's own figure can reverse).
+      expect(await page.locator('#board').innerText()).not.toMatch(/\b(up|down) \d+ points?|since yesterday|▲|▼/i);
+
       // The runner's part: one batched numbers run for the board's displays, put to board.
       const { me, b } = await page.evaluate(async () => ({
         me: (await (await fetch('/api/me')).json()) as { account_id: string },
@@ -179,6 +182,13 @@ describe('W1.2.1: the displays at phone size', () => {
       await how.waitFor();
       await settled(page);
       expect(await how.innerText()).toContain('The price on a day of the line');
+      // A1.4.12: the move on the card is the one with a receipt: same number, and How we got this opens on it.
+      const dayMove = market.body.result.numbers.find((n) => n.op === 'movement')!;
+      const dayRec = market.body.result.receipts.find((x) => x.id === dayMove.receipt_id)!;
+      expect(dayRec.args.window_s).toBe(86400);
+      const v = Math.round(dayMove.value);
+      expect(marketText).toContain(v === 0 ? 'No change since yesterday' : `${v > 0 ? 'Up' : 'Down'} ${Math.abs(v)} point${Math.abs(v) === 1 ? '' : 's'} since yesterday`);
+      expect(await how.innerText()).toContain('How far it moved');
       await how.locator('#how-toggle').scrollIntoViewIfNeeded();
       await how.locator('#how-toggle').tap();
       await expect.poll(() => how.locator('#how-details').isVisible()).toBe(true);

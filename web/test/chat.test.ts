@@ -92,6 +92,8 @@ describe('the chat with the agent', () => {
 
     // The guard: advice wording never reaches the screen; the fixed line does.
     expect(await say(page, 'advice-test')).toBe(BLOCKED_CHAT_LINE);
+    // A1.4.12: the chat says no move the card doesn't have (the numbers card's is the only one).
+    expect(await say(page, 'should I buy the Chiefs?')).not.toMatch(/since yesterday|\b(up|down) \d+ points?/i);
     // The proposals render under the reply, each a question with [Add] [Not now].
     expect(await say(page, 'Chiefs at Bills')).toContain('Chiefs at Bills');
     expect(await lastAgent(page).locator('.chip-ask').count()).toBeGreaterThan(0);

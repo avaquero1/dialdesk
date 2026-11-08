@@ -49,6 +49,18 @@ describe('W1.2.1: the displays show what the numbers steps made, in plain words'
     for (const x of r.receipts) expect(x.op_id).toMatch(/^b\d+_n\d+$/);
   });
 
+  it('A1.4.12: first paint shows the price and no move: the exchange\'s own figure may reverse a minute later', () => {
+    const as_of = new Date().toISOString();
+    const quote = (market_id: string) => ({ market_id, exchange: 'kalshi' as const, yes_price_cents: 68, previous_price_cents: 62, as_of, stale: false });
+    for (const m of [byType('probability'), byType('events'), byType('movement', (s) => s.market_ids.length === 1) ?? byType('movement')]) {
+      const w = { ...widget(m.spec, null), quotes: m.spec.market_ids.map(quote) };
+      const t = text(W.displayHtml(w, ctx));
+      expect(t, m.spec.type).toContain('68%');
+      expect(t, m.spec.type).not.toMatch(/\bup \d|\bdown \d|since yesterday|▲|▼/i);
+      expect(W.cardNumbers(w)).toMatchObject({ p: 68, d: null, line: [] });
+    }
+  });
+
   it('A market: the chance, "since yesterday" from the 24 h movement, the 7-day line from price_at, the prices and base rates from the receipts', () => {
     const m = byType('probability', (s) => s.title.includes(' beat the '));
     const r = m.body.result;

@@ -16,7 +16,7 @@ import {
   type WidgetDraft,
 } from '@app/contracts';
 import { CallError, type Call } from '@app/service-kit';
-import { digitsIn, type Slots } from './slots.ts';
+import { digitsIn, type Slots, type BoardMove } from './slots.ts';
 
 /** What the model knows about one widget on the board: its spec, never its result text. */
 export interface BoardWidget {
@@ -40,6 +40,8 @@ export interface TurnState {
   /** Set in a widget's Tune chat: only this widget may be tuned or removed. */
   widget_id: string | null;
   board: BoardWidget[];
+  /** The cards' moves since yesterday, by market id: the only ones the chat may say. */
+  moves: Map<string, BoardMove>;
   /** Every message the user wrote in this conversation, this one last. Their numbers are theirs to give. */
   userTexts: string[];
   slots: Slots;
@@ -182,7 +184,7 @@ async function run(tool: AgentToolName, a: Record<string, any>, st: TurnState, d
     case 'quote_market': {
       try {
         const m = await deps.markets(MARKETS.get, { params: { market_id: a.market_id } });
-        return done({ ok: true, result: st.slots.quote(m) }, `quote · ${a.market_id}`);
+        return done({ ok: true, result: st.slots.quote(m, st.moves.get(m.market_id)) }, `quote · ${a.market_id}`);
       } catch (e) {
         if (e instanceof CallError && e.status === 404) return done(refuse(`no market ${a.market_id}`));
         if (e instanceof CallError && e.status === 503) return done(refuse('the exchange is down and nothing is cached'));

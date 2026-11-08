@@ -29,7 +29,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof AGENT> {
     const m = message.toLowerCase();
     if (m.includes('advice-test')) return { text: 'You should buy YES. It is a sure thing.', chips: [] };
     if (/\bshould i\b|\bbuy\b|\bsell\b/.test(m))
-      return { text: 'I do math, not calls. The market says 61%, up 4 points since yesterday. Want a widget for this market?', chips: [] };
+      return { text: 'I do math, not calls. The market says 61%. Want a widget for this market?', chips: [] };
     if (/warmer|cooler|hue \d+|\blight\b|\bdark\b|\bsystem\b/.test(m)) {
       const hue = m.includes('warmer') ? 32 : m.includes('cooler') ? 210 : Number(/hue (\d+)/.exec(m)?.[1] ?? NaN);
       const args = Number.isFinite(hue) ? { hue } : { mode: /dark/.test(m) ? 'dark' : /light/.test(m) ? 'light' : 'system' };

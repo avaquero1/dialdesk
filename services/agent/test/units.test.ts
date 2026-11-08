@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Market, WidgetDraft } from '@app/contracts';
 import { picksFor, teamsByLeague } from '../src/picks.ts';
 import { cleanTitle, countInWords, dataBlock, RULES } from '../src/prompt.ts';
-import { Slots, digitsIn, formatValue, forHistory, strayDigits } from '../src/slots.ts';
+import { Slots, boardMoves, digitsIn, formatValue, forHistory, strayDigits } from '../src/slots.ts';
 import { checkDraft, isUsersNumber, type BoardWidget } from '../src/tools.ts';
 
 describe('agent: numbers', () => {
@@ -21,9 +21,52 @@ describe('agent: numbers', () => {
     expect(strayDigits('The market says 62%.', allowed)).toEqual(['62']);
   });
 
+  describe('A1.4.12: one "since yesterday"', () => {
+    const at = '2026-11-08T18:00:00.000Z';
+    const day = (market: string, value: number, created_at = at, window_s = 86400) =>
+      ({
+        created_at,
+        numbers: [{ id: 'n1', op: 'movement', value, unit: 'points', receipt_id: 'r-1' }],
+        receipts: [{ id: 'r-1', op: 'movement', args: { window_s }, provenance: { series: { source: market, as_of: at } } }],
+      }) as never;
+    // The exchange's own figure says up 6; the engine, from the price history, says down 3.
+    const m = { market_id: 'kalshi:NYG-PHI', exchange: 'kalshi', yes_price_cents: 68, previous_price_cents: 62 } as never;
+
+    it('the chat says the move the card shows, never the exchange figure', () => {
+      const s = new Slots();
+      s.quote(m, boardMoves([day('kalshi:NYG-PHI', -3)]).get('kalshi:NYG-PHI'));
+      expect(s.fill('{n1}, {n2}').text).toBe('68%, down 3 points');
+    });
+
+    it('no move on the board means no move in the chat: the quote hands out the price alone', () => {
+      const s = new Slots();
+      const r = s.quote(m, boardMoves([null]).get('kalshi:NYG-PHI'));
+      expect(Object.keys(r.slots as object)).toEqual(['n1']);
+      expect(s.fill('{n1}, {n2}')).toMatchObject({ missing: ['n2'] });
+    });
+
+    it('only a 24 hour move counts, for that game, and the newest result wins', () => {
+      expect(boardMoves([day('kalshi:NYG-PHI', 8, at, 604800)]).size).toBe(0);
+      expect(boardMoves([day('kalshi:OTHER', 2)]).get('kalshi:NYG-PHI')).toBeUndefined();
+      const newer = '2026-11-08T19:00:00.000Z';
+      expect(boardMoves([day('kalshi:NYG-PHI', 2), day('kalshi:NYG-PHI', -3, newer)]).get('kalshi:NYG-PHI')).toEqual({ value: -3, receipt_id: 'r-1' });
+    });
+
+    it('words a move in whole points, as the card does', () => {
+      expect(formatValue('movement', 'points', -2.6)).toBe('down 3 points');
+      expect(formatValue('movement', 'points', 0.4)).toBe('unchanged');
+    });
+
+    it('the model is told "chance", never "implied probability"', () => {
+      const s = new Slots();
+      expect(JSON.stringify(s.quote(m))).not.toMatch(/implied/i);
+      expect(JSON.stringify(s.receipt({ id: 'r-2', op: 'implied_probability', unit: 'probability', value: 0.68 } as never).slots)).not.toMatch(/implied/i);
+    });
+  });
+
   it('fills slots by code and reports the ones never handed out', () => {
     const s = new Slots();
-    const r = s.quote({ market_id: 'kalshi:ABC-1', exchange: 'kalshi', yes_price_cents: 61, previous_price_cents: 57 } as never);
+    const r = s.quote({ market_id: 'kalshi:ABC-1', exchange: 'kalshi', yes_price_cents: 61, previous_price_cents: 57 } as never, { value: 4, receipt_id: 'r-1' });
     expect(JSON.stringify(r)).not.toMatch(/61|57|\b4\b/);
     expect(s.fill('{n1}, {n2}, {n3}')).toMatchObject({ text: '61%, up 4 points, {n3}', missing: ['n3'] });
     expect(forHistory('says {n1}')).toBe('says (a number from a tool)');
