@@ -278,8 +278,17 @@ describe('e2e on fakes', () => {
     const gap = (await browser(EDGE.board, {})).widgets.find((w) => w.spec.kind === 'display' && w.spec.type === 'gap')!;
     const row = await runnerStore.schedule.get(gap.spec.widget_id, 'numbers');
     expect(row!.every_s).toBe(120);
-    const later = new Scheduler(runnerStore, async (j) => void queue.push(j), () => row!.next_at + 1);
+    // Windows are on the wall clock (numbers every 2 min, the news widgets' research every hour), so a run that ends in
+    // the 2 minutes before the hour has both due at once. This clock is always past both: the research jobs are booked
+    // too and set aside, never drained (they would read the poisoned page again and double 4b-4e's counts).
+    const research = await runnerStore.schedule.get(s.widget_id!, 'research');
+    expect(research).toBeDefined();
+    const due: WidgetRunJob[] = [];
+    const later = new Scheduler(runnerStore, async (j) => void (j.kind === 'numbers' ? queue : due).push(j), () => Math.max(row!.next_at, research!.next_at) + 1);
     const jobs = await later.tick();
+    expect(due.length).toBeGreaterThan(0);
+    expect(due.every((j) => j.kind === 'research' && j.reason === 'schedule')).toBe(true);
+    expect(due.map((j) => j.widget_id)).toContain(s.widget_id);
     // One numbers job for the whole board (A1.4.1); the gap widget is in its batch.
     const mine = jobs.filter((j) => j.account_id === gap.spec.account_id && j.kind === 'numbers');
     expect(mine).toHaveLength(1);
