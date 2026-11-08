@@ -10,11 +10,12 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { EDGE, POISONED_NOTE, type Board, type ChatReply, type Widget } from '@app/contracts';
+import { EDGE, POISONED_NOTE, type Board, type ChatReply, type RunTraceStep, type Widget, type WidgetResult } from '@app/contracts';
 import { createClient, sandboxClient, type SandboxClient } from '@app/service-kit';
 import { fixtures } from '@app/testkit';
-import { ORIGIN, stackUp, type Stack, type Svc } from '../real/stack.ts';
+import { ORIGIN, PG_PORT, stackUp, type Stack, type Svc } from '../real/stack.ts';
 import { StepUsageStore } from './usage.ts';
 
 const OUT = process.env.E2E_LIVE_OUT ?? join(import.meta.dirname, '..', '..', '.logs', 'e2e-live');
@@ -24,7 +25,7 @@ const usage = new StepUsageStore(process.env.E2E_LIVE_USAGE ?? '/nonexistent');
 
 let stack: Stack;
 let sandbox: SandboxClient;
-const record: { run: string; started_at: string; cap_self_test?: unknown; steps: Record<string, unknown>[]; spend_usd?: number; by_role?: unknown } = {
+const record: { run: string; started_at: string; cap_self_test?: unknown; steps: Record<string, unknown>[]; spend_usd?: number; by_role?: unknown; database?: unknown } = {
   run: RUN,
   started_at: new Date().toISOString(),
   steps: [],
@@ -80,6 +81,44 @@ const timed = async <T>(fn: () => Promise<T>): Promise<[T, number]> => {
 const eventKeys = (w: Widget) => ((w.spec as { params?: { event_keys?: string[] } }).params?.event_keys ?? []) as string[];
 const ofTeam = (k: string) => k.split('-').slice(-2).includes(TEAM.code);
 
+/** A research run's trace, as data (a refused planner plan is something to report, not a failed journey). Codes and ids, never page text. */
+function researchSaw(steps: RunTraceStep[], r: WidgetResult) {
+  const own = steps.filter((x) => x.run_id === r.run_id);
+  const planner = own.find((x) => x.step === 'plan')?.note ?? null;
+  const math = own.filter((x) => x.step === 'math');
+  return {
+    run_id: r.run_id,
+    planner,
+    planner_plan_used: !!planner && /^planner plan;/.test(planner),
+    math: math.map((x) => ({ status: x.status, ms: x.duration_ms, note: x.note, receipts: x.receipt_ids?.length ?? 0 })),
+    engine_computed: math.at(-1)?.status === 'ok',
+    planner_plan_fell_back: math.length > 1,
+    numbers: r.numbers.map((n) => n.op),
+    notes: own.filter((x) => x.note && x.step !== 'plan' && x.step !== 'math' && (x.step === 'guard' || x.status !== 'ok')).map((x) => ({ step: x.step, status: x.status, domain: x.source?.domain, note: x.note })),
+    left_out: r.notes ?? [],
+  };
+}
+
+/** From the stack's own Postgres, read only: the migrations board applied and every box killed, with why. */
+async function databaseSaw() {
+  const sql = postgres(`postgres://postgres:${stack.env.PG_SUPERUSER_PASSWORD}@127.0.0.1:${PG_PORT}/app`, { max: 1 });
+  try {
+    const applied = (await sql<{ name: string }[]>`select name from board._migrations order by name`).map((m) => m.name);
+    const [ix] = await sql<{ present: boolean }[]>`select to_regclass('board.run_requests_account_refresh') is not null as present`;
+    const kills = [...(await sql<{ sandbox_id: string; job_id: string; reason: string }[]>`
+      select entry->>'subject_id' as sandbox_id, entry->'ids'->>'job_id' as job_id, entry->'ids'->>'reason' as reason
+      from audit.chain where entry->>'action' = 'sandbox.killed' order by seq`)];
+    return {
+      board_migrations: applied,
+      migration_0005_applied: applied.includes('0005_refresh_cap.sql') && !!ix?.present,
+      kills,
+      compute_killed_on_timeout: kills.filter((k) => !k.job_id?.includes(':read:') && /timeout/.test(k.reason ?? '')),
+    };
+  } finally {
+    await sql.end();
+  }
+}
+
 beforeAll(async () => {
   stack = await stackUp({ live: true });
   sandbox = sandboxClient({ baseUrl: stack.manager.url, token: stack.env.RUNNER_TOKEN_SANDBOX_MANAGER! });
@@ -88,6 +127,7 @@ beforeAll(async () => {
 afterAll(async () => {
   record.spend_usd = +usage.total().toFixed(6);
   record.by_role = usage.rows().map(({ role, model, calls, input_tokens, output_tokens, cost_usd }) => ({ role, model, calls, input_tokens, output_tokens, cost_usd }));
+  if (stack) record.database = await databaseSaw().catch((e: Error) => ({ error: String(e.message).slice(0, 200) }));
   mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, `${RUN}.json`), JSON.stringify(record, null, 2) + '\n');
   await stack?.down();
@@ -193,9 +233,10 @@ describe('e2e on the real pieces (live markets and news, Vultr models, real Chro
       const ended = (v: Awaited<ReturnType<typeof both>>) => v.w.result?.kind === 'research' || v.trace.steps.some((x) => x.step === 'guard' && x.status === 'failed');
       const { w, trace } = await until('the news widget’s research run to end', both, ended, 300_000);
       saw.accept_to_research_ms = Date.now() - s.accepted_at!;
-      saw.trace = trace.steps.map((x) => ({ step: x.step, status: x.status, ms: (x as { ms?: number }).ms, note: x.source ? undefined : x.note }));
+      saw.trace = trace.steps.map((x) => ({ step: x.step, status: x.status, ms: x.duration_ms, note: x.source ? undefined : x.note }));
       expect(w.result?.kind, 'a research result (see the trace’s guard note)').toBe('research');
       const r = w.result!;
+      saw.research = researchSaw(trace.steps, r);
       s.runs.push(r.run_id);
       const reads = trace.steps.filter((x) => x.step === 'read' && x.source);
       const poisoned = fixtures.manifest().find((p) => p.poisoned)!;
@@ -235,12 +276,19 @@ describe('e2e on the real pieces (live markets and news, Vultr models, real Chro
       const w = await until('the refreshed research result', () => widget(s.widget_id!), (w) => w.result?.kind === 'research' && w.result.run_id !== before!.run_id, 300_000);
       saw.refresh_to_research_ms = Date.now() - t0;
       s.runs.push(w.result!.run_id);
+      saw.research = researchSaw((await browser(EDGE.trace, { params: { widget_id: s.widget_id! } })).steps, w.result!);
       saw.state = w.state;
       saw.blocked = w.result!.blocked.map((b) => b.domain);
       expect(w.state).toBe('blocked');
       expect(w.result!.blocked.map((b) => b.domain)).toEqual(['fanpost.fixture.test']);
-      // Live prices move between the runs: the clean numbers are recomputed from the market, never from the poisoned page.
-      expect(w.result!.numbers.map((n) => n.op)).toEqual(before!.numbers.map((n) => n.op));
+      // Live prices move between the runs, and the real planner writes a new plan each run, so which ops it picks can differ
+      // (recorded, not failed): the clean numbers are recomputed from the market, each with its receipt.
+      const r = w.result!;
+      saw.ops_before = before!.numbers.map((n) => n.op);
+      saw.ops_after = r.numbers.map((n) => n.op);
+      saw.ops_changed = JSON.stringify(saw.ops_before) !== JSON.stringify(saw.ops_after);
+      expect(saw.ops_after).toContain('implied_probability');
+      for (const n of r.numbers) expect(r.receipts.some((x) => x.id === n.receipt_id)).toBe(true);
     });
   }, 420_000);
 
