@@ -45,6 +45,34 @@ docker compose -f deploy/compose.dev.yml down -v      # -v also deletes the data
 `db-init.sql` runs only when the database volume is new. After you change it, run `down -v` and `up` again, or run it by
 hand inside the container: `docker compose -f deploy/compose.dev.yml exec postgres psql -U postgres -d app -f /docker-entrypoint-initdb.d/10-init.sql`.
 
+## Redeploying (the runbook)
+
+From a clean checkout of the commit to deploy (`push` copies `HEAD`; uncommitted changes are not copied). The machines come
+from the environment, never from the repo; the settings and key files stay on control.
+
+```sh
+export VHA_CONTROL_HOST=root@<control> VHA_SANDBOX_HOST=root@<sandbox machine> VHA_SSH_KEY=<key file>
+git status --short && git log --oneline -1                # the commit that goes out
+deploy/scripts/deploy.sh push                             # sandbox machine, then control; the egress mode stays as installed
+```
+
+| To | Run |
+|---|---|
+| See every step first | `deploy/scripts/deploy.sh --dry-run --env-file deploy/deploy.env.example` |
+| Change only the sandbox machine | `deploy/scripts/deploy.sh sandbox`, then `push` so runner gets its token |
+| Read what egress would drop | on control: `journalctl -k \| grep vha-egress-would-drop` |
+| Enforce egress / go back | `deploy/scripts/deploy.sh push --enforce-egress` / `--log-only-egress` |
+| Rotate tokens and passwords | `deploy/scripts/deploy.sh push --rotate` |
+
+`push` prints each step and ends with `deploy: control is up at https://<host>/ (rev <rev>)`. Health is step 9: every container
+healthy, the site through Caddy with its CSP, the egress sets filled, runner's line to sandbox-manager. A changed firewall waits
+for `vha-nft-confirm` from a new ssh connection (`push` sends it) and rolls back by itself otherwise, so don't interrupt that step.
+Afterwards, on control: `docker compose -p vha-control ps` and `journalctl -k --since -1h | grep -c vha-egress-would-drop`.
+
+Before `--enforce-egress`: a host behind a CDN that rotates per query (Kalshi's and Polymarket's APIs are on CloudFront) keeps
+showing up in the would-drop log even though it is in the table, because `egress-refresh.sh` samples DNS every 3 minutes and the
+container's lookup gets a different answer. Enforcing drops those calls until that is solved.
+
 ## Deploying control
 
 Once the resources in `PROVISION.md` exist, control has Docker, `/etc/vha/deploy.env` is filled in (from
