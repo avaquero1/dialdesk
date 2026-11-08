@@ -12,7 +12,7 @@ import { EngineReceipt } from '../rust.ts';
 import { RunTraceStep } from '../result.ts';
 import { Account, Email, Password } from './accounts.ts';
 import { ChatReply, ChatTurn } from './agent.ts';
-import { Board, Joined, Proposal, Widget } from './board.ts';
+import { Board, FolderBody, FolderTitle, Joined, Proposal, Widget } from './board.ts';
 import { Connection } from './connections.ts';
 import { Spend } from './models.ts';
 import { SignedHead, TrustCounts } from './audit.ts';
@@ -68,6 +68,26 @@ export const EDGE = api('edge', {
     response: Board,
     errors: [400],
     summary: 'Drags, drops and folders (board validates the places).',
+  },
+  makeFolder: {
+    method: 'POST',
+    path: '/api/folders',
+    callers: ['browser'],
+    body: FolderBody,
+    response: Board,
+    status: 201,
+    errors: [400, 404, 409],
+    summary: 'Drop a widget on a widget: a new folder of 2-24 displays, in the order given (board names it when no title is given).',
+  },
+  setTitle: {
+    method: 'PATCH',
+    path: '/api/widgets/:widget_id/title',
+    callers: ['browser'],
+    params: wid,
+    body: z.object({ title: FolderTitle }).strict(),
+    response: Widget,
+    errors: [400, 404],
+    summary: 'Rename a folder. 400 for a display or an app.',
   },
   chat: {
     method: 'POST',

@@ -97,6 +97,37 @@
   },
   {
     "service": "edge",
+    "name": "makeFolder",
+    "method": "POST",
+    "path": "/api/folders",
+    "callers": [
+      "browser"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      404,
+      409
+    ],
+    "summary": "Drop a widget on a widget: a new folder of 2-24 displays, in the order given (board names it when no title is given)."
+  },
+  {
+    "service": "edge",
+    "name": "setTitle",
+    "method": "PATCH",
+    "path": "/api/widgets/:widget_id/title",
+    "callers": [
+      "browser"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "Rename a folder. 400 for a display or an app."
+  },
+  {
+    "service": "edge",
     "name": "chat",
     "method": "POST",
     "path": "/api/chat",
@@ -604,6 +635,37 @@
       404
     ],
     "summary": "The user's drags, drops and folders."
+  },
+  {
+    "service": "board",
+    "name": "makeFolder",
+    "method": "POST",
+    "path": "/boards/:account_id/folders",
+    "callers": [
+      "edge"
+    ],
+    "status": 201,
+    "errors": [
+      400,
+      404,
+      409
+    ],
+    "summary": "A new folder from 2-24 displays, in the order given (drop a widget on a widget). It takes `place`, else the first widget's place. A display may come from the grid or another folder; a folder this empties is removed. No folder in a folder. Default title: \"NFL Week N\" when every card is that NFL week's games, \"NBA Tonight\" when every card is tonight's NBA games, else \"Folder\". 400: an app or a folder in the list, a duplicate, a bad place. 409: the board's cap."
+  },
+  {
+    "service": "board",
+    "name": "setTitle",
+    "method": "PATCH",
+    "path": "/boards/:account_id/widgets/:widget_id/title",
+    "callers": [
+      "edge"
+    ],
+    "status": 200,
+    "errors": [
+      400,
+      404
+    ],
+    "summary": "Rename a folder (trimmed plain text). 400 for a display or an app."
   },
   {
     "service": "board",

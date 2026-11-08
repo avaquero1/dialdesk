@@ -101,6 +101,24 @@ export const AddDraft = z
   .strict();
 export type AddDraft = z.infer<typeof AddDraft>;
 
+/** A folder's title: 1-60 characters after trimming, plain text (no control characters or markup brackets). */
+export const FolderTitle = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  // eslint-disable-next-line no-control-regex -- refusing control characters is the point
+  .regex(/^[^\u0000-\u001f\u007f<>]*$/, 'plain text');
+
+/** makeFolder's body: the displays to put in a new folder, in order. */
+export const FolderBody = z
+  .object({
+    widget_ids: z.array(WidgetId).min(2).max(24),
+    title: FolderTitle.optional(),
+    place: z.object({ col: z.number().int().min(0).max(63), row: z.number().int().min(0).max(255) }).strict().optional().describe('a grid place'),
+  })
+  .strict();
+
 export const Joined = z.boolean().optional().describe('true: joined the run already asked for in this minute');
 
 export const BOARD = api('board', {
@@ -143,6 +161,28 @@ export const BOARD = api('board', {
     response: Board,
     errors: [400, 404],
     summary: "The user's drags, drops and folders.",
+  },
+  makeFolder: {
+    method: 'POST',
+    path: '/boards/:account_id/folders',
+    callers: ['edge'],
+    params: acc,
+    body: FolderBody,
+    response: Board,
+    status: 201,
+    errors: [400, 404, 409],
+    summary:
+      'A new folder from 2-24 displays, in the order given (drop a widget on a widget). It takes `place`, else the first widget\'s place. A display may come from the grid or another folder; a folder this empties is removed. No folder in a folder. Default title: "NFL Week N" when every card is that NFL week\'s games, "NBA Tonight" when every card is tonight\'s NBA games, else "Folder". 400: an app or a folder in the list, a duplicate, a bad place. 409: the board\'s cap.',
+  },
+  setTitle: {
+    method: 'PATCH',
+    path: '/boards/:account_id/widgets/:widget_id/title',
+    callers: ['edge'],
+    params: z.object({ account_id: AccountId, widget_id: WidgetId }),
+    body: z.object({ title: FolderTitle }).strict(),
+    response: Widget,
+    errors: [400, 404],
+    summary: "Rename a folder (trimmed plain text). 400 for a display or an app.",
   },
   propose: {
     method: 'POST',
