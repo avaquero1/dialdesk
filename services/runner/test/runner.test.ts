@@ -19,7 +19,7 @@ import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { fake as modelsFake } from '../../models/src/fake.ts';
 import { getRunHandlers } from '../src/real.ts';
 import { LINE_POINTS, defaultPlan, isBiggestMove, lineAgo, moverIds } from '../src/plans.ts';
-import { handleRun, layerOneGuard, modelGuard, READER_PROMPT, type Guard, type RunnerDeps } from '../src/run.ts';
+import { handleRun, layerOneGuard, MAX_FACTS_PER_SOURCE, modelGuard, READER_PROMPT, type Guard, type RunnerDeps } from '../src/run.ts';
 import { ACTIVE_FOR_MS, Scheduler } from '../src/scheduler.ts';
 import { MemoryStore } from '../src/store.ts';
 
@@ -620,8 +620,33 @@ describe.skipIf(!have)('runner', () => {
     expect(rec.steps.find((s) => s.step === 'guard')!.status).toBe('ok');
   });
 
+  it("a card lists at most two facts from one source, and the reader is told the card's team and game", async () => {
+    const seen: CompleteBody[] = [];
+    const d = deps({ models: answering('reader', FOUR_FACTS, seen) });
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    await handleRun(d, jobFor(w, 'research'), ctx());
+    const perSource = new Map<string, number>();
+    for (const f of (await current(w)).result!.facts) perSource.set(f.candidate_id, (perSource.get(f.candidate_id) ?? 0) + 1);
+    expect(perSource.size).toBeGreaterThan(0);
+    expect(Math.max(...perSource.values())).toBeLessThanOrEqual(MAX_FACTS_PER_SOURCE);
+    const reader = seen.find((b) => b.role === 'reader')!;
+    expect(reader.messages[0]!.content).toContain('Team: "Bills".');
+    expect(reader.messages[0]!.content).toMatch(/Game: ".+"\.$/m);
+    expect(reader.messages.at(-1)!.content).not.toContain('Team: "Bills".');
+  });
+
   it('a layer-one rule on facts (unsourced_claim at fact ids): one sentence per rule, and the rest goes out', async () => {
-    const d = deps({ models: answering('reader', FOUR_FACTS) });
+    // Two facts from each page: a card takes at most two from one source, and this test needs four in all.
+    const inner = models({}, []);
+    const twoPerPage: Call = (async (e, input) => {
+      const body = (input as { body: CompleteBody }).body;
+      const r = (await inner(e, input as never)) as { content: string };
+      if (body.role !== 'reader') return r;
+      const quote = body.messages.at(-1)!.content.trim().slice(0, 40);
+      return { ...r, content: JSON.stringify({ facts: [{ claim: 'One thing the page says.', quote }, { claim: 'Another thing the page says.', quote }] }) };
+    }) as Call;
+    const d = deps({ models: twoPerPage });
     d.guard = flagging(d, (draft) => [
       ...draft.facts.filter((f) => f.fact_id === 'f2' || f.fact_id === 'f3').map((f) => ({ code: 'unsourced_claim' as const, where: f.fact_id })),
       ...draft.facts.filter((f) => f.fact_id === 'f4').map((f) => ({ code: 'advice' as const, where: f.fact_id })),

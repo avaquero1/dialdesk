@@ -156,3 +156,12 @@ describe('agent: the first visit picks (design.md section 7)', () => {
     expect(picksFor({ ...base, message: 'Hi', chips: 1 })).toBeUndefined();
   });
 });
+
+describe('what a receipt slot means', () => {
+  const said = (op: string) => Object.values(new Slots().receipt({ id: 'r-00000001', op, unit: 'points', value: 1 } as never).slots as Record<string, string>)[0]!;
+  it('is plain words, with no digit to copy', () => {
+    expect(said('implied_probability')).toBe('the chance');
+    expect(said('gap')).toMatch(/apart/);
+    for (const op of ['implied_probability', 'gap', 'expected_value', 'movement', 'base_rate']) expect(said(op)).not.toMatch(/[0-9]|implied|\bEV\b|_/);
+  });
+});

@@ -53,6 +53,13 @@ export function boardMoves(results: (WidgetResult | null)[]): Map<string, BoardM
   return out;
 }
 
+/** What a receipt's slot means, in the words the chat may repeat. No digit (the model copies them). */
+const meaning = (op: string) =>
+  op === 'implied_probability' ? 'the chance'
+  : op === 'gap' ? 'how far apart the two prices are, already in points: write it followed by "apart"'
+  : op === 'expected_value' ? "the average result at the user's own chance"
+  : `the ${op.replace(/_/g, ' ')}`;
+
 /** One turn's numbers. Slot names are given out in order: n1, n2… */
 export class Slots {
   private values = new Map<string, SlotValue>();
@@ -76,7 +83,7 @@ export class Slots {
   /** read_receipt: the engine's value in its unit. The model gets the op and unit, not the value, nor the formula (it holds digits the model could copy). */
   receipt(r: EngineReceipt): Record<string, unknown> {
     const name = this.add({ text: formatValue(r.op, r.unit, r.value), source: r.id });
-    return { receipt_id: r.id, op: r.op, unit: r.unit, slots: { [name]: r.op === 'implied_probability' ? 'the chance' : `the ${r.op} value` } };
+    return { receipt_id: r.id, op: r.op, unit: r.unit, slots: { [name]: meaning(r.op) } };
   }
 
   has(name: string) {
