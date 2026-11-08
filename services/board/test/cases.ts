@@ -72,6 +72,7 @@ export function makeCases(acc: string): Case[] {
     { endpoint: 'putResult', caller: 'runner', input: (c) => ({ params: { widget_id: c.new }, body: sampleResult(c.new as string, acc, 'block') }), expect: 422, label: 'blocked verdict refused' },
     { endpoint: 'getTrace', caller: 'edge', input: (c) => ({ params: { widget_id: c.new }, query: { account_id: acc } }) },
     { endpoint: 'putScreenshot', caller: 'runner', input: (c) => ({ params: { widget_id: c.new, run_id: run, candidate_id: cnd }, body: { account_id: acc, png_base64: TINY_PNG } }) },
+    { endpoint: 'addDrafts', caller: 'edge', input: () => ({ params: { type: 'probability' } }) },
     { endpoint: 'getScreenshot', caller: 'edge', input: (c) => ({ params: { widget_id: c.new, run_id: run, candidate_id: cnd }, query: { account_id: acc } }) },
     { endpoint: 'getScreenshot', caller: 'edge', label: 'no such screenshot', expect: 404,
       input: (c) => ({ params: { widget_id: c.new, run_id: newId('run'), candidate_id: cnd }, query: { account_id: acc } }) },

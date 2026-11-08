@@ -39,7 +39,7 @@ import {
   ownConnection,
   type DisplaySpec,
 } from './logic.ts';
-import { prescribedTiles } from './defaults.ts';
+import { draftsFor, prescribedTiles } from './defaults.ts';
 import { MemoryObjectStore, isPng, type ObjectStore } from './storage.ts';
 
 export interface FakeDeps {
@@ -378,6 +378,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       await objects.put(key, bytes, 'image/png');
       return { screenshot_key: key };
     },
+    addDrafts: async ({ params }) => ({ drafts: await draftsFor(deps.markets, params.type, Date.now()) }),
     getScreenshot: async ({ params, query }) => {
       widget(params.widget_id, query.account_id);
       const key = screenshotKey(params.widget_id, params.run_id, params.candidate_id);

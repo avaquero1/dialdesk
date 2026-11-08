@@ -65,6 +65,8 @@ export const cases: Case[] = [
   { endpoint: 'accept', caller: 'browser', input: (c) => ({ params: { proposal_id: c.prp }, body: {} }), save: (o, c) => { c.new = o.widgets[0].spec.widget_id; } },
   { endpoint: 'chat', caller: 'browser', input: () => ({ body: { conversation_id: null, widget_id: null, message: 'NFL too' } }), save: (o, c) => { c.prp2 = o.turn.chips[0].proposal_id; } },
   { endpoint: 'reject', caller: 'browser', input: (c) => ({ params: { proposal_id: c.prp2 }, body: {} }) },
+  { endpoint: 'addChoices', caller: 'browser', input: () => ({ params: { type: 'probability' } }) },
+  { endpoint: 'addWidget', caller: 'browser', label: 'not one of this week’s games', expect: 404, input: () => ({ body: { type: 'probability', event_key: 'nfl-2026-11-08-zzz-yyy' } }) },
   { endpoint: 'addWidget', caller: 'browser', input: () => ({ body: { type: 'gap' } }), save: (o, c) => { c.added = o.widgets[0].spec.widget_id; } },
   { endpoint: 'resize', caller: 'browser', input: (c) => ({ params: { widget_id: c.new }, body: { size: 'L' } }) },
   { endpoint: 'addSource', caller: 'browser', input: (c) => ({ params: { widget_id: c.new }, body: { domain: 'weatherdesk.fixture.test' } }) },

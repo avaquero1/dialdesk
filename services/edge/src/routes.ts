@@ -1,4 +1,4 @@
-import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, defaultDraft, EDGE, MODELS, SESSION_COOKIE, type ServiceName } from '@app/contracts';
+import { ACCOUNTS, AGENT, AUDIT, BOARD, CONNECTIONS, EDGE, MODELS, SESSION_COOKIE, type ServiceName } from '@app/contracts';
 import { ContractError, HttpError, type Call, type Handlers } from '@app/service-kit';
 
 export type Upstream = Extract<ServiceName, 'accounts' | 'board' | 'agent' | 'connections' | 'audit' | 'models'>;
@@ -67,10 +67,21 @@ export function routes(deps: Deps, hooks: RouteHooks = {}): Handlers<typeof EDGE
     accept: ({ params }, ctx) => need('board')(BOARD.accept, { params, body: { account_id: acc(ctx) } }),
     reject: ({ params }, ctx) => need('board')(BOARD.reject, { params, body: { account_id: acc(ctx) } }),
     addWidget: async ({ body }, ctx) => {
-      // The Add app: the type's prescribed defaults, proposed and accepted at once, so it pours in like an accepted proposal.
+      // The Add app: board's draft on this week's games (the default, or the game the user picked), proposed and accepted
+      // at once, so it pours in like an accepted proposal.
       const account_id = acc(ctx);
-      const p = await need('board')(BOARD.propose, { params: { account_id }, body: { changes: [{ op: 'add', widget: defaultDraft(body.type) }] } });
+      const { drafts } = await need('board')(BOARD.addDrafts, { params: { type: body.type } });
+      const d = body.event_key === undefined ? drafts[0] : drafts.find((x) => x.event_key === body.event_key);
+      if (!d) throw new HttpError(404, 'not_found', "not one of this week's games");
+      const p = await need('board')(BOARD.propose, { params: { account_id }, body: { changes: [{ op: 'add', widget: d.widget }] } });
       return need('board')(BOARD.accept, { params: { proposal_id: p.proposal_id }, body: { account_id } });
+    },
+    addChoices: async ({ params }, ctx) => {
+      // "Which game?": only when there is a game to choose (a one-game display, and more than one game this week).
+      acc(ctx);
+      const { drafts } = await need('board')(BOARD.addDrafts, { params: { type: params.type } });
+      const games = drafts.flatMap((d) => (d.event_key ? [{ event_key: d.event_key, label: d.label }] : []));
+      return { choices: games.length > 1 ? games : [] };
     },
     resize: ({ params, body }, ctx) => need('board')(BOARD.resize, { params, body: { ...body, account_id: acc(ctx) } }),
     clear: ({ params }, ctx) => need('board')(BOARD.clear, { params, body: { account_id: acc(ctx) } }),

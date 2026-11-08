@@ -65,7 +65,7 @@ import {
   ownConnection,
   type DisplaySpec,
 } from './logic.ts';
-import { prescribedTiles } from './defaults.ts';
+import { draftsFor, prescribedTiles } from './defaults.ts';
 import { s3ObjectStoreFromConfig } from './s3-store.ts';
 import { LocalDirObjectStore, isPng, type ObjectStore } from './storage.ts';
 
@@ -659,6 +659,7 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
       return { screenshot_key: key };
     },
 
+    addDrafts: async ({ params }) => ({ drafts: await draftsFor(deps.markets, params.type, Date.now()) }),
     getScreenshot: async ({ params, query }) => {
       const key = screenshotKey(params.widget_id, params.run_id, params.candidate_id);
       const [r] = await sql<{ sha256: string }[]>`select sha256 from screenshots where screenshot_key = ${key} and account_id = ${query.account_id}`;

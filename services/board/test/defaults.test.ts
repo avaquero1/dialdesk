@@ -5,7 +5,8 @@
 import { DefaultTile, WIDGET_CATALOG, type Market } from '@app/contracts';
 import { describe, expect, it } from 'vitest';
 import { validateDisplay } from '../src/logic.ts';
-import { fixtureOnly, gamesOf, nbaNight, nflWeek, prescribedTiles, weekBoard } from '../src/defaults.ts';
+import { addDrafts, draftsFor, fixtureOnly, gameLabel, gamesOf, nbaNight, nflWeek, prescribedTiles, weekBoard } from '../src/defaults.ts';
+import { defaultDraft } from '@app/contracts';
 import { marketsForBoard } from './cases.ts';
 
 const AT = '2026-11-07T20:00:00Z';
@@ -115,5 +116,48 @@ describe('board: the prescribed first board from this week’s games', () => {
   it('markets’ fake (the catalog’s made-up fixture games): the catalog’s own board, as the other pieces expect', async () => {
     expect(fixtureOnly(LIST)).toBe(false);
     expect(await prescribedTiles(marketsForBoard(), Date.parse(AT))).toBe(WIDGET_CATALOG.default_board.tiles);
+  });
+});
+
+describe('board: the Add app’s drafts on this week’s games (W1.2.6)', () => {
+  const now = Date.parse(AT);
+  const board = () => displays(weekBoard(LIST, now)!);
+
+  it('a market card: the first board’s game first, then this week’s other games, most traded first, in plain words', () => {
+    const d = addDrafts(LIST, 'probability', now);
+    // The NBA's next night only (tonight), as on the first board; tomorrow's Sixers at Bulls is not this week's pick.
+    expect(d.map((x) => x.event_key)).toEqual(['nfl-2026-11-08-nyj-kc', 'nfl-2026-11-09-buf-min', 'nfl-2026-11-08-tb-chi', 'nba-2026-11-07-nyk-cle', 'nba-2026-11-07-bkn-atl']);
+    expect(d.map((x) => x.label)).toEqual(['Jets at Chiefs, Sun 1 PM', 'Bills at Vikings, Mon 8:15 PM', 'Buccaneers at Bears, Sun 8:20 PM', 'Knicks at Cavaliers, Sat 8 PM', 'Nets at Hawks, Sat 7:30 PM']);
+    const tile = board().find((t) => t.type === 'probability')!;
+    expect(d[0]!.widget).toEqual({ kind: 'display', type: 'probability', size: defaultDraft('probability').size, title: tile.title, market_ids: tile.market_ids, params: tile.params });
+    expect(d[1]!.widget).toMatchObject({ type: 'probability', title: 'Bills beat the Vikings', params: { event_keys: ['nfl-2026-11-09-buf-min'] } });
+    for (const x of d) validateDisplay(x.widget);
+  });
+
+  it('News follows the picked game’s home team; Two prices only offers games on both exchanges', () => {
+    expect(addDrafts(LIST, 'news', now)[1]!.widget).toMatchObject({ title: 'Vikings news', params: { team: 'Vikings' } });
+    const one = LIST.filter((m) => !(m.event_key === 'nfl-2026-11-09-buf-min' && m.exchange === 'polymarket'));
+    expect(addDrafts(one, 'gap', now).map((x) => x.event_key)).not.toContain('nfl-2026-11-09-buf-min');
+    for (const x of addDrafts(one, 'gap', now)) expect(x.widget.market_ids).toHaveLength(2);
+  });
+
+  it('Tonight and Biggest move: one draft, the first board’s own games', () => {
+    for (const type of ['events', 'movement'] as const) {
+      const d = addDrafts(LIST, type, now);
+      expect(d).toHaveLength(1);
+      expect(d[0]).toMatchObject({ event_key: null, widget: { market_ids: board().find((t) => t.type === type)!.market_ids } });
+    }
+  });
+
+  it('a game with no start time is labelled with its day', () => {
+    expect(gameLabel({ ...gamesOf(LIST)[0]!, starts_at: null })).toBe('Lakers at Celtics, Fri');
+  });
+
+  it('no games ahead, markets down, or markets’ fake: the catalog’s draft, as before', async () => {
+    const catalog = [{ event_key: null, label: defaultDraft('probability').title, widget: defaultDraft('probability') }];
+    expect(addDrafts([], 'probability', now)).toEqual(catalog);
+    expect(await draftsFor(undefined, 'probability', now)).toEqual(catalog);
+    expect(await draftsFor((async () => { throw new Error('503'); }) as never, 'probability', now)).toEqual(catalog);
+    expect(await draftsFor(marketsForBoard(), 'probability', now)).toEqual(catalog);
   });
 });
