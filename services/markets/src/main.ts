@@ -8,6 +8,6 @@ await runService({
   service: 'markets',
   api: MARKETS,
   fake: async () => fake(await fakeDepsFromEnv()),
-  real,
+  real: (cfg) => real(cfg, { keepList: true }),
   migrationsDir: fileURLToPath(new URL('../migrations', import.meta.url)),
 });

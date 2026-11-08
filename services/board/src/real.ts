@@ -68,7 +68,7 @@ import {
   ownConnection,
   type DisplaySpec,
 } from './logic.ts';
-import { draftsFor, folderTitleFor, prescribedTiles } from './defaults.ts';
+import { draftsFor, folderTitleFor, prescribedTiles, sampleTiles } from './defaults.ts';
 import { s3ObjectStoreFromConfig } from './s3-store.ts';
 import { LocalDirObjectStore, isPng, type ObjectStore } from './storage.ts';
 
@@ -367,7 +367,7 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
 
     createDefaults: async ({ params }, ctx) => {
       const account_id = params.account_id;
-      const tiles = await prescribedTiles(deps.markets, Date.now());
+      const tiles = await prescribedTiles(deps.markets, Date.now(), { noGames: sampleTiles });
       const displays = tiles.flatMap((t) => (t.kind === 'display' ? [t] : t.kind === 'folder' ? t.children : []));
       const [exists] = await sql`select 1 from boards where account_id = ${account_id}`;
       if (exists) throw new HttpError(409, 'exists', 'board already exists');

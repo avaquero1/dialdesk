@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MARKETS, PlannerCandidate } from '@app/contracts';
 import { runCase, type Case, type Ctx } from '@app/testkit';
 import { httpGet } from '../src/upstream.ts';
@@ -28,10 +28,10 @@ function setup(opts: { braveKey?: boolean } = {}) {
   return { app, rec, lines, keyFile };
 }
 
-async function run(app: ReturnType<typeof realApp>, c: Case, ctx: Ctx = {}) {
+async function run<T = never>(app: ReturnType<typeof realApp>, c: Case, ctx: Ctx = {}): Promise<T> {
   const out = await runCase(app, MARKETS, c, ctx);
   expect(out.problems).toEqual([]);
-  return out.body as never;
+  return out.body as T;
 }
 
 describe('markets real mode on recorded live answers', () => {
@@ -114,6 +114,60 @@ describe('markets real mode on recorded live answers', () => {
     expect(m.stale).toBe(true);
     expect(m.as_of).toBe(new Date(RECORDED_AT).toISOString());
     await run(app, { endpoint: 'get', caller: 'runner', input: () => ({ params: { market_id: PM } }), expect: 503 });
+  });
+});
+
+describe('the games list stays ready (A1.4.10)', () => {
+  const NFL: Case = { endpoint: 'list', caller: 'board', input: () => ({ query: { league: 'nfl' } }) };
+  type List = { markets: { market_id: string; stale: boolean }[] };
+  const ids = (b: List) => b.markets.map((m) => m.market_id).sort();
+  const settle = () => new Promise((r) => setTimeout(r, 5));
+
+  function clocked() {
+    const rec = recordedFetch();
+    const clock = { t: RECORDED_AT };
+    const { log } = captureLog();
+    const app = realApp({}, { fetch: rec.fetch, log, now: () => clock.t });
+    return { app, rec, clock };
+  }
+
+  it('an exchange failing after a good list: the same real games, marked stale, for as long as LIST_KEEP_S', async () => {
+    const { app, rec, clock } = clocked();
+    const good: List = await run(app, NFL);
+    expect(good.markets.length).toBeGreaterThan(0);
+    expect(good.markets.every((m) => !m.stale)).toBe(true);
+    rec.setDown(true);
+    clock.t += 3_599_000; // one second inside the default hour
+    const kept: List = await run(app, NFL);
+    expect(ids(kept)).toEqual(ids(good));
+    expect(kept.markets.every((m) => m.stale)).toBe(true);
+    await settle();
+    clock.t += 2_000; // past the bound, nothing fresher came: the exchanges' answer, a 503
+    await run(app, { ...NFL, expect: 503 });
+  });
+
+  it('a slow exchange does not hold a read: the last list comes back at once', async () => {
+    const rec = recordedFetch();
+    let hanging = false;
+    const fetch = ((...a: Parameters<typeof rec.fetch>) => (hanging ? new Promise<Response>(() => {}) : rec.fetch(...a))) as typeof rec.fetch;
+    let t = RECORDED_AT;
+    const app = realApp({}, { fetch, log: captureLog().log, now: () => t });
+    const good: List = await run(app, NFL);
+    hanging = true;
+    t += 31_000;
+    const answer = await Promise.race([run<List>(app, NFL), new Promise<'held'>((r) => setTimeout(() => r('held'), 1000))]);
+    expect(answer).not.toBe('held');
+    expect(ids(answer as List)).toEqual(ids(good));
+  });
+
+  it('keepList fills the list before anyone asks, and a read adds no exchange call', async () => {
+    const rec = recordedFetch();
+    const eventCalls = () => rec.calls.filter((c) => c.url.includes('/events?')).length;
+    const app = realApp({}, { fetch: rec.fetch, log: captureLog().log, now: () => RECORDED_AT, keepList: true });
+    await vi.waitFor(() => expect(eventCalls()).toBe(2)); // one per league, nobody has asked yet
+    const body: List = await run(app, NFL);
+    expect(body.markets.length).toBeGreaterThan(0);
+    expect(eventCalls()).toBe(2);
   });
 });
 

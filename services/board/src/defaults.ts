@@ -4,7 +4,8 @@
  *
  * The catalog's default board (WIDGET_CATALOG.default_board) gives the shape and each tile's params. At sign-up board asks
  * markets for the open NFL and NBA games and puts them in that shape. When markets has no games ahead, is down, or lists
- * only the catalog's made-up fixture markets (its fake), the catalog's own tiles are the board.
+ * only the catalog's made-up fixture markets (its fake), the catalog's own tiles are the board. In production, the catalog's
+ * games are labelled as samples (sampleTiles): a real account must never take them for real ones.
  */
 import { defaultDraft, MARKETS, WIDGET_CATALOG, type AddDraft, type DefaultTile, type DisplayType, type Market } from '@app/contracts';
 import type { Call } from '@app/service-kit';
@@ -221,14 +222,38 @@ export async function draftsFor(markets: Call | undefined, type: DisplayType, no
 
 const weekday = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
 
-/** The tiles a new board starts with: this week's games from markets, else the catalog's. Waits at most timeoutMs. */
-export async function prescribedTiles(markets: Call | undefined, now: number, timeoutMs = 3000): Promise<DefaultTile[]> {
+/** How long a new board waits for real games. Longer than one exchange's timeout (markets' upstream calls: 8 s). */
+export const FIRST_BOARD_WAIT_MS = 12_000;
+
+/**
+ * The tiles a new board starts with: this week's games from markets, else `noGames` of the catalog's (the fake stack: the
+ * catalog's as they are; production: sampleTiles). Waits at most timeoutMs. A board keeps the tiles it starts with.
+ */
+export async function prescribedTiles(
+  markets: Call | undefined,
+  now: number,
+  { timeoutMs = FIRST_BOARD_WAIT_MS, noGames = (c) => c }: { timeoutMs?: number; noGames?: (catalog: DefaultTile[]) => DefaultTile[] } = {},
+): Promise<DefaultTile[]> {
   const catalog = WIDGET_CATALOG.default_board.tiles;
-  if (!markets) return catalog;
+  if (!markets) return noGames(catalog);
   const timeout = new Promise<null>((r) => setTimeout(() => r(null), timeoutMs).unref());
   const got = await Promise.race([markets(MARKETS.list, { query: { category: 'sports' } }).catch(() => null), timeout]);
-  if (!got || fixtureOnly(got.markets, catalog)) return catalog;
-  return weekBoard(got.markets, now) ?? catalog;
+  if (got && fixtureOnly(got.markets, catalog)) return catalog;
+  return (got && weekBoard(got.markets, now)) || noGames(catalog);
+}
+
+/** The names tiles show for these catalog titles (web's DISPLAY_NAMES), so a label doesn't lose them. */
+const SHOWN_AS: Record<string, string> = { Gap: 'Two prices', Movement: 'Biggest move' };
+const sampled = <T extends { title: string }>(t: T): T => ({ ...t, title: `Sample: ${SHOWN_AS[t.title] ?? t.title}` });
+
+/** The catalog's board, every made-up game plainly labelled: for a production board when the exchanges gave no games. */
+export function sampleTiles(catalog: DefaultTile[]): DefaultTile[] {
+  return catalog.map((t) => {
+    if (t.kind === 'app') return t;
+    if (t.kind === 'folder') return { ...sampled(t), children: t.children.map(sampled) };
+    if (!t.market_ids.length) return t; // Your account: no game on it
+    return t.type === 'events' ? { ...t, title: 'Sample games' } : sampled(t);
+  });
 }
 
 /** markets' fake lists only the made-up fixture markets the catalog's board already holds: that board is the right one. */

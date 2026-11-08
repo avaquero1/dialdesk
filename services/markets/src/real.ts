@@ -19,6 +19,8 @@ import { UpstreamError, httpGet, type Fetch } from './upstream.ts';
 export const MarketsConfig = z.object({
   QUOTE_TTL_S: z.coerce.number().int().min(10).max(30).default(15),
   LIST_TTL_S: z.coerce.number().int().min(10).max(300).default(30),
+  /** The oldest list served when the exchanges are slow or failing (marked stale). Older than this, list waits for them. */
+  LIST_KEEP_S: z.coerce.number().int().min(60).max(86400).default(3600),
   HISTORY_TTL_S: z.coerce.number().int().min(10).max(3600).default(300),
   /** History requests per exchange per minute, at most (polite: they are spaced evenly). */
   HISTORY_PER_MIN: z.coerce.number().int().min(1).max(6000).default(20),
@@ -51,6 +53,8 @@ export interface RealDeps {
   now?: () => number;
   /** Kalshi, Gamma and CLOB base URLs (tests point them at recorded answers). */
   bases?: { kalshi?: string; gamma?: string; clob?: string };
+  /** Refresh the games list in the background, at start and before it goes stale (main.ts; tests read it by hand). */
+  keepList?: boolean;
 }
 
 type League = NonNullable<Market['league']>;
@@ -120,7 +124,8 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
   async function leagueMarkets(league: GameLeague): Promise<Market[] | null> {
     let events: { value: KalshiEventRaw[]; at: number; stale: boolean };
     try {
-      events = await cache.get(`k:list:${league}`, ms(cfg.LIST_TTL_S), () => kalshi.openEvents(GAME_SERIES[league]), stale);
+      // Always a live read (ttl 0): refreshList decides when, and readyList serves the last good list and bounds its age.
+      events = await cache.get(`k:list:${league}`, 0, () => kalshi.openEvents(GAME_SERIES[league]));
     } catch (err) {
       if (!isUpstream(err)) throw err;
       log.warn({ league, err: (err as Error).message }, 'kalshi list failed');
@@ -132,8 +137,8 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
       const g = parseKalshiTicker(ev.event_ticker);
       if (g) games.push(g);
       for (const m of ev.markets ?? []) {
-        if (!events.stale) cache.put(`k:m:${m.ticker}`, m, events.at); // a list read is also a fresh quote
-        const mk = kalshiToMarket(m, { asOf: iso(events.at), stale: events.stale });
+        cache.put(`k:m:${m.ticker}`, m, events.at); // a list read is also a fresh quote
+        const mk = kalshiToMarket(m, { asOf: iso(events.at), stale: false });
         if (mk) out.push(mk);
       }
     }
@@ -142,7 +147,7 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
     try {
       const pm = await cache.get(
         `p:list:${league}`,
-        ms(cfg.LIST_TTL_S),
+        0,
         async () => {
           const found: PolyMarketRaw[] = [];
           for (let i = 0; i < slugs.length; i += 40) found.push(...(await poly.markets(slugs.slice(i, i + 40))));
@@ -150,7 +155,7 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
         },
         stale,
       );
-      for (const raw of pm.value) {
+      for (const raw of pm.stale && now() - pm.at >= ms(cfg.LIST_KEEP_S) ? [] : pm.value) {
         const mk = polyToMarket(raw, { asOf: iso(pm.at), stale: pm.stale });
         if (mk && mk.event_key && keys.has(mk.event_key)) {
           out.push(mk);
@@ -162,6 +167,52 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
       log.warn({ league, err: (err as Error).message }, 'polymarket list failed');
     }
     return out;
+  }
+
+  // --- the games list, kept ready: one live read at a time per league, and the last good answer for everyone else --------
+  const ready = new Map<GameLeague, { markets: Market[]; at: number }>();
+  const refreshing = new Map<GameLeague, Promise<Market[] | null>>();
+
+  function refreshList(league: GameLeague): Promise<Market[] | null> {
+    const running = refreshing.get(league);
+    if (running) return running;
+    const p = leagueMarkets(league)
+      .then((markets) => {
+        if (markets) ready.set(league, { markets, at: now() });
+        return markets;
+      })
+      .finally(() => refreshing.delete(league));
+    refreshing.set(league, p);
+    return p;
+  }
+  const refreshInBackground = (league: GameLeague) =>
+    refreshList(league).catch((err: Error) => {
+      log.warn({ league, err: err.message }, 'list refresh failed');
+      return null;
+    });
+
+  /**
+   * Inside LIST_TTL_S: the last good list. Up to LIST_KEEP_S old (the bound, here and nowhere else): the same list marked
+   * stale, at once, while a refresh runs. Older or none yet: waits for the exchanges (null: Kalshi is down).
+   */
+  async function readyList(league: GameLeague): Promise<Market[] | null> {
+    const last = ready.get(league);
+    const age = last ? now() - last.at : Infinity;
+    if (last && age < ms(cfg.LIST_TTL_S)) return last.markets;
+    if (last && age < ms(cfg.LIST_KEEP_S)) {
+      void refreshInBackground(league);
+      return last.markets.map((m) => ({ ...m, stale: true }));
+    }
+    return refreshList(league);
+  }
+
+  // A refresh lands before the TTL is up: a sign-up finds the list ready, never a cold fetch.
+  if (deps.keepList) {
+    const tick = async () => {
+      await Promise.all(GAME_LEAGUES.map(refreshInBackground));
+      setTimeout(() => void tick(), ms(cfg.LIST_TTL_S) * 0.8).unref();
+    };
+    void tick();
   }
 
   // --- candidates ---------------------------------------------------------------------------------------------------
@@ -209,7 +260,7 @@ export function real(rawCfg: Record<string, unknown> = {}, deps: RealDeps = {}):
     list: async ({ query }) => {
       if (query.category && query.category !== 'sports') return { markets: [] }; // sports first: other categories later
       const leagues = query.league ? GAME_LEAGUES.filter((l) => l === query.league) : GAME_LEAGUES;
-      const lists = await Promise.all(leagues.map(leagueMarkets));
+      const lists = await Promise.all(leagues.map(readyList));
       if (leagues.length && lists.every((l) => l === null)) throw down('kalshi');
       const q = query.q?.toLowerCase();
       const markets = lists.flatMap((l) => l ?? []).filter((m) => !q || m.title.toLowerCase().includes(q));

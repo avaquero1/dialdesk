@@ -48,14 +48,14 @@ afterAll(async () => {
   await Promise.all(pools.map((p) => p.end({ timeout: 2 })));
 });
 
-async function realApp() {
+async function realApp(markets: ReturnType<typeof marketsForBoard> = marketsForBoard()) {
   const log = createLogger('board', 'silent');
   await migrate({ databaseUrl: url!, schema: 'board', dir: join(import.meta.dirname, '../migrations'), log });
   const sql = connect(url!);
   pools.push(sql);
   const bus = new MemoryBus();
   const jobs: WidgetRunJob[] = [];
-  const handlers = createReal({ sql, bus, enqueue: async (_q, j) => void jobs.push(j), markets: marketsForBoard(), connections: connectionsForBoard(), objects: new MemoryObjectStore() });
+  const handlers = createReal({ sql, bus, enqueue: async (_q, j) => void jobs.push(j), markets, connections: connectionsForBoard(), objects: new MemoryObjectStore() });
   const app = buildApp({ service: 'board', mode: 'real', api: BOARD, handlers, callers: testCallers(), log });
   return { app, bus, jobs };
 }
@@ -72,6 +72,21 @@ describe.skipIf(!up)('contract: board (real, Postgres)', async () => {
 });
 
 if (up) boardBehaviors('real (Postgres)', realApp);
+
+describe.skipIf(!up)('board (real, Postgres): no list at sign-up (A1.4.10)', () => {
+  it('a new board says its games are samples', async () => {
+    await Promise.all(pools.splice(0).map((p) => p.end({ timeout: 2 })));
+    const down = (async () => {
+      throw new Error('503');
+    }) as never;
+    const { app } = await realApp(down);
+    const out = await runCase(app, BOARD, { endpoint: 'createDefaults', caller: 'edge', input: () => ({ params: { account_id: newId('acc') }, body: { category: 'sports' } }) }, {});
+    expect(out.problems).toEqual([]);
+    const text = JSON.stringify(out.body);
+    expect(text).toContain('Sample games');
+    expect(text).toContain('Sample: Chiefs beat the Bills');
+  });
+});
 
 describe.skipIf(!up)('board (real, Postgres): a deleted account takes its board with it', () => {
   it('forget deletes the board, its folders, tiles, layout, proposals and run requests, and leaves other boards', async () => {

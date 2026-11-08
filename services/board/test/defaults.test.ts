@@ -3,9 +3,9 @@
  * The same rules on the exchanges' recorded answers: first-paint.test.ts.
  */
 import { DefaultTile, WIDGET_CATALOG, type Market } from '@app/contracts';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { validateDisplay } from '../src/logic.ts';
-import { addDrafts, draftsFor, fixtureOnly, gameLabel, gamesOf, nbaNight, nflWeek, prescribedTiles, weekBoard } from '../src/defaults.ts';
+import { addDrafts, draftsFor, fixtureOnly, gameLabel, gamesOf, nbaNight, nflWeek, prescribedTiles, sampleTiles, weekBoard } from '../src/defaults.ts';
 import { defaultDraft } from '@app/contracts';
 import { marketsForBoard } from './cases.ts';
 
@@ -116,6 +116,55 @@ describe('board: the prescribed first board from this week’s games', () => {
   it('markets’ fake (the catalog’s made-up fixture games): the catalog’s own board, as the other pieces expect', async () => {
     expect(fixtureOnly(LIST)).toBe(false);
     expect(await prescribedTiles(marketsForBoard(), Date.parse(AT))).toBe(WIDGET_CATALOG.default_board.tiles);
+  });
+});
+
+describe('a first board never shows made-up games as real (A1.4.10)', () => {
+  const NOW = Date.parse(AT);
+  const FOLDER = (ms: number, markets: Market[]) =>
+    (async () => {
+      await new Promise((r) => setTimeout(r, ms));
+      return { markets };
+    }) as never;
+  const titles = (tiles: DefaultTile[]) => JSON.stringify(tiles);
+  afterEach(() => void vi.useRealTimers());
+
+  it('a slow list (over the old 3 s, under the new wait) still gets real games', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const got = prescribedTiles(FOLDER(5_000, LIST), NOW, { noGames: sampleTiles });
+    await vi.advanceTimersByTimeAsync(5_000);
+    const tiles = await got;
+    expect(titles(tiles)).toContain('Jets');
+    expect(titles(tiles)).not.toContain('Sample');
+    expect(titles(tiles)).not.toContain('Chiefs at Bills');
+  });
+
+  it('no list after the wait: every made-up game is labelled a sample, and the labels fit the contract', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const got = prescribedTiles(FOLDER(60_000, LIST), NOW, { noGames: sampleTiles });
+    await vi.advanceTimersByTimeAsync(12_000);
+    const tiles = await got;
+    for (const t of tiles) {
+      DefaultTile.parse(t);
+      if (t.kind === 'app') continue;
+      if (t.kind === 'folder') {
+        expect(t.title).toMatch(/^Sample: /);
+        for (const c of t.children) expect(c.title).toMatch(/^Sample: /);
+      } else if (t.market_ids.length) expect(t.title).toMatch(/^Sample/);
+    }
+    expect(titles(tiles)).toContain('Sample: Two prices'); // the name the web shows for the catalog's "Gap"
+  });
+
+  it('markets down or no games ahead: the same labels', async () => {
+    const down = (async () => {
+      throw new Error('503');
+    }) as never;
+    const none = (async () => ({ markets: [] })) as never;
+    for (const m of [down, none, undefined]) expect(titles(await prescribedTiles(m, NOW, { noGames: sampleTiles }))).toContain('Sample games');
+  });
+
+  it('the fake stack is unchanged: markets’ fake gives the catalog’s board, labels or not', async () => {
+    expect(await prescribedTiles(marketsForBoard(), NOW, { noGames: sampleTiles })).toBe(WIDGET_CATALOG.default_board.tiles);
   });
 });
 
