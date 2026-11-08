@@ -32,6 +32,12 @@ Never edit another piece's folder. Never commit in the main checkout. No remote:
 - **Errors:** `throw new HttpError(404, 'not_found', '…')`. The status must be in the endpoint's `errors`.
 - **Logs:** `ctx.log` (pino, JSON). Never log a body, a key, a token or page text. `console.log` fails lint.
 - **The audit log:** `bus.log(logEntry('board', 'widget.accepted', {...}))`: ids, hashes and sizes only.
+- **Deleted accounts (the nightly run):** "Try it" guests are deleted once a night by accounts' guest sweep
+  (`scheduleGuestSweep` in `services/accounts/src/real.ts`, at `ACCOUNTS_GUEST_SWEEP_HOUR_UTC`, default 08:00 UTC). It is
+  the only scheduled deletion. Each guest gets an `account.deleted` event and an `account.deleted` log row (the Safety app
+  counts them). A service that keeps rows per account hands an `AccountData` to `followAccountDeletes` (service-kit) and
+  is listed in `ACCOUNTS.missing`'s callers and in `VALKEY_ACL` as a subscriber: it deletes on the event, and its orphan
+  sweep (a minute after start, then every 6 hours) deletes the rows of any account accounts says is gone.
 - **The bus in real mode:** `const bus = busFromConfig('board', cfg)` (a `ValkeyBus` on `<SVC>_VALKEY_URL`); fakes keep `MemoryBus`.
   `bus.emit(...)` publishes on `events.<name>`, `bus.log(...)` appends to `log:actions`, `bus.subscribe(['run.step'], fn)` listens
   (edge: `'all'`). audit reads the stream with `LogStreamReader`.

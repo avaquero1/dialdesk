@@ -3,13 +3,16 @@ import { z } from 'zod';
 import { CONNECTIONS, QUEUES, TRUST_ACTIONS, newId, type Connection, type Numbers } from '@app/contracts';
 import {
   busFromConfig,
+  clientFromEnv,
   createLogger,
   createQueue,
   createWorker,
+  followAccountDeletes,
   HttpError,
   logEntry,
   NoRetry,
   now,
+  type AccountData,
   type Bus,
   type Handlers,
   type Logger,
@@ -303,8 +306,22 @@ export async function createConnections(cfg: Record<string, unknown> = {}, deps:
     },
   };
 
+  /** For account deletion: a deleted account's connections go, sealed keys and numbers with them (numbers cascade). */
+  const accountData: AccountData = {
+    accountIds: () => db.accountIds(),
+    forget: async (account_id) => {
+      const rows = await db.byAccount(account_id);
+      for (const r of rows) {
+        await db.remove(r.conn.connection_id);
+        await audit('connections', TRUST_ACTIONS.connectionRemoved, { account_id, subject_id: r.conn.connection_id, outcome: 'ok', ids: { exchange: r.conn.exchange } });
+      }
+      return rows.length;
+    },
+  };
+
   return {
     handlers,
+    accountData,
     /** Read one connection now (tests; the worker uses it through refreshJob). */
     refresh,
     refreshJob,
@@ -315,7 +332,13 @@ export async function createConnections(cfg: Record<string, unknown> = {}, deps:
   };
 }
 
-/** For `runService`: the handlers only. */
+/** For `runService`: the handlers, following account deletes on Valkey (the orphan sweep catches a missed event). */
 export async function real(cfg: Record<string, unknown> = {}, deps: RealDeps = {}): Promise<Handlers<typeof CONNECTIONS>> {
-  return (await createConnections(cfg, deps)).handlers;
+  const c = await createConnections(cfg, deps);
+  const url = typeof cfg.VALKEY_URL === 'string' && cfg.VALKEY_URL ? cfg.VALKEY_URL : null;
+  if (url && deps.bus === undefined) {
+    const log = deps.log ?? createLogger('connections');
+    await followAccountDeletes({ service: 'connections', bus: busFromConfig('connections', { VALKEY_URL: url }), data: c.accountData, accounts: await clientFromEnv('connections', 'accounts'), log });
+  }
+  return c.handlers;
 }

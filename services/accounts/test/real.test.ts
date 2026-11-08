@@ -19,6 +19,7 @@ import { realAccounts } from './helpers.ts';
 
 const json = async (r: Response | Promise<Response>): Promise<any> => (await r).json();
 const asEdge = { authorization: `Bearer ${TEST_TOKENS.edge}`, 'content-type': 'application/json' };
+const asBoard = { authorization: `Bearer ${TEST_TOKENS.board}` };
 const post = (app: ReturnType<typeof realAccounts>['app'], path: string, body: unknown, headers: Record<string, string> = asEdge) =>
   app.request(path, { method: 'POST', headers, body: JSON.stringify(body) });
 
@@ -188,6 +189,14 @@ describe('accounts (real): the nightly guest sweep', () => {
       [TRUST_ACTIONS.accountDeleted, old.account.account_id, undefined],
       ['account.guests_swept', null, 1],
     ]);
+    // account.deleted goes out on the bus too, so board, agent and connections delete the guest's rows.
+    expect(sweepBus.events.filter((e) => e.event === 'account.deleted').map((e) => e.payload)).toEqual([
+      { account_id: old.account.account_id, at: expect.any(String), reason: 'guest_sweep' },
+    ]);
+    // ACCOUNTS.missing (the orphan sweeps): the swept guest is missing, the user and the fresh guest are not.
+    const ids = [old.account.account_id, user.account.account_id, fresh.account.account_id];
+    const missing = await app.request('/accounts/missing', { method: 'POST', headers: { ...asBoard, 'content-type': 'application/json' }, body: JSON.stringify({ account_ids: ids }) });
+    expect(await missing.json()).toEqual({ missing: [old.account.account_id] });
   });
 
   it('deleteGuests answers the deleted account ids', async () => {

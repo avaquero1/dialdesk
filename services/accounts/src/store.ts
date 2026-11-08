@@ -20,9 +20,10 @@ export interface Store {
   insertSession(s: SessionRow): Promise<void>;
   session(id: string): Promise<SessionRow | null>;
   revokeSession(id: string): Promise<boolean>;
-  /** Deletes guest accounts created before `before`, with their sessions. Returns how many. */
   /** Deletes guests made before `before` and their sessions; answers the deleted account ids. */
   deleteGuests(before: string): Promise<string[]>;
+  /** Which of these ids are accounts. */
+  existing(ids: string[]): Promise<string[]>;
 }
 
 export function memoryStore(): Store {
@@ -71,6 +72,9 @@ export function memoryStore(): Store {
           gone.push(a.account_id);
         }
       return gone;
+    },
+    async existing(ids) {
+      return ids.filter((id) => accounts.has(id));
     },
   };
 }
@@ -133,6 +137,10 @@ export function pgStore(sql: Sql): Store {
     },
     async deleteGuests(before) {
       const rows = await sql<{ account_id: string }[]>`delete from accounts where guest and created_at < ${before} returning account_id`;
+      return rows.map((r) => r.account_id);
+    },
+    async existing(ids) {
+      const rows = await sql<{ account_id: string }[]>`select account_id from accounts where account_id = any(${ids})`;
       return rows.map((r) => r.account_id);
     },
   };

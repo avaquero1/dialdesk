@@ -7,10 +7,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BOARD, newId, type WidgetRunJob } from '@app/contracts';
 import { MemoryBus, buildApp, createLogger, migrate } from '@app/service-kit';
-import { runCase, testCallers, type Ctx } from '@app/testkit';
+import { runCase, testCallers, TEST_TOKENS, type Ctx } from '@app/testkit';
 import postgres from 'postgres';
 import { afterAll, describe, expect, it } from 'vitest';
-import { connect, createReal } from '../src/real.ts';
+import { connect, createReal, pgAccountData } from '../src/real.ts';
 import { MemoryObjectStore } from '../src/storage.ts';
 import { boardBehaviors } from './behaviors.ts';
 import { makeCases, marketsForBoard } from './cases.ts';
@@ -72,3 +72,25 @@ describe.skipIf(!up)('contract: board (real, Postgres)', async () => {
 });
 
 if (up) boardBehaviors('real (Postgres)', realApp);
+
+describe.skipIf(!up)('board (real, Postgres): a deleted account takes its board with it', () => {
+  it('forget deletes the board, its folders, tiles, layout, proposals and run requests, and leaves other boards', async () => {
+    // svc_board may hold 5 connections: the earlier suites are done, so their pools go first.
+    await Promise.all(pools.splice(0).map((p) => p.end({ timeout: 2 })));
+    const { app } = await realApp();
+    const sql = pools.at(-1)!;
+    const data = pgAccountData(sql);
+    const [gone, kept] = [newId('acc'), newId('acc')];
+    for (const a of [gone, kept]) {
+      const res = await app.request(`/boards/${a}`, { method: 'POST', headers: { authorization: `Bearer ${TEST_TOKENS.edge}`, 'content-type': 'application/json' }, body: JSON.stringify({ category: 'sports' }) });
+      expect(res.status).toBe(201);
+    }
+    const count = async (table: string, a: string) => (await sql<{ n: number }[]>`select count(*)::int as n from ${sql(table)} where account_id = ${a}`)[0]!.n;
+    expect(await count('widgets', gone)).toBeGreaterThan(0);
+    expect(await data.accountIds()).toEqual(expect.arrayContaining([gone, kept]));
+    expect(await data.forget(gone)).toBe(1);
+    for (const table of ['boards', 'widgets', 'layout', 'proposals', 'run_requests', 'results', 'screenshots']) expect(await count(table, gone), table).toBe(0);
+    expect(await count('widgets', kept)).toBeGreaterThan(0);
+    expect(await data.forget(gone)).toBe(0);
+  }, 30_000);
+});

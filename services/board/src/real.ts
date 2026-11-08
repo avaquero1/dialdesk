@@ -25,10 +25,24 @@ import {
   type WidgetResult,
   type WidgetRunJob,
 } from '@app/contracts';
-import { HttpError, busFromConfig, clientFromEnv, createLogger, createQueue, logEntry, now, type Bus, type Call, type Handlers } from '@app/service-kit';
+import {
+  HttpError,
+  busFromConfig,
+  clientFromEnv,
+  createLogger,
+  createQueue,
+  followAccountDeletes,
+  logEntry,
+  now,
+  type AccountData,
+  type Bus,
+  type Call,
+  type Handlers,
+} from '@app/service-kit';
 import postgres from 'postgres';
 import {
   REFRESH_PER_HOUR,
+  checkWidgetCap,
   allMarketIds,
   applyTune,
   checkResult,
@@ -79,13 +93,32 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
   const s3 = s3ObjectStoreFromConfig(cfg);
   if (s3) log.info({ objects: 's3' }, 'screenshots in Object Storage');
   else log.info({ objects: 'local' }, 'screenshots in a local folder (no BOARD_S3_BUCKET)');
+  const sql = connect(url);
+  // A deleted account (the nightly guest sweep) takes its board with it; the orphan sweep catches a missed event.
+  if (valkey) await followAccountDeletes({ service: 'board', bus, data: pgAccountData(sql), accounts: await clientFromEnv('board', 'accounts'), log });
   return createReal({
-    sql: connect(url),
+    sql,
     bus,
     enqueue: async (_q, job) => void (await runs.enqueue(job)),
     markets: await clientFromEnv('board', 'markets'),
     objects: s3 ?? new LocalDirObjectStore(dir),
   });
+}
+
+/**
+ * board's rows per account, for account deletion. The layout goes first (a tile's folder_id reference doesn't
+ * cascade), then the board row, which cascades to widgets, results, proposals, run requests and screenshot rows
+ * (migrations/0002_board.sql).
+ */
+export function pgAccountData(sql: Sql): AccountData {
+  return {
+    accountIds: async () => (await sql<{ account_id: string }[]>`select account_id from boards`).map((r) => r.account_id),
+    forget: (account_id) =>
+      sql.begin(async (tx) => {
+        await tx`delete from layout where account_id = ${account_id}`;
+        return (await tx`delete from boards where account_id = ${account_id} returning account_id`).length;
+      }),
+  };
 }
 
 /** svc_board's pool. The role is limited to 5 connections; migrations use one at start. */
@@ -358,6 +391,8 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
         if (p.status !== 'pending') throw new HttpError(409, 'not_pending', `proposal is ${p.status}`);
         await tx`select 1 from boards where account_id = ${account_id} for update`;
         const drafts = p.changes.flatMap((c) => (c.op === 'add' ? [c.widget] : []));
+        const [have] = await tx<{ n: number }[]>`select count(*)::int as n from widgets where account_id = ${account_id}`;
+        checkWidgetCap(have!.n, drafts.length);
         const places = packPlaces(drafts.map((d) => SIZE_CELLS[d.size ?? displayEntry(d.type).default_size]), await nextRow(tx, account_id));
         let i = 0;
         for (const c of p.changes) {

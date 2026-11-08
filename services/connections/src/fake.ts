@@ -1,12 +1,15 @@
 import { CONNECTIONS, newId, type Connection, type Numbers } from '@app/contracts';
-import { HttpError, now, type Handlers } from '@app/service-kit';
+import { HttpError, now, type AccountData, type Handlers } from '@app/service-kit';
 import { fixtures } from '@app/testkit';
 import { sealKeyPair } from './seal.ts';
 
 /** Public on purpose: the fake holds no secret. */
 const FAKE_SEED = new Uint8Array(32).fill(0x42);
 
-export type FakeDeps = Record<string, never>;
+export interface FakeDeps {
+  /** Hands over the fake's per-account data, so a test can follow account deletes (followAccountDeletes). */
+  accountData?: (d: AccountData) => void;
+}
 export async function fakeDepsFromEnv(): Promise<FakeDeps> {
   return {};
 }
@@ -17,8 +20,16 @@ export async function fakeDepsFromEnv(): Promise<FakeDeps> {
  * a Kalshi key id containing "write" is treated as a key with write scope and refused (403), like the real check
  * against fixtures/markets/kalshi/api_keys-write.json.
  */
-export function fake(_deps: FakeDeps = {}): Handlers<typeof CONNECTIONS> {
+export function fake(deps: FakeDeps = {}): Handlers<typeof CONNECTIONS> {
   const conns = new Map<string, Connection>();
+  deps.accountData?.({
+    accountIds: async () => [...new Set([...conns.values()].map((c) => c.account_id))],
+    forget: async (account_id) => {
+      let n = 0;
+      for (const [id, c] of conns) if (c.account_id === account_id && conns.delete(id)) n++;
+      return n;
+    },
+  });
   const mine = (id: string, account_id: string) => {
     const c = conns.get(id);
     if (!c || c.account_id !== account_id) throw new HttpError(404, 'not_found', 'no such connection');

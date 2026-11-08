@@ -69,5 +69,6 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof ACCOUNTS> {
       await bus.emit('look.changed', { account_id: a.account_id, at: now(), look: a.look });
       return a.look;
     },
+    missing: ({ body }) => ({ missing: body.account_ids.filter((id) => !accounts.has(id)) }),
   };
 }

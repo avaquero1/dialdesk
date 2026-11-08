@@ -13,9 +13,10 @@ import {
   type WidgetDraft,
   type WidgetRunJob,
 } from '@app/contracts';
-import { HttpError, MemoryBus, calleeConfig, createClient, now, type Bus, type Call, type Handlers } from '@app/service-kit';
+import { HttpError, MemoryBus, calleeConfig, createClient, now, type AccountData, type Bus, type Call, type Handlers } from '@app/service-kit';
 import {
   REFRESH_PER_HOUR,
+  checkWidgetCap,
   allMarketIds,
   applyTune,
   checkResult,
@@ -43,6 +44,8 @@ export interface FakeDeps {
   markets?: Call;
   /** Screenshots. Default: in memory. */
   objects?: ObjectStore;
+  /** Hands over the fake's per-account data, so a test can follow account deletes (followAccountDeletes). */
+  accountData?: (d: AccountData) => void;
 }
 /** With `make fakes`, the board fake reads first-paint prices from the markets fake over HTTP. */
 export async function fakeDepsFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<FakeDeps> {
@@ -125,6 +128,21 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
     await bus.emit('widget.updated', { account_id, at: now(), widget_id, change: 'added' });
     return w;
   }
+  deps.accountData?.({
+    accountIds: async () => [...boards.keys()],
+    forget: async (account_id) => {
+      const b = boards.get(account_id);
+      if (!b) return 0;
+      for (const id of b.widgets) {
+        widgets.delete(id);
+        traces.delete(id);
+      }
+      for (const [k, p] of proposals) if (p.account_id === account_id) proposals.delete(k);
+      for (const [k, r] of requested) if (b.widgets.includes(r.widget_id)) requested.delete(k);
+      boards.delete(account_id);
+      return 1;
+    },
+  });
   const tile = (account_id: string, spec: Widget['spec']) => {
     widgets.set(spec.widget_id, { spec, profile: null, state: 'normal', result: null, previous: null, updated_at: now() });
     boards.get(account_id)!.widgets.push(spec.widget_id);
@@ -194,6 +212,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       if (p.status !== 'pending') throw new HttpError(409, 'not_pending', `proposal is ${p.status}`);
       for (const c of p.changes) if (c.op !== 'add' && !widgets.has(c.widget_id)) throw new HttpError(409, 'stale', 'a widget in this proposal is gone');
       const adds = p.changes.flatMap((c) => (c.op === 'add' ? [c.widget] : []));
+      checkWidgetCap(boards.get(p.account_id)?.widgets.length ?? 0, adds.length);
       const quotes = [...(await fetchQuotes(deps.markets, allMarketIds(adds))).values()];
       const places = packPlaces(adds.map((d) => SIZE_CELLS[d.size ?? displayEntry(d.type).default_size]), nextRow(p.account_id));
       const out: Widget[] = [];

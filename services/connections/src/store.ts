@@ -21,6 +21,8 @@ export interface ConnStore {
   remove(id: string): Promise<void>;
   /** Connections whose numbers may leave (the refresh schedule reads only these). */
   shared(): Promise<{ connection_id: string; account_id: string }[]>;
+  /** Every account with a connection (the orphan sweep). */
+  accountIds(): Promise<string[]>;
   putNumbers(n: Numbers): Promise<void>;
   numbers(id: string): Promise<Numbers | null>;
   end(): Promise<void>;
@@ -49,6 +51,9 @@ export class MemoryStore implements ConnStore {
   }
   async shared() {
     return [...this.rows.values()].filter((r) => r.conn.share_numbers).map((r) => ({ connection_id: r.conn.connection_id, account_id: r.conn.account_id }));
+  }
+  async accountIds() {
+    return [...new Set([...this.rows.values()].map((r) => r.conn.account_id))];
   }
   async putNumbers(n: Numbers) {
     if (this.rows.has(n.connection_id)) this.nums.set(n.connection_id, structuredClone(n));
@@ -127,6 +132,9 @@ export class PgStore implements ConnStore {
   }
   async shared() {
     return this.sql<{ connection_id: string; account_id: string }[]>`select connection_id, account_id from connections where share_numbers`;
+  }
+  async accountIds() {
+    return (await this.sql<{ account_id: string }[]>`select distinct account_id from connections`).map((r) => r.account_id);
   }
   async putNumbers(n: Numbers) {
     await this.sql`

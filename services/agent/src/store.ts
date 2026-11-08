@@ -21,6 +21,10 @@ export interface ConversationStore {
   append(conversation_id: string, turn: StoredTurn): Promise<void>;
   /** The last `limit` turns, oldest first. */
   turns(conversation_id: string, limit?: number): Promise<StoredTurn[]>;
+  /** Every account with a conversation (the orphan sweep). */
+  accountIds(): Promise<string[]>;
+  /** Deletes the account's conversations and their turns; answers how many conversations. */
+  forget(account_id: string): Promise<number>;
 }
 
 export class MemoryConversationStore implements ConversationStore {
@@ -37,6 +41,14 @@ export class MemoryConversationStore implements ConversationStore {
   }
   async turns(id: string, limit = 1000) {
     return (this.convs.get(id)?.turns ?? []).slice(-limit);
+  }
+  async accountIds() {
+    return [...new Set([...this.convs.values()].map((c) => c.account_id))];
+  }
+  async forget(account_id: string) {
+    let n = 0;
+    for (const [id, c] of this.convs) if (c.account_id === account_id && this.convs.delete(id)) n++;
+    return n;
   }
 }
 
@@ -76,5 +88,12 @@ export class PgConversationStore implements ConversationStore {
       verdict_id: r.verdict_id,
       at: r.at.toISOString(),
     }));
+  }
+  async accountIds() {
+    return (await this.sql<{ account_id: string }[]>`select distinct account_id from conversations`).map((r) => r.account_id);
+  }
+  /** Turns cascade (migrations/0002_conversations.sql). */
+  async forget(account_id: string) {
+    return (await this.sql`delete from conversations where account_id = ${account_id} returning conversation_id`).length;
   }
 }

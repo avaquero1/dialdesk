@@ -31,6 +31,15 @@ type DraftLike = Pick<WidgetDraft, 'type' | 'size' | 'market_ids' | 'params'>;
 /** "Refresh now" at most this many times per widget per hour (then 429). */
 export const REFRESH_PER_HOUR = 12;
 
+/** The demo cap on one board's widgets, folders and their tiles counted. The prescribed board stays under it. */
+export const MAX_WIDGETS = 80;
+
+/** Accept refuses adds past MAX_WIDGETS (409). */
+export function checkWidgetCap(have: number, adding: number): void {
+  if (adding > 0 && have + adding > MAX_WIDGETS)
+    throw new HttpError(409, 'board_full', `a board holds at most ${MAX_WIDGETS} widgets; remove some first`);
+}
+
 /** Checks a display against its catalog entry: the size, the params it may use, and its markets. Throws 400. */
 export function validateDisplay(d: DraftLike): void {
   const e = displayEntry(d.type);

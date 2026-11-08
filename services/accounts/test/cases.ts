@@ -16,4 +16,12 @@ export const cases: Case[] = [
   { endpoint: 'setLook', caller: 'edge', input: (c) => ({ params: { account_id: c.acc }, body: { theme: 'deep-sea', mode: 'dark', hue: 32 } }) },
   { endpoint: 'sessionValid', caller: 'edge', input: (c) => ({ params: { session_id: c.ses } }) },
   { endpoint: 'logout', caller: 'edge', input: (c) => ({ params: { session_id: c.ses } }) },
+  {
+    endpoint: 'missing',
+    caller: 'board',
+    input: (c) => ({ body: { account_ids: [c.acc, 'acc_gone0000000000'] } }),
+    save: (o: { missing: string[] }) => {
+      if (o.missing.join() !== 'acc_gone0000000000') throw new Error(`missing answered ${o.missing.join()}`);
+    },
+  },
 ];

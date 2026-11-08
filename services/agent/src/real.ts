@@ -20,7 +20,7 @@ import {
   type Verdict,
 } from '@app/contracts';
 import { checkChat, guardChatReply } from '@app/guard';
-import { CallError, HttpError, MemoryBus, busFromConfig, clientFromEnv, createLogger, logEntry, now, type Bus, type Call, type Handlers, type Logger } from '@app/service-kit';
+import { CallError, HttpError, MemoryBus, busFromConfig, clientFromEnv, createLogger, followAccountDeletes, logEntry, now, type Bus, type Call, type Handlers, type Logger } from '@app/service-kit';
 import { picksFor } from './picks.ts';
 import { RULES, boardForModel, dataBlock, marketsForModel } from './prompt.ts';
 import { Slots, digitsIn, forHistory, strayDigits } from './slots.ts';
@@ -57,12 +57,16 @@ export async function real(cfg: Record<string, unknown>): Promise<Handlers<typeo
   if (!url) log.warn('no AGENT_DATABASE_URL: conversations are kept in memory');
   const valkey = typeof cfg.VALKEY_URL === 'string' && cfg.VALKEY_URL ? cfg.VALKEY_URL : undefined;
   if (!valkey) log.warn('no AGENT_VALKEY_URL: the log stream stays in memory');
+  const store = url ? new PgConversationStore(connect(url)) : new MemoryConversationStore();
+  const bus = valkey ? busFromConfig('agent', { VALKEY_URL: valkey }) : new MemoryBus();
+  // A deleted account (the nightly guest sweep) takes its conversations with it; the orphan sweep catches a missed event.
+  if (valkey) await followAccountDeletes({ service: 'agent', bus, data: store, accounts: await clientFromEnv('agent', 'accounts'), log });
   return createReal({
     models: await clientFromEnv('agent', 'models'),
     board: await clientFromEnv('agent', 'board'),
     markets: await clientFromEnv('agent', 'markets'),
-    store: url ? new PgConversationStore(connect(url)) : new MemoryConversationStore(),
-    bus: valkey ? busFromConfig('agent', { VALKEY_URL: valkey }) : new MemoryBus(),
+    store,
+    bus,
     log,
   });
 }

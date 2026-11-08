@@ -181,7 +181,11 @@ describe.skipIf(!on)('bus on Valkey', () => {
       await expect(board.call('LPUSH', 'bull:account-refresh:wait', 'x')).rejects.toThrow(/NOPERM/);
       await expect(board.call('SET', 'anything', 'x')).rejects.toThrow(/NOPERM/);
       await expect(board.publish('events.run.poisoned', '{}')).rejects.toThrow(/NOPERM/);
-      await expect(board.call('SUBSCRIBE', 'events.widget.updated')).rejects.toThrow(/NOPERM/);
+      // board listens to account.deleted only (and could hear its own channels): runner's are refused.
+      await expect(board.call('SUBSCRIBE', 'events.run.step')).rejects.toThrow(/NOPERM/);
+      const listener = board.duplicate();
+      await expect(listener.subscribe('events.account.deleted')).resolves.toBe(1);
+      await listener.quit();
       // Lua runs as the caller: a script can't reach outside the user's keys either.
       await expect(board.call('EVAL', "return redis.call('SET', KEYS[1], 'x')", '1', 'bull:account-refresh:x')).rejects.toThrow(/NOPERM|permission/i);
       await expect(board.call('EVAL', "return redis.call('FLUSHALL')", '0')).rejects.toThrow(/NOPERM|permission/i);

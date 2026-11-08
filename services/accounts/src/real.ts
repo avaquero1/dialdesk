@@ -136,12 +136,20 @@ export function createAccounts(o: AccountsOptions): Handlers<typeof ACCOUNTS> {
       await bus.log(logEntry('accounts', 'look.changed', { account_id: params.account_id, subject_id: params.account_id, outcome: 'ok' }));
       return look.data;
     },
+
+    missing: async ({ body }) => {
+      const known = new Set(await store.existing(body.account_ids));
+      return { missing: body.account_ids.filter((id) => !known.has(id)) };
+    },
   };
 }
 
 /**
- * "Try it" guests are deleted nightly: once a day at `hourUtc` (default 08:00 UTC, 3 AM in New York) every guest
- * created more than an hour earlier goes, with its sessions. `tick` is exported for tests.
+ * The nightly run, and the only place it is scheduled: "Try it" guests are deleted once a day at `hourUtc`
+ * (ACCOUNTS_GUEST_SWEEP_HOUR_UTC, default 08:00 UTC, 3 AM in New York). Every guest created more than an hour earlier
+ * goes, with its sessions. For each one, account.deleted goes out on the bus (board, agent and connections delete its
+ * rows; their orphan sweeps catch a missed event) and an account.deleted row goes to the log (the Safety app counts
+ * guests deleted). `tick` is exported for tests.
  */
 export function scheduleGuestSweep(store: Store, log: Logger, bus: Bus, hourUtc = 8, clock: () => number = Date.now) {
   let lastDay = '';
@@ -154,8 +162,10 @@ export function scheduleGuestSweep(store: Store, log: Logger, bus: Bus, hourUtc 
       const gone = await store.deleteGuests(new Date(clock() - 3600_000).toISOString());
       log.info({ deleted: gone.length }, 'guest sweep');
       // One row per guest (the trust page counts account.deleted), then the sweep's own summary.
-      for (const account_id of gone)
+      for (const account_id of gone) {
+        await bus.emit('account.deleted', { account_id, at: now(), reason: 'guest_sweep' });
         await bus.log(logEntry('accounts', A.accountDeleted, { account_id, subject_id: account_id, outcome: 'ok', ids: { reason: 'guest_sweep' } }));
+      }
       await bus.log(logEntry('accounts', 'account.guests_swept', { outcome: 'ok', sizes: { accounts: gone.length } }));
       return gone.length;
     } catch (err) {
