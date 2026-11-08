@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EDGE, POISONED_NOTE, type Board, type ChatReply, type RunTraceStep, type Widget, type WidgetResult } from '@app/contracts';
 import { createClient, sandboxClient, type SandboxClient } from '@app/service-kit';
 import { fixtures } from '@app/testkit';
+import { BANNED_WORDS } from '../../services/runner/src/run.ts';
 import { ORIGIN, PG_PORT, stackUp, type Stack, type Svc } from '../real/stack.ts';
 import { StepUsageStore } from './usage.ts';
 
@@ -25,23 +26,51 @@ const usage = new StepUsageStore(process.env.E2E_LIVE_USAGE ?? '/nonexistent');
 
 let stack: Stack;
 let sandbox: SandboxClient;
-const record: { run: string; started_at: string; cap_self_test?: unknown; steps: Record<string, unknown>[]; spend_usd?: number; by_role?: unknown; database?: unknown } = {
+const record: { run: string; started_at: string; cap_self_test?: unknown; steps: Record<string, unknown>[]; spend_usd?: number; by_role?: unknown; model_calls?: unknown; database?: unknown; signup_news?: unknown; numbers_batches?: unknown } = {
   run: RUN,
   started_at: new Date().toISOString(),
   steps: [],
 };
 
+/** What a step added to the usage file, per role: calls next to tokens, so a total is never read as one call. */
+function usageDelta(before: ReturnType<StepUsageStore['rows']>) {
+  const out: Record<string, { calls: number; input_tokens: number; output_tokens: number; cost_usd: number }> = {};
+  for (const r of usage.rows()) {
+    const b = before.find((x) => x.account === r.account && x.role === r.role && x.model === r.model);
+    const calls = r.calls - (b?.calls ?? 0);
+    if (!calls) continue;
+    const t = (out[r.role] ??= { calls: 0, input_tokens: 0, output_tokens: 0, cost_usd: 0 });
+    t.calls += calls;
+    t.input_tokens += r.input_tokens - (b?.input_tokens ?? 0);
+    t.output_tokens += r.output_tokens - (b?.output_tokens ?? 0);
+    t.cost_usd = +(t.cost_usd + r.cost_usd - (b?.cost_usd ?? 0)).toFixed(6);
+  }
+  return out;
+}
+
+/** Every model call, from models' own "model call" log lines: role, tokens, cost and time, one row per call. */
+function modelCalls() {
+  const rows: { at: number; role: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; ms: number }[] = [];
+  for (const line of readFileSync(join(stack.logs, 'models.log'), 'utf8').split('\n')) {
+    if (!line.includes('"model call"')) continue;
+    const l = JSON.parse(line) as { time: number; role: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; ms: number };
+    rows.push({ at: l.time, role: l.role, model: l.model, input_tokens: l.input_tokens, output_tokens: l.output_tokens, cost_usd: l.cost_usd, ms: l.ms });
+  }
+  return rows;
+}
+
 /** Runs one step: its pass or fail, its time, its model spend and what it saw go to the record. */
 async function step(name: string, fn: (saw: Record<string, unknown>) => Promise<void>) {
   const saw: Record<string, unknown> = {};
   const usd0 = usage.total();
+  const rows0 = usage.rows();
   const t0 = Date.now();
   try {
     await fn(saw);
-    record.steps.push({ step: name, pass: true, ms: Date.now() - t0, spend_usd: +(usage.total() - usd0).toFixed(6), ...saw });
+    record.steps.push({ step: name, pass: true, ms: Date.now() - t0, spend_usd: +(usage.total() - usd0).toFixed(6), usage: usageDelta(rows0), ...saw });
   } catch (e) {
     const why = String((e as Error).message).split('\n')[0]!.slice(0, 300);
-    record.steps.push({ step: name, pass: false, ms: Date.now() - t0, spend_usd: +(usage.total() - usd0).toFixed(6), why, ...saw });
+    record.steps.push({ step: name, pass: false, ms: Date.now() - t0, spend_usd: +(usage.total() - usd0).toFixed(6), usage: usageDelta(rows0), why, ...saw });
     throw e;
   }
 }
@@ -90,12 +119,16 @@ function researchSaw(steps: RunTraceStep[], r: WidgetResult) {
     run_id: r.run_id,
     planner,
     planner_plan_used: !!planner && /^planner plan;/.test(planner),
+    plan_source: planner?.split(';')[0]?.replace(/^.*: /, '') ?? null,
+    window: own.length ? { first: own[0]!.at, last: own.at(-1)!.at, last_ms: own.at(-1)!.duration_ms } : null,
     math: math.map((x) => ({ status: x.status, ms: x.duration_ms, note: x.note, receipts: x.receipt_ids?.length ?? 0 })),
     engine_computed: math.at(-1)?.status === 'ok',
     planner_plan_fell_back: math.length > 1,
     numbers: r.numbers.map((n) => n.op),
     notes: own.filter((x) => x.note && x.step !== 'plan' && x.step !== 'math' && (x.step === 'guard' || x.status !== 'ok')).map((x) => ({ step: x.step, status: x.status, domain: x.source?.domain, note: x.note })),
     left_out: r.notes ?? [],
+    receipts: { numbers: r.numbers.length, in_result: r.receipts.length, distinct_ids: new Set(r.numbers.map((n) => n.receipt_id)).size, every_number_has_one: r.numbers.every((n) => r.receipts.some((x) => x.id === n.receipt_id)) },
+    summary: { step: own.filter((x) => x.step === 'summary').map((x) => ({ status: x.status, note: x.note })), chars: r.summary?.template.length ?? 0, banned_word: r.summary?.template.match(BANNED_WORDS)?.[0] ?? null },
   };
 }
 
@@ -105,12 +138,16 @@ async function databaseSaw() {
   try {
     const applied = (await sql<{ name: string }[]>`select name from board._migrations order by name`).map((m) => m.name);
     const [ix] = await sql<{ present: boolean }[]>`select to_regclass('board.run_requests_account_refresh') is not null as present`;
+    const created = [...(await sql<{ sandbox_id: string; kind: string; job_id: string; run_id: string; widget_id: string }[]>`
+      select entry->>'subject_id' as sandbox_id, entry->'ids'->>'kind' as kind, entry->'ids'->>'job_id' as job_id, entry->'ids'->>'run_id' as run_id, entry->'ids'->>'widget_id' as widget_id
+      from audit.chain where entry->>'action' = 'sandbox.created' order by seq`)];
     const kills = [...(await sql<{ sandbox_id: string; job_id: string; reason: string }[]>`
       select entry->>'subject_id' as sandbox_id, entry->'ids'->>'job_id' as job_id, entry->'ids'->>'reason' as reason
       from audit.chain where entry->>'action' = 'sandbox.killed' order by seq`)];
     return {
       board_migrations: applied,
       migration_0005_applied: applied.includes('0005_refresh_cap.sql') && !!ix?.present,
+      boxes: { browse: created.filter((b) => b.kind === 'browse').length, compute: created.filter((b) => b.kind === 'compute').length, created },
       kills,
       compute_killed_on_timeout: kills.filter((k) => !k.job_id?.includes(':read:') && /timeout/.test(k.reason ?? '')),
     };
@@ -127,6 +164,7 @@ beforeAll(async () => {
 afterAll(async () => {
   record.spend_usd = +usage.total().toFixed(6);
   record.by_role = usage.rows().map(({ role, model, calls, input_tokens, output_tokens, cost_usd }) => ({ role, model, calls, input_tokens, output_tokens, cost_usd }));
+  if (stack) record.model_calls = (() => { try { return modelCalls(); } catch (e) { return { error: String((e as Error).message).slice(0, 200) }; } })();
   if (stack) record.database = await databaseSaw().catch((e: Error) => ({ error: String(e.message).slice(0, 200) }));
   mkdirSync(OUT, { recursive: true });
   writeFileSync(join(OUT, `${RUN}.json`), JSON.stringify(record, null, 2) + '\n');
@@ -134,7 +172,7 @@ afterAll(async () => {
 }, 120_000);
 
 describe('e2e on the real pieces (live markets and news, Vultr models, real Chromium)', () => {
-  const s: { widget_id?: string; accepted_at?: number; event_key?: string; runs: string[] } = { runs: [] };
+  const s: { widget_id?: string; accepted_at?: number; event_key?: string; runs: string[]; signup_at?: string } = { runs: [] };
 
   it('0. caps: a call past the global or the account cap is refused before any real call', async () => {
     await step('0 caps', async (saw) => {
@@ -146,6 +184,7 @@ describe('e2e on the real pieces (live markets and news, Vultr models, real Chro
   it('1. sign up: the first board shows this weekend’s live games, priced', async () => {
     await step('1 sign up and first board', async (saw) => {
       const t0 = Date.now();
+      s.signup_at = new Date(t0).toISOString();
       await browser(EDGE.signup, { body: { email: 'trader@example.test', password: 'correct horse battery' } });
       const b: Board = await board();
       saw.signup_to_board_ms = Date.now() - t0;
@@ -290,6 +329,39 @@ describe('e2e on the real pieces (live markets and news, Vultr models, real Chro
       for (const n of r.numbers) expect(r.receipts.some((x) => x.id === n.receipt_id)).toBe(true);
     });
   }, 420_000);
+
+  // Data only, never a failed journey: the News card a new board starts at sign-up (A1.4.4), and how the numbers runs shared compute boxes (A1.4.3).
+  it('4n. recorded: the sign-up News run and the numbers batches', async () => {
+    try {
+      const b = await board();
+      const news = b.widgets.find((w) => w.spec.kind === 'display' && w.spec.type === 'news' && 'col' in w.spec.place && w.spec.widget_id !== s.widget_id);
+      if (news) {
+        const steps = (await browser(EDGE.trace, { params: { widget_id: news.spec.widget_id } })).steps;
+        const r = news.result;
+        record.signup_news = {
+          widget_id: news.spec.widget_id,
+          state: news.state,
+          result_kind: r?.kind ?? null,
+          signup_at: s.signup_at,
+          first_step_at: steps[0]?.at ?? null,
+          steps: steps.map((x) => ({ run_id: x.run_id, step: x.step, status: x.status, at: x.at, ms: x.duration_ms, domain: x.source?.domain, note: x.source ? undefined : x.note })),
+          research: r?.kind === 'research' ? researchSaw(steps, r) : null,
+          reads: r?.kind === 'research' ? r.sources?.map((x) => ({ domain: x.domain, status: x.status })) : null,
+        };
+      } else record.signup_news = { error: 'no default news widget on the board' };
+      const runs: { widget: string | false; run_id: string; sandbox: string | null; receipts: number; status: string }[] = [];
+      for (const w of b.widgets.filter((x) => x.spec.kind === 'display' && x.spec.widget_id !== s.widget_id && x.spec.widget_id !== news?.spec.widget_id)) {
+        for (const x of (await browser(EDGE.trace, { params: { widget_id: w.spec.widget_id } })).steps.filter((x) => x.step === 'math'))
+          runs.push({ widget: w.spec.kind === 'display' && w.spec.type, run_id: x.run_id, sandbox: x.sandbox?.sandbox_id ?? null, receipts: x.receipt_ids.length, status: x.status });
+      }
+      const boxes = new Map<string, number>();
+      for (const r of runs) if (r.sandbox) boxes.set(r.sandbox, (boxes.get(r.sandbox) ?? 0) + 1);
+      record.numbers_batches = { runs, runs_per_box: [...boxes.values()] };
+    } catch (e) {
+      record.signup_news ??= { error: String((e as Error).message).slice(0, 200) };
+      record.numbers_batches ??= { error: String((e as Error).message).slice(0, 200) };
+    }
+  }, 60_000);
 
   it('5. the Safety numbers count it, and audit’s verify says ok', async () => {
     await step('5 trust and audit', async (saw) => {
