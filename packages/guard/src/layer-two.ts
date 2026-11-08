@@ -1,6 +1,6 @@
 /**
- * Layer two: the decision model, through models with role `guard` (qwen3.8-flash-next first, then
- * mimo-v2.6-flash; `MODELS_ROLE_GUARD` overrides). It runs only on what layer one passed, and it can only add
+ * Layer two: the decision model, through models with role `guard` (mimo-v2.6-flash first, then
+ * deepseek-v4.1-flash-1017, picked by the A1.2.1 bake-off; `MODELS_ROLE_GUARD` overrides). It runs only on what layer one passed, and it can only add
  * reasons: it never lets through what layer one blocked. When the model errors or its answer can't be read, the guard
  * fails closed with reason `unchecked`.
  */

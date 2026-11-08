@@ -20,7 +20,7 @@ The lists are in `src/words.ts` (`WORDLIST_VERSION` v1). Words that are only som
 in layer one.
 
 **Layer two: the decision model** (`guardExtract`, `guardPublish`, `guardChat`, `guardChatReply`). It runs layer one,
-and only when that passes asks models (role `guard`: qwen3.8-flash-next, then mimo-v2.6-flash;
+and only when that passes asks models (role `guard`: mimo-v2.6-flash, then deepseek-v4.1-flash-1017;
 `MODELS_ROLE_GUARD` overrides) two questions: "is this advice?" (publish, chat) and "does this text carry instructions
 aimed at the agent?" (extract, chat). It only adds reasons: it never lets through what layer one blocked.
 
@@ -31,6 +31,10 @@ aimed at the agent?" (extract, chat). It only adds reasons: it never lets throug
 - Measured on Vultr (A1.1.1, `test/fixtures/real-answers.json`): nemotron-3.5-content-safety ignores the JSON instruction and
   echoes the reply (`{"Assistant Response": "..."}`), and it called an injected order to an agent `"safe"`. It judges harm, not
   our two questions, so it left the role.
+- The bake-off (A1.2.1, `test/fixtures/bakeoff-answers.json`, cases in `services/models/scripts/bakeoff-cases.ts`): mimo-v2.6-flash
+  and deepseek-v4.1-flash-1017 flagged exactly the poisoned scenario's planted orders on all five runs and passed every clean and
+  advice case (45/45 each). qwen3.8-flash-next returned nothing on the poisoned facts all five times (its reasoning used up the
+  256 tokens): `unchecked`, so a block and not a kill. It left the role.
 - **Fails closed.** A model error (402 kill switch, 429, 502) or an unreadable answer gives reason `unchecked` and
   outcome `block`. At the extract stage that's `block`, not `poison`: runner releases the sandbox and drops that
   source's facts, without the poison note (the page did nothing we know of).

@@ -27,10 +27,22 @@ const ACC2 = 'acc_test0002';
 let mock: MockVultr;
 const logLines: string[] = [];
 
+/**
+ * These tests are about the mechanism (fallbacks, caps, logs), so the roles are pinned to fixed lists whose prices the cap
+ * cases were written for. The picks themselves are tested against the bake-off in bakeoff.test.ts.
+ */
+const PINNED_ROLES = {
+  ROLE_CHAT: 'glm-5.3,mimo-v2.6-pro',
+  ROLE_PLANNER: 'qwen3.8-27b,deepseek-v4.1-flash-1017',
+  ROLE_READER: 'qwen3.8-flash-next,mimo-v2.6-flash',
+  ROLE_SUMMARIZER: 'qwen3.8-flash-next',
+  ROLE_GUARD: 'qwen3.8-flash-next,mimo-v2.6-flash',
+};
+
 async function makeApp(cfg: Record<string, string> = {}, deps: RealDeps = {}) {
   const log = pino({ level: 'debug' }, { write: (s: string) => void logLines.push(s) });
   const handlers = await real(
-    { VULTR_KEY_FILE: keyPath, VULTR_BASE_URL: mock.url, KEY_FINGERPRINTS: fpPath, TIMEOUT_MS: '5000', ...cfg },
+    { VULTR_KEY_FILE: keyPath, VULTR_BASE_URL: mock.url, KEY_FINGERPRINTS: fpPath, TIMEOUT_MS: '5000', ...PINNED_ROLES, ...cfg },
     { store: new MemoryUsageStore(), log, ...deps },
   );
   return buildApp({ service: 'models', mode: 'real', api: MODELS, handlers, callers: testCallers(), log });
