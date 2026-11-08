@@ -19,7 +19,7 @@ import {
   type Handlers,
   type Logger,
 } from '@app/service-kit';
-import { handleBoardNumbers } from './batch.ts';
+import { AccountBatches, handleBoardNumbers } from './batch.ts';
 import { handleRun, type RunnerDeps } from './run.ts';
 import { Scheduler, type OpenedFn } from './scheduler.ts';
 import { PgStore, connect, toRunState, type Store } from './store.ts';
@@ -34,11 +34,15 @@ export function getRunHandlers(store: Store): Handlers<typeof RUNNER> {
   };
 }
 
-/** One widget-runs job: a board's numbers batch (the scheduler saved one under this job id), or one widget's run. */
-export async function runJob(deps: RunnerDeps, job: WidgetRunJob, ctx: Parameters<typeof handleRun>[2]) {
+/**
+ * One widget-runs job: a board's numbers batch (the scheduler saved one under this job id), or one widget's run. With
+ * `together`, a numbers run shares its box with the account's other numbers runs in the worker at the same time.
+ */
+export async function runJob(deps: RunnerDeps, job: WidgetRunJob, ctx: Parameters<typeof handleRun>[2], together?: AccountBatches) {
   const batch = job.kind === 'numbers' && job.reason === 'schedule' ? await deps.store.batches.get(job.job_id) : null;
   if (!batch) {
-    const r = await handleRun(deps, job, ctx);
+    const slot = together && job.kind === 'numbers' ? together.join(job.account_id) : null;
+    const r = await (slot ? handleRun({ ...deps, batch: slot }, job, ctx).finally(() => slot.leave()) : handleRun(deps, job, ctx));
     return { run_id: r.run_id, status: r.status, runs: 1 };
   }
   const rs = await handleBoardNumbers(deps, job, ctx, batch.widget_ids);
@@ -56,6 +60,7 @@ export const openedFrom =
 
 /** The widget-runs worker: each job is one runJob on `deps`. `opts` is for tests (faster rules). */
 export function consumeWidgetRuns(deps: RunnerDeps, valkey: string, log: Logger, opts: Parameters<typeof createWorker>[4] = {}) {
+  const together = new AccountBatches();
   return createWorker(
     QUEUES.widgetRuns,
     valkey,
@@ -63,7 +68,7 @@ export function consumeWidgetRuns(deps: RunnerDeps, valkey: string, log: Logger,
     async (job, ctx) => {
       const t0 = Date.now();
       try {
-        const r = await runJob(deps, job, ctx);
+        const r = await runJob(deps, job, ctx, together);
         log.info({ job_id: job.job_id, run_id: r.run_id, status: r.status, runs: r.runs, ms: Date.now() - t0 }, 'run ended');
       } catch (e) {
         log.warn({ job_id: job.job_id, attempt: ctx.attempt, err: e instanceof Error ? e.name : 'error', msg: e instanceof Error ? e.message.slice(0, 200) : '' }, 'run did not finish');

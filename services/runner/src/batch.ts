@@ -29,19 +29,33 @@ interface Part {
   reject: (e: unknown) => void;
 }
 
-/** Collects the engine inputs of `n` runs and computes them in one box. */
+/**
+ * Collects the engine inputs of `n` runs (more can `join` until it fires) and computes them in one box. It fires when
+ * every member has handed its input in or left, and at least `gatherMs` after the first input; at the latest `waitMs`
+ * after the first input.
+ */
 export class ComputeBatch {
   /** undefined: not yet; null: finished without an input; a Part: waiting for the box. */
   private readonly parts: (Part | null | undefined)[];
-  private fired = false;
+  fired = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private firstAt: number | null = null;
   /** How many boxes this batch opened (tests and the load test read it). */
   boxes = 0;
   constructor(
     n: number,
     readonly waitMs: number = RUN_RULES.schedule.batchWaitMs,
+    readonly gatherMs = 0,
+    readonly onFire?: () => void,
   ) {
     this.parts = new Array(n).fill(undefined);
+  }
+
+  /** A new member's slot, or null when the batch has fired already. */
+  join(): (BatchSlot & { leave(): void }) | null {
+    if (this.fired) return null;
+    this.parts.push(undefined);
+    return this.slot(this.parts.length - 1);
   }
 
   /** Member i's slot: its compute goes in the batch; `leave` when its run ends (with or without an input). */
@@ -51,7 +65,11 @@ export class ComputeBatch {
         if (this.fired) return this.solo(run, spec, input);
         return new Promise<SbxJobStatus | null>((resolve, reject) => {
           this.parts[i] = { run, spec, input, resolve, reject };
-          this.timer ??= setTimeout(() => void this.fire(), this.waitMs);
+          if (this.firstAt === null) {
+            this.firstAt = Date.now();
+            this.timer = setTimeout(() => void this.fire(), this.waitMs);
+            if (this.gatherMs) setTimeout(() => this.maybeFire(), this.gatherMs);
+          }
           this.maybeFire();
         });
       },
@@ -63,7 +81,8 @@ export class ComputeBatch {
   }
 
   private maybeFire() {
-    if (!this.fired && this.parts.every((p) => p !== undefined)) void this.fire();
+    if (this.fired || this.firstAt === null || Date.now() - this.firstAt < this.gatherMs) return;
+    if (this.parts.every((p) => p !== undefined)) void this.fire();
   }
 
   private solo(run: ComputeRunner, spec: DisplaySpec, input: EngineInput) {
@@ -75,6 +94,7 @@ export class ComputeBatch {
     if (this.fired) return;
     this.fired = true;
     if (this.timer) clearTimeout(this.timer);
+    this.onFire?.();
     const parts = this.parts.flatMap((p, i) => (p ? [{ p, prefix: `b${i}_` }] : []));
     const fit = parts.filter(({ p, prefix }) => fits(p.input, prefix));
     // A widget whose ids don't fit under a prefix computes alone (none today: ids are short).
@@ -131,6 +151,25 @@ function sliceStatus(j: SbxJobStatus, prefix: string, other: boolean): SbxJobSta
   const out: SbxJobStatus = { ...j, ...(er?.success ? { compute_result: slice(er.data, prefix) } : {}) };
   if (other) out.trust_log = [];
   return out;
+}
+
+/**
+ * The numbers runs of one account that reach the worker together, outside a scheduled batch: a new board's first runs
+ * (one per display at sign-up) and accepts. Each joins the account's open batch, which gathers for
+ * RUN_RULES.schedule.gatherMs, so the worker's slots open one box per account at a time instead of one per run.
+ */
+export class AccountBatches {
+  private readonly open = new Map<string, ComputeBatch>();
+  constructor(readonly gatherMs: number = RUN_RULES.schedule.gatherMs) {}
+  join(account_id: string): BatchSlot & { leave(): void } {
+    const cur = this.open.get(account_id)?.join();
+    if (cur) return cur;
+    const b: ComputeBatch = new ComputeBatch(0, RUN_RULES.schedule.batchWaitMs, this.gatherMs, () => {
+      if (this.open.get(account_id) === b) this.open.delete(account_id);
+    });
+    this.open.set(account_id, b);
+    return b.join()!;
+  }
 }
 
 /**

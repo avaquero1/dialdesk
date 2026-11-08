@@ -43,6 +43,11 @@ export const RUN_RULES = {
      * most this long for every widget to have its inputs; a widget later than that computes alone.
      */
     batchWaitMs: 10_000,
+    /**
+     * Numbers runs of one account that reach the worker together (a new board's first runs: one per display at sign-up)
+     * share one box too: the first input waits this long for the others. It costs first paint 0.3 s.
+     */
+    gatherMs: 300,
   },
 } as const;
 

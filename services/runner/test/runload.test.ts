@@ -17,7 +17,7 @@ import { fake as boardFake } from '../../board/src/fake.ts';
 import { fake as connectionsFake } from '../../connections/src/fake.ts';
 import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { fake as modelsFake } from '../../models/src/fake.ts';
-import { ComputeBatch, merge, slice } from '../src/batch.ts';
+import { AccountBatches, ComputeBatch, merge, slice } from '../src/batch.ts';
 import { openedFrom, runJob } from '../src/real.ts';
 import { handleRun, type ComputeRunner, type RunnerDeps } from '../src/run.ts';
 import { Scheduler, everyS, nextWindow } from '../src/scheduler.ts';
@@ -240,7 +240,7 @@ const owner = new Map<string, string>();
  * Runs jobs `slots` at a time, as the widget-runs worker does (QUEUE_RULES concurrency). A busy answer puts the job
  * back after its wait without spending an attempt, as the queue does. Returns the other errors and the busy waits.
  */
-async function drain(d: RunnerDeps, jobs: WidgetRunJob[], slots = RUN_RULES.sandboxSlots) {
+async function drain(d: RunnerDeps, jobs: WidgetRunJob[], slots = RUN_RULES.sandboxSlots, together?: AccountBatches) {
   const queue = [...jobs];
   const errors: unknown[] = [];
   let busy = 0;
@@ -254,7 +254,7 @@ async function drain(d: RunnerDeps, jobs: WidgetRunJob[], slots = RUN_RULES.sand
           await new Promise((r) => setTimeout(r, 50));
           continue;
         }
-        await runJob(d, j, ctx()).catch(async (e) => {
+        await runJob(d, j, ctx(), together).catch(async (e) => {
           if (!(e instanceof SandboxBusy)) return void errors.push(e);
           busy++;
           waiting++;
@@ -322,6 +322,24 @@ describe.skipIf(!have)('runs fit the machine (stub sandbox-manager)', () => {
       expect(again.numbers.map((n) => [n.id, n.op, n.value])).toEqual(cur.numbers.map((n) => [n.id, n.op, n.value]));
     }
   }, 60_000);
+
+  it("sign-up: a new board's first numbers runs (one job per display) share boxes per account in the worker", async () => {
+    const boxes = new Map<string, number>();
+    const { d, store } = deps(boxes);
+    const users = await boards(5, new Scheduler(new MemoryStore(), async () => undefined));
+    const jobs = users.flatMap((b) =>
+      b.displays.map((w) => ({ job_id: `${w.spec.widget_id}:numbers:1794096000`, widget_id: w.spec.widget_id, account_id: b.account_id, kind: 'numbers' as const, window_start: 1794096000, reason: 'accept' as const })),
+    );
+    const { errors } = await drain(d, jobs, RUN_RULES.sandboxSlots, new AccountBatches());
+    expect(errors).toEqual([]);
+    const runs = numbersRuns(store);
+    expect(runs).toHaveLength(jobs.length);
+    expect(runs.filter((r) => r.status !== 'done')).toEqual([]);
+    const per = users.map((u) => boxes.get(u.account_id) ?? 0);
+    console.info(`A1.4.1 sign-up: ${JSON.stringify({ runs_per_board: users[0]!.displays.length, boxes_per_board: per })}`);
+    // Six worker slots: about one box per six runs of a board, never one per run.
+    expect(Math.max(...per)).toBeLessThanOrEqual(Math.ceil(users[0]!.displays.length / 2));
+  }, 120_000);
 
   it('load: twenty users ticked together run with no timeouts, at most a few boxes per board per tick (was one per display)', async () => {
     const t0 = Date.now();
