@@ -1,0 +1,81 @@
+{
+  "step": "A1.3.7",
+  "recorded_on": "2026-11-08",
+  "spend": {
+    "cap_usd": 0.05,
+    "spent_usd": 0.00023,
+    "stopped": null
+  },
+  "held_banned_word": 0,
+  "prompt": "Write two short sentences for a widget. You do math, not advice: never say buy, sell, bet or should.\nNever write a digit. Put numbers only as slots like {n1} (from \"numbers\") and quotes only as slots like {q1} (from \"facts\").\nUse plain words a grandpa reads once: say \"chance\", never \"implied probability\" or \"implied\"; say \"points\", never \"pts\"; never write \"EV\", \"sandbox\" or \"receipt\".\nAnswer one JSON object: {\"template\": \"...\"}.",
+  "input": {
+    "numbers": [
+      {
+        "slot": "n1",
+        "op": "implied_probability",
+        "unit": "probability"
+      },
+      {
+        "slot": "n2",
+        "op": "movement",
+        "unit": "points"
+      }
+    ],
+    "facts": [
+      {
+        "slot": "q1",
+        "claim": "The Bills' starting left tackle is listed questionable with a knee injury.",
+        "quote": "listed their starting left tackle as questionable"
+      },
+      {
+        "slot": "q2",
+        "claim": "Strong west winds are expected at kickoff in Orchard Park.",
+        "quote": "steady west winds of about 18 mph"
+      }
+    ]
+  },
+  "answers": [
+    {
+      "rep": 1,
+      "model": "glm-5.3-flash",
+      "usd": 3.6049999999999995e-05,
+      "content": "{\"template\": \"The chance here sits at {n1}. With the left tackle {q1} and {q2}, the line has moved {n2} points.\"}",
+      "banned": null
+    },
+    {
+      "rep": 2,
+      "model": "glm-5.3-flash",
+      "usd": 3.5e-05,
+      "content": "{\"template\": \"The chance here sits at {n1}. With {q1} and {q2}, the line has moved {n2} points.\"}",
+      "banned": null
+    },
+    {
+      "rep": 3,
+      "model": "glm-5.3-flash",
+      "usd": 4.41e-05,
+      "content": "{\"template\": \"The Bills' starting left tackle is {q1}, and steady west winds of about 18 mph are expected at kickoff. The chance here sits at {n1}, with the line having moved {n2} points.\"}",
+      "banned": null
+    },
+    {
+      "rep": 4,
+      "model": "glm-5.3-flash",
+      "usd": 3.6049999999999995e-05,
+      "content": "{\"template\": \"The chance here sits at {n1}. With the left tackle {q1} and {q2}, the line has moved {n2} points.\"}",
+      "banned": null
+    },
+    {
+      "rep": 5,
+      "model": "glm-5.3-flash",
+      "usd": 3.5e-05,
+      "content": "{\"template\": \"The chance here sits at {n1}. With {q1} and {q2}, the line has moved {n2} points.\"}",
+      "banned": null
+    },
+    {
+      "rep": 6,
+      "model": "glm-5.3-flash",
+      "usd": 4.41e-05,
+      "content": "{\"template\": \"The Bills' starting left tackle is {q1}, and steady west winds of about 18 mph are expected at kickoff. The chance here sits at {n1}, with the line having moved {n2} points.\"}",
+      "banned": null
+    }
+  ]
+}

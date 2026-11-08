@@ -56,7 +56,7 @@ const ANSWERS: Record<ModelRole, Partial<Record<FakeScenario, (b: CompleteBody) 
     }),
   },
   summarizer: {
-    clean: () => ({ content: JSON.stringify({ template: 'Implied probability {n1}; the exchanges differ by {n2}. {q1}' }), tool_calls: [] }),
+    clean: () => ({ content: JSON.stringify({ template: 'The chance is {n1}; the exchanges are {n2} apart. {q1}' }), tool_calls: [] }),
     advice: () => ({ content: JSON.stringify({ template: 'You should buy YES at {n1}. Lock it in.' }), tool_calls: [] }),
   },
   guard: {

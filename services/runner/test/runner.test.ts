@@ -1,7 +1,7 @@
 /**
  * runner's steps on the fakes (board, markets, models, audit) and the real sandbox-manager binary on its stub backend:
  * a numbers run, a research run with a poisoned page, the guard's `unchecked`, keep-the-last-clean-result, the slot
- * summary blocked for advice, busy and resume, the planner's plan checked against the catalog, the timeout, and the
+ * summary blocked for advice, the summary's banned words, busy and resume, the planner's plan checked against the catalog, the timeout, and the
  * scheduler. Needs target/debug/sandbox-manager (make check builds it first); without it the suite is skipped.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -384,6 +384,26 @@ describe.skipIf(!have)('runner', () => {
     const clean = rec.steps.filter((s) => s.step === 'extract' && s.status === 'ok');
     expect(clean.length).toBe(readerSaw.length);
     for (const s of clean) expect(s.sandbox!.state).toBe('released');
+  });
+
+  it('the summary step: "implied probability" becomes chance; a banned word costs only the summary, with the note', async () => {
+    const run = async (template: string) => {
+      const d = deps({ models: answering('summarizer', JSON.stringify({ template })) });
+      const { byTitle } = await freshBoard();
+      const w = byTitle('Bills news');
+      const rec = await handleRun(d, jobFor(w, 'research'), ctx());
+      return { rec, result: (await current(w)).result! };
+    };
+    const fixed = await run('Implied probability {n1}, and the implied_probability is {n1}.');
+    expect(fixed.result.summary!.template).toBe('Chance {n1}, and the chance is {n1}.');
+    expect(fixed.rec.steps.find((s) => s.step === 'summary')).toMatchObject({ status: 'ok', note: null });
+
+    const gone = await run('The sandbox read {q1}.');
+    expect(gone.result.summary).toBeNull();
+    expect(gone.result.facts.length).toBeGreaterThan(0);
+    expect(gone.result.numbers.length).toBeGreaterThan(0);
+    expect(gone.rec.status).not.toBe('failed');
+    expect(gone.rec.steps.find((s) => s.step === 'summary')).toMatchObject({ status: 'failed', note: 'summary blocked: banned_word' });
   });
 
   it("a planner plan with an arg name the engine doesn't know is refused up front for the default plan, in code", async () => {
