@@ -242,12 +242,12 @@ describe('Add, Settings, screenshots and the article count at phone size', () =>
     await settled(page);
     await shot(page, '6-settings-solid');
 
-    // The Look, from Settings: Light (dark is the default, so choosing it would save nothing).
+    // The Look, from Settings: Dark.
     await sheet().locator('[data-open-look]').tap();
-    await page.locator('.surface.sheet.is-open [data-mode-set="light"]').waitFor();
+    await page.locator('.surface.sheet.is-open [data-mode-set="dark"]').waitFor();
     await settled(page);
     const saved = page.waitForResponse((r) => r.url().endsWith('/api/look') && r.request().method() === 'PUT' && r.ok(), { timeout: 15_000 });
-    await page.locator('.surface.sheet.is-open [data-mode-set="light"]').tap();
+    await page.locator('.surface.sheet.is-open [data-mode-set="dark"]').tap();
     await saved;
     await page.keyboard.press('Escape');
     await settled(page);
@@ -255,12 +255,12 @@ describe('Add, Settings, screenshots and the article count at phone size', () =>
     await page.reload();
     await ready(page);
     await settled(page);
-    expect(await page.evaluate(() => ({ t: document.documentElement.dataset.transparency, m: document.documentElement.dataset.mode }))).toEqual({ t: 'reduced', m: 'light' });
+    expect(await page.evaluate(() => ({ t: document.documentElement.dataset.transparency, m: document.documentElement.dataset.mode }))).toEqual({ t: 'reduced', m: 'dark' });
     await tile('Settings').tap();
     await sheet().waitFor();
     await settled(page);
     expect(await sheet().locator('[data-toggle="transparency"]').getAttribute('aria-pressed')).toBe('true');
-    expect(await sheet().locator('#set-look').innerText()).toMatch(/· Light ·/);
+    expect(await sheet().locator('#set-look').innerText()).toMatch(/· Dark ·/);
     await shot(page, '7-settings-after-reload');
   });
 

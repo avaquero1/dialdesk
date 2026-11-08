@@ -36,4 +36,4 @@ export const LookPatch = Look.partial().strict();
 export type LookPatch = z.infer<typeof LookPatch>;
 
 /** A new visitor's look, and the first paint's (web/build.ts). The one line to change to switch the default. */
-export const DEFAULT_LOOK: Look = { theme: 'stadium-night', mode: 'dark', hue: null };
+export const DEFAULT_LOOK: Look = { theme: 'agent-mail', mode: 'system', hue: null };
