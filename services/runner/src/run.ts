@@ -974,6 +974,7 @@ export const SUMMARIZER_PROMPT = [
   'Write two short sentences for a widget. You do math, not advice: never say buy, sell, bet or should.',
   'Never write a digit. Put numbers only as slots like {n1} (from "numbers") and quotes only as slots like {q1} (from "facts").',
   'Use plain words a grandpa reads once: say "chance", never "implied probability" or "implied"; say "points", never "pts"; never write "EV", "sandbox" or "receipt".',
+  'A slot already shows its unit: never write percent, points or cents after it.',
   'Answer one JSON object: {"template": "..."}.',
 ].join('\n');
 
