@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { UsageRow, UsageStore } from '../../services/models/src/meter.ts';
 
-/** The most this step may spend on model calls (andre's brief for C2.1). */
+/** The most this step may spend on model calls (the operator's brief for C2.1). */
 export const STEP_LIMIT_USD = 1;
 
 export class StepUsageStore implements UsageStore {

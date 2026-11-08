@@ -1,5 +1,5 @@
 /**
- * Meeting point 1, "On siren, end to end" (C1.1): the whole journey on the real services, only the model faked.
+ * Meeting point 1, "On one machine, end to end" (C1.1): the whole journey on the real services, only the model faked.
  * `make e2e-real` brings up Postgres, Valkey and the fixture site (Compose project vha-e2e-real), then this file starts
  * sandbox-manager on the docker backend and the nine services in real mode (e2e/real/stack.ts) and drives edge's
  * browser API the way the web app does: sign up, the first board, the chat, the proposals, the runs on BullMQ, the

@@ -7,8 +7,7 @@
  *
  *   WEB_URL (default: this worktree's stack, web/test/stack.ts)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR
  */
-import { existsSync, mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,8 +17,7 @@ import { sampleResult } from '@app/testkit';
 import { numbersRun, type Made } from './display-results.ts';
 import { WEB_URL, stackEnv } from './stack.ts';
 
-const EVIDENCE = join(homedir(), 'siren/domains/vultr/blast-radius-zero/planning/evidence');
-const SHOTS = process.env.SHOTS_DIR ?? (existsSync(EVIDENCE) ? join(EVIDENCE, 'web-w1-5-3') : join(import.meta.dirname, '.shots'));
+const SHOTS = process.env.SHOTS_DIR ?? join(import.meta.dirname, '.shots');
 mkdirSync(SHOTS, { recursive: true });
 
 let browser: Browser;

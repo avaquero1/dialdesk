@@ -160,7 +160,7 @@ export function run(argv: string[], env: Env, print: (s: string) => void): numbe
     const auditPem = keep('audit/signing-key', pem);
     const master = keep('connections/master', () => randomBytes(32).toString('base64') + '\n');
 
-    // Files handed in by andre or deploy.sh: copied when given, else an existing copy is kept, else empty.
+    // Files handed in by the operator or deploy.sh: copied when given, else an existing copy is kept, else empty.
     const copied = (rel: string, src: string | undefined, what: string, check?: (p: string) => void) => {
       if (src) {
         if (!existsSync(src)) {

@@ -7,7 +7,6 @@
  *   node --import tsx services/markets/scripts/record-live.ts [nfl-event-key]
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { KALSHI_BASE } from '../src/kalshi.ts';
@@ -99,8 +98,8 @@ for (const [rel, url] of feeds) {
 }
 
 // Brave: only with the key, and only links, dates and hosts.
-const keyFile = process.env.MARKETS_BRAVE_KEY_FILE ?? join(homedir(), '.config/siren/secrets/brave-search');
-if (existsSync(keyFile)) {
+const keyFile = process.env.MARKETS_BRAVE_KEY_FILE;
+if (keyFile && existsSync(keyFile)) {
   const q = `${game.away.name} ${game.home.name} ${game.league.toUpperCase()}`;
   const r = (await json(`${BRAVE_NEWS}?q=${encodeURIComponent(q)}&count=20&freshness=pw&country=us&search_lang=en&spellcheck=0`, {
     'x-subscription-token': readFileSync(keyFile, 'utf8').trim(),

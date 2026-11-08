@@ -10,11 +10,10 @@
  * - a note from the guard's left-out facts (A1.3.6) shows on the card.
  *
  *   WEB_URL (default: this worktree's stack, web/test/stack.ts)   CHROMIUM (default /usr/bin/chromium)
- *   SHOTS_DIR (default ~/siren/domains/vultr/blast-radius-zero/planning/evidence/web-w1-2-2 when it exists, else web/test/.shots)
+ *   SHOTS_DIR (default web/test/.shots)
  */
 import { generateKeyPairSync } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -24,8 +23,7 @@ import { clientFromEnv } from '@app/service-kit';
 import { stackRunner, type StackRunner } from './stack-runner.ts';
 import { WEB_URL, stackEnv } from './stack.ts';
 
-const EVIDENCE = join(homedir(), 'siren/domains/vultr/blast-radius-zero/planning/evidence');
-const SHOTS = process.env.SHOTS_DIR ?? (existsSync(EVIDENCE) ? join(EVIDENCE, 'web-w1-2-2') : join(import.meta.dirname, '.shots'));
+const SHOTS = process.env.SHOTS_DIR ?? join(import.meta.dirname, '.shots');
 mkdirSync(SHOTS, { recursive: true });
 const PEM = generateKeyPairSync('ed25519').privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
 /** Words only the poisoned page has (its hidden orders and its headline): none may reach the screen. */

@@ -1,9 +1,7 @@
-# The same gate as `make check`. Nothing is pushed yet; this runs once the repo is public.
+# The same gate as `make check`. Manual only: start it from the Actions tab. It has not been proven on a clean runner.
 name: check
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
