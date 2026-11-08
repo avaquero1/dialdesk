@@ -834,6 +834,21 @@
   },
   {
     "service": "markets",
+    "name": "resolved",
+    "method": "GET",
+    "path": "/resolved",
+    "callers": [
+      "runner"
+    ],
+    "status": 200,
+    "errors": [
+      404,
+      503
+    ],
+    "summary": "Settled markets of one kind this season (a league's game winners), for base rates. 404: a league markets doesn't cover."
+  },
+  {
+    "service": "markets",
     "name": "event",
     "method": "GET",
     "path": "/events/:event_key",

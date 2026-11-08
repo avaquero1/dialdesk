@@ -156,10 +156,10 @@ export const WIDGET_CATALOG: WidgetCatalog = {
     {
       type: 'probability',
       title: 'Market',
-      description: 'One market on both exchanges, a 7-day line, and EV at your probability.',
+      description: 'One market on both exchanges, a 7-day line, EV at your probability, and base rates from settled games.',
       default_size: 'M',
       sizes: ['S', 'M', 'L'],
-      engine_ops: ['implied_probability', 'expected_value', 'movement', 'price_at'],
+      engine_ops: ['implied_probability', 'expected_value', 'movement', 'price_at', 'base_rate_history'],
       params: ['event_keys', 'user_probability', 'window_s'],
       needs_markets: true,
       research: false,

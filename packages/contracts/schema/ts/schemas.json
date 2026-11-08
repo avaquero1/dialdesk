@@ -2079,6 +2079,15 @@
           "additionalProperties": false
         }
       },
+      "notes": {
+        "description": "plain words, no digits, for a number the widget would show and does not (e.g. a base rate whose sample is too small)",
+        "maxItems": 8,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
       "verdict_id": {
         "type": "string",
         "pattern": "^vrd_[A-Za-z0-9]{8,32}$",

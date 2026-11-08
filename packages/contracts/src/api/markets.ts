@@ -51,6 +51,44 @@ export const GamePairing = z.discriminatedUnion('paired', [
 ]);
 export type GamePairing = z.infer<typeof GamePairing>;
 
+/**
+ * One settled game-winner market from an exchange's history: the YES team's price before the game and how it resolved.
+ * Only games that resolved YES or NO are records (a tie is counted in left_out), so each one fits the engine's history.
+ */
+export const ResolvedRecord = z
+  .object({
+    market_id: MarketId,
+    event_key: EventKey,
+    home: z.boolean().describe('true when YES is the home team winning'),
+    t: z.number().int().describe('unix seconds: when price_cents was taken, the last hourly price before the start'),
+    price_cents: z.number().min(0).max(100).describe('the YES price before the game started'),
+    outcome: z.union([z.literal(0), z.literal(1)]).describe('1 when YES won'),
+  })
+  .strict();
+export type ResolvedRecord = z.infer<typeof ResolvedRecord>;
+
+export const ResolvedKind = z.enum(['game_winner']).describe('which kind of market: game_winner = "this team wins the game"');
+
+export const ResolvedHistory = z
+  .object({
+    league: League,
+    kind: ResolvedKind,
+    exchange: Exchange,
+    series: z.string().max(40).describe("the exchange's own series, e.g. KXNFLGAME"),
+    season_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('the first game day counted (ET), this season'),
+    records: z.array(ResolvedRecord).describe('both teams\' markets of each game, oldest first'),
+    left_out: z
+      .object({
+        ties: z.number().int().min(0).describe('games that resolved neither YES nor NO'),
+        no_price: z.number().int().min(0).describe('markets with no price before the start'),
+        pending: z.number().int().min(0).describe('markets whose prices markets has not fetched yet (it fetches them politely, a day at a time)'),
+      })
+      .strict(),
+    as_of: Timestamp.describe('when the list of settled markets was read'),
+  })
+  .strict();
+export type ResolvedHistory = z.infer<typeof ResolvedHistory>;
+
 const mid = z.object({ market_id: MarketId });
 // 503: the exchange (or every source) is down and markets has nothing cached for it yet. With a cached copy it answers
 // 200 with `stale: true` instead.
@@ -83,6 +121,15 @@ export const MARKETS = api('markets', {
     response: z.object({ market_id: MarketId, points: z.array(PricePoint), as_of: Timestamp }).strict(),
     errors: [404, 503],
     summary: 'Price history for movement, volatility and the 7-day line.',
+  },
+  resolved: {
+    method: 'GET',
+    path: '/resolved',
+    callers: ['runner'],
+    query: z.object({ league: League, kind: ResolvedKind.default('game_winner') }),
+    response: ResolvedHistory,
+    errors: [404, 503],
+    summary: "Settled markets of one kind this season (a league's game winners), for base rates. 404: a league markets doesn't cover.",
   },
   event: {
     method: 'GET',

@@ -124,6 +124,11 @@ export const WidgetResult = z
     summary: SlotSummary.nullable().describe('null in a numbers run and in phase one of publish'),
     sources: z.array(ResultSource),
     blocked: z.array(BlockedItem),
+    notes: z
+      .array(z.string().max(200))
+      .max(8)
+      .optional()
+      .describe('plain words, no digits, for a number the widget would show and does not (e.g. a base rate whose sample is too small)'),
     verdict_id: VerdictId,
   })
   .strict();
