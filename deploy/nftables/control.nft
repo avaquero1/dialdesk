@@ -62,6 +62,9 @@ table inet vha {
 		type filter hook forward priority filter - 10; policy drop;
 		ct state established,related accept
 		ct state invalid drop
+		# The services talking to each other on the internal `apps` network: Docker's br_netfilter sends bridged packets
+		# through this chain too. Same bridge in and out, so nothing here reaches the outside.
+		iifname "vha-apps" oifname "vha-apps" accept
 		# HTTPS in: Docker has already rewritten the address to caddy's.
 		oifname "vha-egress" ip daddr $CADDY_IP tcp dport 443 accept
 		# Image builds on this VM (BuildKit RUN steps use the default bridge). No service container joins docker0.

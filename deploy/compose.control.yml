@@ -247,6 +247,11 @@ services:
 networks:
   apps:
     internal: true
+    driver: bridge
+    driver_opts:
+      # A fixed bridge name: control.nft's forward chain lets only this network's own traffic through (br_netfilter
+      # sends bridged packets through that chain too).
+      com.docker.network.bridge.name: vha-apps
   egress:
     driver: bridge
     driver_opts:

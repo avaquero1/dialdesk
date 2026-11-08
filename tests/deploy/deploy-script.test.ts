@@ -302,3 +302,20 @@ describe('control.nft', () => {
     expect(nft).toMatch(/iifname \$PUBLIC_IF ip saddr \$ADMIN_IP tcp dport 22 accept/);
   });
 });
+
+describe('control.nft and the apps network', () => {
+  const nft = readFileSync(join(root, 'deploy/nftables/control.nft'), 'utf8');
+  const compose = readFileSync(join(root, 'deploy/compose.control.yml'), 'utf8');
+  const apps = /^ {2}apps:\n((?: {4,}.*\n)+)/m.exec(compose)?.[1] ?? '';
+  const forward = /chain forward \{([\s\S]*?)\n\t\}/.exec(nft)?.[1] ?? '';
+
+  it('the apps network is internal and its bridge has the name the firewall matches', () => {
+    expect(apps).toMatch(/internal: true/);
+    expect(apps).toMatch(/com\.docker\.network\.bridge\.name: vha-apps/);
+  });
+
+  it("the forward chain lets the apps bridge's own traffic through (br_netfilter sends bridged packets through it), and only that", () => {
+    const rules = forward.split('\n').filter((l) => l.includes('vha-apps') && !l.trim().startsWith('#'));
+    expect(rules.map((l) => l.trim())).toEqual(['iifname "vha-apps" oifname "vha-apps" accept']);
+  });
+});
