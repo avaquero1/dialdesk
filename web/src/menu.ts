@@ -25,8 +25,8 @@ export const LABELS: Record<MenuAction, string> = {
   remove: 'Remove',
 };
 const ORDER: MenuAction[] = ['agent', 'refresh', 'size', 'how', 'move', 'clear', 'remove'];
-/** Rows a later step wires (the chat in W1.3, the receipts trail in W1.2): greyed on every tile until then. */
-export const NOT_YET: ReadonlySet<MenuAction> = new Set(['agent', 'how']);
+/** Rows a later step wires (the receipts trail in W1.2): greyed on every tile until then. */
+export const NOT_YET: ReadonlySet<MenuAction> = new Set(['how']);
 
 /** Every size in the same order; the ones the catalog doesn't allow for this display are off. */
 export function sizesFor(w: Widget): { size: Size; on: boolean; cur: boolean }[] {
@@ -44,7 +44,7 @@ export function foldersFor(w: Widget, all: Iterable<Widget>): Widget[] {
 export function menuRows(w: Widget, all: Iterable<Widget>): MenuRow[] {
   const display = w.spec.kind === 'display';
   const on: Record<MenuAction, boolean> = {
-    agent: false,
+    agent: display, // the agent tunes displays (tune_widget); apps and folders it can't change
     refresh: display && w.state !== 'refreshing',
     size: display && sizesFor(w).some((z) => z.on),
     how: false,

@@ -110,7 +110,7 @@ describe('the ⋯ menu at phone size', () => {
     }
     const seven = ['Change it with the agent', 'Refresh now', 'Size', 'How we got this', 'Move to a folder', 'Clear all', 'Remove'];
     for (const s of Object.values(seen)) expect(s.labels).toEqual(seven);
-    expect(seen[T.market]!.off).toEqual(['Change it with the agent', 'How we got this']);
+    expect(seen[T.market]!.off).toEqual(['How we got this']);
     expect(seen[T.app]!.off).toEqual(['Change it with the agent', 'Refresh now', 'Size', 'How we got this', 'Clear all']);
     expect(seen[T.folder1]!.off).toEqual(['Change it with the agent', 'Refresh now', 'Size', 'How we got this', 'Move to a folder', 'Clear all']);
   });

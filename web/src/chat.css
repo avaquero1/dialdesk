@@ -9,6 +9,17 @@
 .msg--error { background: var(--field); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--attention) 40%, transparent); }
 .tool-chip--refused { opacity: .7; }
 
+/* ---- proposals and look changes (W1.3.2): a question with two buttons; what the tap did fades in ---- */
+.chip-ask { display: grid; gap: 8px; width: 100%; padding: 10px 12px; border-radius: 16px; background: var(--glass-chip-bg);
+  box-shadow: inset 0 1px 0 var(--glass-chip-top), inset 0 0 0 1px var(--glass-chip-rim); }
+.chip-q { font-weight: 600; color: var(--text); }
+.chip-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip-ask.is-busy { opacity: .6; }
+.chip-note { font-size: 12.5px; color: var(--text-2); }
+.chip-said { display: inline-flex; align-items: center; min-height: 28px; font-weight: 600; color: var(--text-2); }
+.chip-undo { align-self: center; }
+.msg .msg-row.is-new { animation: chat-fade 260ms ease both; }
+
 /* ---- the agent at work: a calm shimmer over two soft bars, never a typing spinner ---- */
 .msg--working { width: 168px; height: 52px; overflow: hidden; display: grid; align-content: center; gap: 8px; }
 .chat-bar { display: block; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--text) 12%, transparent); }
@@ -76,6 +87,7 @@ html[data-layout="phone"] .chat:not(.is-open) .chat-head, html[data-layout="phon
 html[data-layout="phone"] .chat:not(.is-open) .chat-quick { visibility: hidden; transition: opacity 140ms ease, transform 140ms ease, visibility 0s linear 140ms; }
 html[data-layout="phone"] .chat-quick .chat-pick { height: 44px; padding: 0 18px; border-radius: 22px; font-size: 15px; }
 html[data-layout="phone"] .msg { font-size: 16px; }
+html[data-layout="phone"] .msg-row .btn { height: 44px; padding: 0 18px; font-size: 15px; }
 html[data-layout="phone"] .chat-form input { font-size: 16px; }
 /* the pill sits clear of the last row's ⋯ buttons: the board scrolls a little past them */
 html[data-layout="phone"] .board-wrap { padding-bottom: 34px; }

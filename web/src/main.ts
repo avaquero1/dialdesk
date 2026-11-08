@@ -8,7 +8,7 @@ import { $, finishAnimations, raf2, root, wait } from './dom.ts';
 import { ApiError, api, setApiHooks } from './api.ts';
 import { showAuth } from './auth.ts';
 import { EL, S, bindBoard, buildLens, desktopPlaces, isDragging, layoutAll, mount, reconcile, shimmer, updateRefraction } from './board.ts';
-import { closeChat, initChat } from './chat.ts';
+import { askAbout, closeChat, initChat } from './chat.ts';
 import { fillIcons } from './icons.ts';
 import { Live } from './live.ts';
 import { initLook, lookFromServer } from './look.ts';
@@ -138,9 +138,19 @@ async function start(a: Account) {
   const b = await api.board();
   mount(b.widgets);
   bindBoard({ openMenu, openApp, openFolder, saveOrder, closeSurface });
-  initSurfaces({ account: () => account, logout, closeChat, menuAction });
+  initSurfaces({
+    account: () => account,
+    logout,
+    closeChat,
+    // "Change it with the agent": the chat, with the widget named in the input.
+    menuAction: (id, act, arg) => {
+      if (act !== 'agent') return menuAction(id, act, arg);
+      closeSurface();
+      askAbout(S.widgets.get(id)?.spec.title ?? 'this widget');
+    },
+  });
   initActions();
-  initChat(a, { relayout: () => requestAnimationFrame(() => layoutAll()) });
+  initChat(a, { relayout: () => requestAnimationFrame(() => layoutAll()), pending: b.pending.map((p) => p.proposal_id), boardChanged: () => refetchSoon(0) });
   live = new Live({
     onEvent,
     onReconnect: () => refetchSoon(0),

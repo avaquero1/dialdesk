@@ -2,8 +2,8 @@
  * The chat in a real browser, on the local stack (`make web-e2e`): the desktop panel and the phone pill open and
  * close, a message goes out through edge and the agent's guarded reply comes back whole (a calm shimmer while it
  * works), the history reloads with the board, the first visit's picks render and a tap sends one, and a limit shows
- * a plain line. The picks and the errors come from page.route (the stack runs agent's fake, which sends no picks;
- * the real agent on the models fake does), everything else from the stack.
+ * a plain line. The errors and the slow reply come from page.route; everything else, the picks too, from the stack
+ * (the real agent on the models fake).
  *
  *   WEB_URL (default http://localhost:8490)   CHROMIUM (default /usr/bin/chromium)   SHOTS_DIR (default web/test/.shots)
  */
@@ -57,11 +57,6 @@ async function say(page: Page, text: string) {
   return (await lastAgent(page).innerText()).trim();
 }
 
-const reply = (text: string, picks?: string[]) => ({
-  conversation_id: 'cnv_routedtest01',
-  turn: { turn_id: `trn_routed${Math.random().toString(36).slice(2, 10)}`, role: 'agent', text, chips: [], verdict_id: 'vrd_routedtest01', at: new Date().toISOString(), ...(picks && { picks }) },
-});
-
 beforeAll(async () => {
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? '/usr/bin/chromium', headless: true });
 });
@@ -96,9 +91,9 @@ describe('the chat with the agent', () => {
 
     // The guard: advice wording never reaches the screen; the fixed line does.
     expect(await say(page, 'advice-test')).toBe(BLOCKED_CHAT_LINE);
-    // A tool chip renders under the reply.
+    // The proposals render under the reply, each a question with [Add] [Not now].
     expect(await say(page, 'Chiefs at Bills')).toContain('Chiefs at Bills');
-    expect(await lastAgent(page).locator('.tool-chip').count()).toBeGreaterThan(0);
+    expect(await lastAgent(page).locator('.chip-ask').count()).toBeGreaterThan(0);
     await settled(page);
     await page.screenshot({ path: join(SHOTS, 'desktop-chat.png') });
 
@@ -194,24 +189,18 @@ describe('the chat with the agent', () => {
   });
 
   it('the first visit on a phone: leagues to tap, then teams; a tap sends the pick', async () => {
-    const ctx = await browser.newContext({ ...PHONE, colorScheme: 'light', storageState: session });
-    const page = await ctx.newPage();
+    const ctx = await browser.newContext({ ...PHONE, colorScheme: 'light' });
+    const page = await open(ctx);
     const sent: string[] = [];
-    await page.route('**/api/chat/*', (r) => r.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found","message":"no such conversation"}' }));
-    await page.route('**/api/chat', (r) => {
-      const m = (r.request().postDataJSON() as { message: string }).message;
-      sent.push(m);
-      if (m === 'Hi') return r.fulfill({ json: reply('Hi. Which teams or markets do you follow?', ['NFL', 'NBA']) });
-      if (m === 'NFL') return r.fulfill({ json: reply('Which teams?', ['Bills', 'Chiefs', 'Cowboys', 'Eagles']) });
-      return r.fulfill({ json: reply('Got it.') });
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && r.url().endsWith('/api/chat')) sent.push((r.postDataJSON() as { message: string }).message);
     });
-    page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
-    await page.goto(URL0 + '/');
+    await page.getByRole('button', { name: 'Try it as a guest' }).tap();
     await ready(page);
     await page.locator('#chat-input').tap();
     await page.waitForFunction(() => document.querySelector('#chat')!.classList.contains('is-open'));
     const picks = page.locator('#chat-quick .chat-pick');
-    await expect.poll(() => picks.allInnerTexts()).toEqual(['NFL', 'NBA']);
+    await expect.poll(() => picks.allInnerTexts(), { timeout: 20_000 }).toContain('NFL');
     expect(await lastAgent(page).innerText()).toBe('Hi. Which teams or markets do you follow?');
     expect(await page.locator('#chat-log .msg--me').count()).toBe(0);
     const pb = (await picks.first().boundingBox())!;
@@ -219,15 +208,16 @@ describe('the chat with the agent', () => {
     await settled(page);
     await page.screenshot({ path: join(SHOTS, 'phone-first-visit-leagues.png') });
 
-    await picks.first().tap();
-    await expect.poll(() => picks.allInnerTexts()).toEqual(['Bills', 'Chiefs', 'Cowboys', 'Eagles']);
+    await picks.filter({ hasText: /^NFL$/ }).tap();
+    await expect.poll(() => picks.allInnerTexts(), { timeout: 20_000 }).toContain('Bills');
+    expect(await picks.allInnerTexts()).not.toContain('NFL');
     expect(sent).toEqual(['Hi', 'NFL']);
     expect(await page.locator('#chat-log .msg--me').last().innerText()).toBe('NFL');
     await settled(page);
     await page.screenshot({ path: join(SHOTS, 'phone-first-visit-teams.png') });
-    await picks.filter({ hasText: 'Bills' }).tap();
-    await expect.poll(() => picks.count()).toBe(0);
-    expect(sent).toEqual(['Hi', 'NFL', 'Bills']);
+    await picks.filter({ hasText: /^Bills$/ }).tap();
+    await expect.poll(() => sent).toEqual(['Hi', 'NFL', 'Bills']);
+    await expect.poll(() => picks.count(), { timeout: 20_000 }).toBe(0);
     await ctx.close();
   });
 

@@ -3,7 +3,7 @@
  * Every state-changing call carries the page's Origin (the browser adds it) and edge checks it.
  * Any route may answer 429 (rate limits) or 413 (body cap): both become a notice, never a crash.
  */
-import type { Account, Board, ChatReply, ChatTurn, Look, Widget } from '@app/contracts';
+import type { Account, Board, ChatReply, ChatTurn, Look, Proposal, Widget } from '@app/contracts';
 
 export type { Account, Board, Look, Widget };
 
@@ -90,6 +90,9 @@ export const api = {
   remove: (id: string, o: { keepalive?: boolean } = {}) => call<{ ok: true }>('DELETE', `/api/widgets/${encodeURIComponent(id)}`, undefined, o),
   chat: (conversation_id: string | null, message: string) =>
     call<ChatReply>('POST', '/api/chat', { conversation_id, widget_id: null, message }, { quiet: true }),
+  // A proposal chip's [Add] and [Not now]. quiet: the chip says what went wrong, not the global notice.
+  accept: (id: string) => call<{ proposal: Proposal; widgets: Widget[] }>('POST', `/api/proposals/${encodeURIComponent(id)}/accept`, {}, { quiet: true }),
+  reject: (id: string) => call<Proposal>('POST', `/api/proposals/${encodeURIComponent(id)}/reject`, {}, { quiet: true }),
   conversation: (id: string) =>
     call<{ conversation_id: string; turns: ChatTurn[] }>('GET', `/api/chat/${encodeURIComponent(id)}`, undefined, { quiet: true }),
 };

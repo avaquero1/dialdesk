@@ -6,16 +6,36 @@
  *
  * The first visit sends the opener unseen, so the agent's greeting comes first, with its picks (leagues, then teams)
  * to tap. A tap sends the pick's text. The agent's words are shown as they come, always escaped.
- * Not here yet (W1.3.2): [Add] [Not now] on proposals and applying the look from a chip.
+ * A proposal is a question with two buttons, "Add 'Chiefs at Bills news'?" [Add] [Not now]: nothing changes without the
+ * tap. Add accepts it through edge and the widgets pour in on the board; Not now rejects it. A look change (set_look)
+ * applies live as the reply arrives, is saved through edge, and offers [Undo], which puts back the theme, mode and hue
+ * from before it. "Change it with the agent" (the ⋯ menu) opens the chat with the widget named in the input.
  *
  * Motion: only transform and opacity. The phone sheet's glass grows from the pill's height by scaleY while the pill's
  * glass fades; the words rise after the shape. Nothing moves inside the glass at rest.
  */
-import type { Account } from '@app/contracts';
+import type { Account, Look } from '@app/contracts';
 import { $, clamp, esc, mk, reduced } from './dom.ts';
 import { ApiError, api } from './api.ts';
 import { S } from './board.ts';
-import { OPENER, currentPicks, emptyChat, fail, fromHistory, receive, send, type ChatState, type Line, type Turn } from './chat-state.ts';
+import {
+  OPENER,
+  chipView,
+  currentPicks,
+  decide,
+  emptyChat,
+  fail,
+  fromHistory,
+  lookChange,
+  receive,
+  send,
+  undoLook,
+  type ChatState,
+  type ChipView,
+  type Line,
+  type Turn,
+} from './chat-state.ts';
+import { L, setLook } from './look.ts';
 import { closeSurface, surfaceOpen } from './surfaces.ts';
 
 const PILL_H = 58;
@@ -30,7 +50,12 @@ let scrimChat = false;
 let st: ChatState = emptyChat();
 let key = '';
 let relayout: () => void = () => {};
+let boardChanged: () => void = () => {};
+let pendingAtLoad: ReadonlySet<string> | undefined;
+/** The look from before the change [Undo] can take back now. */
+let lookBefore: Look | null = null;
 const shown = new Map<string, HTMLElement>();
+const drawn = new Map<string, string>();
 
 const remember = (id: string | null) => {
   try {
@@ -48,7 +73,15 @@ const recalled = () => {
   }
 };
 
-export function initChat(a: Account, o: { relayout: () => void }) {
+export interface ChatHooks {
+  relayout: () => void;
+  /** The proposals the board holds as pending at load: older proposal chips show without buttons. */
+  pending: readonly string[];
+  /** A proposal was accepted: fetch the board, so the widgets pour in. */
+  boardChanged: () => void;
+}
+
+export function initChat(a: Account, o: ChatHooks) {
   chat = $('#chat');
   scrim = $('#scrim');
   log = $('#chat-log');
@@ -56,6 +89,8 @@ export function initChat(a: Account, o: { relayout: () => void }) {
   input = $<HTMLInputElement>('#chat-input');
   key = `chat:${a.account_id}`;
   relayout = o.relayout;
+  boardChanged = o.boardChanged;
+  pendingAtLoad = new Set(o.pending);
   // The phone's two glass layers (the pill and the sheet), behind the words.
   chat.prepend(mk('i', 'chat-glass chat-glass--sheet'), mk('i', 'chat-glass chat-glass--pill'));
   fab = mk('button', 'chat-fab', '<i class="agent-bead"></i><span>Ask your agent…</span>');
@@ -83,6 +118,12 @@ export function initChat(a: Account, o: { relayout: () => void }) {
     const b = (e.target as Element).closest<HTMLButtonElement>('button[data-pick]');
     if (b) void submit(b.dataset.pick!);
   });
+  log.addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('button[data-chip]');
+    if (!b || b.disabled) return;
+    if (b.dataset.chip === 'undo') return undoLookChange();
+    void answer(b.dataset.pid!, b.dataset.chip === 'add');
+  });
   void load();
 }
 
@@ -92,7 +133,7 @@ async function load() {
   if (id) {
     try {
       const c = await api.conversation(id);
-      st = fromHistory(c.conversation_id, c.turns as Turn[]);
+      st = fromHistory(c.conversation_id, c.turns as Turn[], pendingAtLoad);
       render();
       return;
     } catch (e) {
@@ -120,6 +161,11 @@ async function turn(text: string, visible: boolean) {
     const r = await api.chat(st.conversationId, text);
     st = receive(st, r.conversation_id, r.turn as Turn);
     remember(r.conversation_id);
+    const look = lookChange(r.turn as Turn);
+    if (look) {
+      lookBefore = { theme: L.theme, mode: L.mode, hue: L.hue };
+      setLook(look); // live, and saved through edge
+    }
   } catch (e) {
     const err = e instanceof ApiError ? e : { status: -1 };
     if (err instanceof ApiError && err.code === 'bad_conversation') {
@@ -132,10 +178,62 @@ async function turn(text: string, visible: boolean) {
   render();
 }
 
+/** [Add] or [Not now] on a proposal: the call goes to edge; only then does the board change. */
+async function answer(proposalId: string, add: boolean) {
+  const d = st.decided[proposalId];
+  if (d === 'busy' || d === 'accepted' || d === 'rejected' || d === 'gone') return;
+  st = decide(st, proposalId, 'busy');
+  render();
+  try {
+    await (add ? api.accept(proposalId) : api.reject(proposalId));
+    st = decide(st, proposalId, add ? 'accepted' : 'rejected');
+    if (add) boardChanged();
+  } catch (e) {
+    // 409: decided already (another tab); 404: no longer there. Either way the buttons go.
+    const gone = e instanceof ApiError && (e.status === 409 || e.status === 404);
+    st = decide(st, proposalId, gone ? 'gone' : 'failed');
+    if (gone && add) boardChanged();
+  }
+  render();
+}
+
+/** [Undo] on a look change: the theme, mode and hue from before it, saved through edge. */
+function undoLookChange() {
+  if (!lookBefore || !st.undoLine) return;
+  setLook(lookBefore);
+  lookBefore = null;
+  st = undoLook(st);
+  render();
+}
+
+function chipHtml(v: ChipView): string {
+  switch (v.kind) {
+    case 'ask': {
+      const off = v.busy ? ' disabled' : '';
+      const pid = esc(v.proposalId);
+      return (
+        `<div class="chip-ask${v.busy ? ' is-busy' : ''}"><span class="chip-q">${esc(v.ask)}</span>` +
+        `<span class="chip-btns"><button type="button" class="btn btn--sm btn--accent" data-chip="add" data-pid="${pid}"${off}>${esc(v.yes)}</button>` +
+        `<button type="button" class="btn btn--sm" data-chip="skip" data-pid="${pid}"${off}>Not now</button></span>` +
+        (v.failed ? `<span class="chip-note">That didn't go through. Try again in a moment.</span>` : '') +
+        `</div>`
+      );
+    }
+    case 'said':
+      return `<span class="chip-said">${esc(v.text)}</span>`;
+    case 'look':
+      return (
+        `<span class="tool-chip tool-chip--applied"><i></i><b>${esc(v.text)}</b></span>` +
+        (v.undo ? `<button type="button" class="btn btn--sm chip-undo" data-chip="undo">Undo</button>` : '')
+      );
+    case 'label':
+      return `<span class="tool-chip tool-chip--${esc(v.status)}"><i></i><b>${esc(v.label)}</b></span>`;
+  }
+}
+
 function lineHtml(l: Line): string {
   if (l.role !== 'agent' || !l.chips.length) return esc(l.text);
-  const chips = l.chips.map((c) => `<span class="tool-chip tool-chip--${esc(c.status)}"><i></i><b>${esc(c.label)}</b></span>`).join('');
-  return `${esc(l.text)}<div class="msg-row">${chips}</div>`;
+  return `${esc(l.text)}<div class="msg-row">${l.chips.map((c) => chipHtml(chipView(st, l, c))).join('')}</div>`;
 }
 
 function render() {
@@ -144,6 +242,7 @@ function render() {
     if (!keep.has(id)) {
       el.remove();
       shown.delete(id);
+      drawn.delete(id);
     }
   }
   let work = log.querySelector('.msg--working');
@@ -152,10 +251,21 @@ function render() {
     work = null;
   }
   for (const l of st.lines) {
-    if (shown.has(l.id)) continue;
-    const el = mk('div', `msg${l.role === 'user' ? ' msg--me' : l.role === 'error' ? ' msg--error' : ''} is-new`, lineHtml(l));
+    const html = lineHtml(l);
+    const had = shown.get(l.id);
+    if (had) {
+      // A chip was answered (or its Undo went): redraw that line's row in place; the answer fades in.
+      if (drawn.get(l.id) !== html) {
+        had.innerHTML = html;
+        had.querySelector('.msg-row')?.classList.add('is-new');
+        drawn.set(l.id, html);
+      }
+      continue;
+    }
+    const el = mk('div', `msg${l.role === 'user' ? ' msg--me' : l.role === 'error' ? ' msg--error' : ''} is-new`, html);
     el.dataset.role = l.role;
     shown.set(l.id, el);
+    drawn.set(l.id, html);
     log.insertBefore(el, work);
   }
   if (st.pending && !work) {
@@ -198,4 +308,16 @@ export function closeChat() {
   if (scrimChat) scrim.classList.remove('on');
   scrimChat = false;
   input.blur();
+}
+
+/**
+ * "Change it with the agent" from a widget's ⋯ menu: the chat opens with the widget named in the input and the caret
+ * at the end, for the user to finish the sentence.
+ */
+export function askAbout(title: string) {
+  if (S.phone) openChat();
+  else showPanel(true);
+  input.value = `Change '${title}' to `;
+  input.focus({ preventScroll: true });
+  input.setSelectionRange(input.value.length, input.value.length);
 }
