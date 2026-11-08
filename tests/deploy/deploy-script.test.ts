@@ -80,6 +80,7 @@ describe('deploy.sh control --dry-run', () => {
       /docker run .*--user 0:0 --network none .*-v \/etc\/vha\/secrets:\/out .*deploy\/prod-secrets\.ts --out \/out$/m,
       /-e PGSSLMODE=require .*-v \/etc\/vha\/inputs\/pg-admin\.pgpass:\/run\/pg\/pgpass:ro -v \/etc\/vha\/secrets\/postgres\/env:\/run\/pg\/env:ro/,
       /psql\\ -X\\ -q\\ -v\\ ON_ERROR_STOP=1\\ -f\\ \/run\/pg\/db-init\.sql/,
+      /-e MIG_HOST=vultr-prod-pg\.example\.invalid -e MIG_PORT=16751 -e MIG_DB=defaultdb -e MIG_USER=vultradmin -e MIG_SSLMODE=require -v \/etc\/vha\/inputs\/pg-admin\.pgpass:\/run\/pg\/pgpass:ro vha\/app:\S+ node -e/,
       /docker compose -p vha-control -f \S+\/deploy\/compose\.control\.yml --env-file \S+ --env-file \/etc\/vha\/release\.env up -d --wait/,
       /curl .*--resolve vultrcontest\.vaquerothe\.dev:443:127\.0\.0\.1 .*https:\/\/vultrcontest\.vaquerothe\.dev\//,
       /exec -T runner wget .*http:\/\/10\.1\.96\.4:8200\/health/,
@@ -87,6 +88,11 @@ describe('deploy.sh control --dry-run', () => {
     ];
     for (const re of want) expect(r.out, String(re)).toMatch(re);
     expect(r.out).toContain('egress mode: log-only');
+    // audit's migrations run after db-init and before Compose starts audit; the admin URL is never in audit's env.
+    const at = (s: string) => r.out.indexOf(s);
+    expect(at('db-init.sql:ro')).toBeLessThan(at('MIG_HOST='));
+    expect(at('MIG_HOST=')).toBeLessThan(at('up -d --wait --wait-timeout'));
+    expect(readFileSync(join(root, 'deploy/compose.control.yml'), 'utf8')).not.toContain('AUDIT_MIGRATE_DATABASE_URL');
   });
 
   it('writes a control-vars.nft that defines every variable control.nft uses, and passes nft -c', () => {
@@ -138,6 +144,8 @@ describe('deploy.sh control --dry-run, options and settings', () => {
     expect(r.out).toMatch(/prod-secrets\.ts --out \/out --local-db$/m);
     expect(r.out).toContain('--profile local-db up -d --wait');
     expect(r.out).not.toContain('db-init.sql:ro');
+    expect(r.out).toMatch(/--profile local-db up -d --wait postgres$/m);
+    expect(r.out).toMatch(/--network vha-control_apps -e MIG_HOST=postgres .*-e MIG_SSLMODE=disable vha\/app:\S+ node -e/);
   });
 
   it('no S3_ENDPOINT: the buckets step is skipped', () => {
@@ -229,6 +237,52 @@ describe('deploy.sh push and sandbox --dry-run (the dev PC side)', () => {
     const r = deploy(['push', '--dry-run'], example, { VHA_CONTROL_HOST: '', VHA_SSH_KEY: '' });
     expect(r.code).not.toBe(0);
     expect(r.err).toMatch(/VHA_SSH_KEY/);
+  });
+});
+
+describe("audit's migration one-off (MIGRATE_JS in deploy.sh)", () => {
+  // The script's own JS, pointed at a temp folder instead of /run/pg, with an npm that prints what it was given.
+  const js = /^MIGRATE_JS='\n([\s\S]*?)\n'$/m.exec(readFileSync(script, 'utf8'))![1]!;
+  const dir = join(base, 'migrate');
+  mkdirSync(join(dir, 'bin'), { recursive: true });
+  writeFileSync(join(dir, 'bin/npm'), '#!/bin/sh\necho "args: $*"\necho "url: $AUDIT_MIGRATE_DATABASE_URL"\n');
+  chmodSync(join(dir, 'bin/npm'), 0o755);
+  const migrate = (files: Record<string, string>, env: Record<string, string>) => {
+    rmSync(join(dir, 'pg'), { recursive: true, force: true });
+    mkdirSync(join(dir, 'pg'));
+    for (const [f, body] of Object.entries(files)) writeFileSync(join(dir, 'pg', f), body);
+    return spawnSync('node', ['-e', js.replaceAll('/run/pg/', `${dir}/pg/`)], {
+      encoding: 'utf8',
+      env: { PATH: `${join(dir, 'bin')}:${process.env.PATH}`, ...env },
+    });
+  };
+
+  it('builds the admin URL from the pgpass file (escapes undone, then URL-encoded) and runs npm run migrate', () => {
+    const r = migrate(
+      { pgpass: '# comment\nh:1:d:vultradmin:p\\:w\\\\x@y\n', env: 'POSTGRES_PASSWORD=unused\n' },
+      { MIG_HOST: 'db.internal', MIG_PORT: '16751', MIG_DB: 'defaultdb', MIG_USER: 'vultradmin', MIG_SSLMODE: 'require' },
+    );
+    expect(r.stderr).toBe('');
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('args: run --silent migrate -w services/audit');
+    const url = new URL(/^url: (.*)$/m.exec(r.stdout)![1]!);
+    expect(decodeURIComponent(url.password)).toBe('p:w\\x@y');
+    expect(url.host).toBe('db.internal:16751');
+    expect(url.pathname).toBe('/defaultdb');
+    expect(url.searchParams.get('sslmode')).toBe('require');
+  });
+
+  it('the local database: the superuser password from postgres/env, no TLS', () => {
+    const r = migrate({ env: 'POSTGRES_PASSWORD=abc_DEF-123\nDB_PASSWORD_AUDIT=x\n' },
+      { MIG_HOST: 'postgres', MIG_PORT: '5432', MIG_DB: 'app', MIG_USER: 'postgres', MIG_SSLMODE: 'disable' });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('url: postgres://postgres:abc_DEF-123@postgres:5432/app\n');
+  });
+
+  it('stops without a password', () => {
+    const r = migrate({ env: 'DB_PASSWORD_AUDIT=x\n' }, { MIG_HOST: 'postgres', MIG_PORT: '5432', MIG_DB: 'app', MIG_USER: 'postgres', MIG_SSLMODE: 'disable' });
+    expect(r.status).toBe(2);
+    expect(r.stdout).not.toContain('args:');
   });
 });
 

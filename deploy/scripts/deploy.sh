@@ -255,9 +255,12 @@ control_main() {
   in_app --user 0:0 --network none --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add DAC_OVERRIDE \
     -v "$SECRETS:/out" "vha/app:$REV" "${ps[@]}"
 
-  step "database (db-init.sql over TLS)"
+  step "database (db-init.sql over TLS, then audit's migrations as audit_owner)"
   if [[ $LOCAL_DB == 1 ]]; then
     note "VHA_LOCAL_DB=1: the postgres container runs db-init.sql itself when its volume is new"
+    compose up -d --wait postgres
+    audit_migrate --network vha-control_apps -e MIG_HOST=postgres -e MIG_PORT=5432 -e MIG_DB=app -e MIG_USER=postgres \
+      -e MIG_SSLMODE=disable
   else
     # The admin password stays in its pgpass file (PG_ADMIN_PASSFILE); the services' passwords come from postgres/env
     # (sourced inside the container). Nothing secret is on a command line or in `docker inspect`.
@@ -267,6 +270,8 @@ control_main() {
       -v "$(cfg PG_ADMIN_PASSFILE):/run/pg/pgpass:ro" -v "$SECRETS/postgres/env:/run/pg/env:ro" \
       -v "$SRC/deploy/db-init.sql:/run/pg/db-init.sql:ro" "$PG_IMAGE" \
       -c 'set -a; . /run/pg/env; set +a; exec psql -X -q -v ON_ERROR_STOP=1 -f /run/pg/db-init.sql'
+    audit_migrate -e "MIG_HOST=$(cfg PG_HOST)" -e "MIG_PORT=$PG_PORT" -e "MIG_DB=$(cfg PG_DATABASE)" -e "MIG_USER=$(cfg PG_ADMIN_USER)" \
+      -e "MIG_SSLMODE=$(cfg PG_SSLMODE require)" -v "$(cfg PG_ADMIN_PASSFILE):/run/pg/pgpass:ro"
   fi
 
   step "services (docker compose up --wait)"
@@ -284,6 +289,35 @@ control_main() {
   fi
   say ""
   if ((DRY)); then say "deploy: dry run done ($STEPS steps), nothing changed"; else say "deploy: control is up at https://$(cfg VHA_HOSTNAME)/ (rev $REV)"; fi
+}
+
+# audit's migrations, as audit_owner (`npm run migrate -w services/audit`), in a one-off app container before Compose
+# starts audit (audit refuses to start while one is pending). AUDIT_MIGRATE_DATABASE_URL is an admin login that may
+# SET ROLE audit_owner: it is built inside the container from the pgpass file (or, for the local database, postgres/env)
+# and exists only in npm's environment there. It is never on a command line, in `docker inspect`, or in audit's env.
+MIGRATE_JS='
+const fs = require("fs");
+const e = process.env;
+let pw = "";
+if (fs.existsSync("/run/pg/pgpass")) {
+  const line = fs.readFileSync("/run/pg/pgpass", "utf8").split("\n").find((l) => l.trim() && !l.startsWith("#")) || "";
+  const f = line.trim().split(/(?<!\\):/);
+  pw = f.slice(4).join(":").replace(/\\(.)/g, "$1");
+} else {
+  const m = /^POSTGRES_PASSWORD=(.*)$/m.exec(fs.readFileSync("/run/pg/env", "utf8"));
+  pw = m ? m[1] : "";
+}
+if (!pw) { console.error("audit-migrate: no admin password"); process.exit(2); }
+const q = e.MIG_SSLMODE === "disable" ? "" : "?sslmode=" + e.MIG_SSLMODE;
+const url = "postgres://" + encodeURIComponent(e.MIG_USER) + ":" + encodeURIComponent(pw) + "@" + e.MIG_HOST + ":" + e.MIG_PORT + "/" + e.MIG_DB + q;
+const r = require("child_process").spawnSync("npm", ["run", "--silent", "migrate", "-w", "services/audit"],
+  { stdio: "inherit", env: { ...e, AUDIT_MIGRATE_DATABASE_URL: url } });
+process.exit(r.status ?? 1);
+'
+audit_migrate() {
+  run docker run --rm --read-only --tmpfs /tmp:size=64m --security-opt no-new-privileges --cap-drop ALL --user 0:0 \
+    -e HOME=/tmp -e npm_config_cache=/tmp/npm -e npm_config_update_notifier=false \
+    -v "$SECRETS/postgres/env:/run/pg/env:ro" "$@" "vha/app:$REV" node -e "$MIGRATE_JS"
 }
 
 egress_mode_name() {

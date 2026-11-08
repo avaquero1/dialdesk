@@ -63,6 +63,10 @@ buckets, the secrets, `db-init.sql` over TLS, `docker compose up --wait`, and th
 - **The firewall** loads with a timed rollback (`--rollback-seconds`, 300). deploy.sh waits until `vha-nft-confirm`
   runs from a NEW ssh connection (push does that by itself); without it, the old table comes back and ufw goes back on.
   An unchanged, confirmed table isn't reloaded.
+- **audit's migrations** run in step 7, after `db-init.sql` and before Compose starts audit: `npm run migrate -w
+  services/audit` in a one-off app container, as an admin login that may `SET ROLE audit_owner`
+  (`AUDIT_MIGRATE_DATABASE_URL`, `sslmode=require`). The URL is built inside that container from the admin pgpass file and
+  is never in audit's env: audit itself never migrates, and it refuses to start while a migration is pending.
 - **Egress starts log-only.** Read `journalctl -k | grep vha-egress-would-drop` on control, add what's missing to
   `egress-hosts.ts`, then deploy again with `--enforce-egress` (`--log-only-egress` goes back).
 - **The sandbox machine** (`deploy/sandbox-host`): with `VHA_SANDBOX_HOST=root@<it>` set, `push` does it first, and
