@@ -20,6 +20,8 @@ import {
   checkWidgetCap,
   allMarketIds,
   applyTune,
+  keptPlanProfile,
+  tunedProfile,
   baselineOf,
   isAway,
   sinceOf,
@@ -301,7 +303,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
           const w = widgets.get(c.widget_id)!;
           validateTune(c, w.spec);
           if (w.spec.kind === 'display') w.spec = applyTune(c, w.spec);
-          if (w.profile && c.brief !== undefined) w.profile.brief = c.brief;
+          if (w.profile) w.profile = tunedProfile(c, w.profile);
           w.updated_at = now();
           await bus.emit('widget.updated', { account_id: p.account_id, at: now(), widget_id: c.widget_id, change: 'changed' });
           out.push(shown(w));
@@ -385,6 +387,7 @@ export function fake(deps: FakeDeps = {}): Handlers<typeof BOARD> {
       w.result = body.result;
       delete w.quotes;
       w.state = body.result.blocked.length ? 'blocked' : 'normal';
+      w.profile = keptPlanProfile(w.profile, body.math_plan) ?? w.profile;
       w.updated_at = now();
       traces.set(w.spec.widget_id, body.trace);
       await bus.emit('result.updated', { account_id: body.account_id, at: now(), widget_id: w.spec.widget_id, result_id: body.result.result_id, phase: body.phase });

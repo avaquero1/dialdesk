@@ -75,6 +75,7 @@ export function makeCases(acc: string): Case[] {
     { endpoint: 'lastOpened', caller: 'runner', input: () => ({ body: { account_ids: [acc, 'acc_nobody000001'] } }),
       save: (o) => { if (o.boards.length !== 1 || !o.boards[0].last_opened_at) throw new Error('the owner read should set last_opened_at'); } },
     { endpoint: 'putResult', caller: 'runner', input: (c) => ({ params: { widget_id: c.new }, body: sampleResult(c.new as string, acc, 'pass') }) },
+    { endpoint: 'putResult', caller: 'runner', input: (c) => ({ params: { widget_id: c.new }, body: { ...sampleResult(c.new as string, acc, 'pass'), math_plan: { plan_version: 1, ops: [{ id: 'n1', op: 'implied_probability', args: { price_cents: 'price_1' } }] } } }), label: 'with the math plan' },
     { endpoint: 'putResult', caller: 'runner', input: (c) => ({ params: { widget_id: c.new }, body: sampleResult(c.new as string, acc, 'block') }), expect: 422, label: 'blocked verdict refused' },
     { endpoint: 'getTrace', caller: 'edge', input: (c) => ({ params: { widget_id: c.new }, query: { account_id: acc } }) },
     { endpoint: 'putScreenshot', caller: 'runner', input: (c) => ({ params: { widget_id: c.new, run_id: run, candidate_id: cnd }, body: { account_id: acc, png_base64: TINY_PNG } }) },

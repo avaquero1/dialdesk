@@ -10,6 +10,7 @@ import {
   displayEntry,
   widgetRunJobId,
   type DisplayType,
+  type EnginePlan,
   ProposalChange,
   type Quote,
   type RunKind,
@@ -104,6 +105,13 @@ export function defaultProfile(widget_id: string, type: DisplayType, brief = '')
   const e = displayEntry(type);
   return { widget_id, brief, source_ids: [...e.default_sources], added_domains: [], cadence: { ...e.default_cadence }, feedback: [], last_math_plan: null };
 }
+
+/** A tune's profile: its brief, and the math starts over (the next model's plan that computes is kept). */
+export const tunedProfile = (c: Tune, p: WidgetProfile): WidgetProfile => ({ ...p, brief: c.brief ?? p.brief, last_math_plan: null });
+
+/** The profile with a run's math plan kept, or null when there is nothing to store: only the first plan stays. */
+export const keptPlanProfile = (p: WidgetProfile | null, plan: EnginePlan | undefined): WidgetProfile | null =>
+  p && plan && p.last_math_plan === null ? { ...p, last_math_plan: plan } : null;
 
 /** The job for one widget run. The id collapses duplicates inside one minute's window. */
 export function runJob(spec: DisplaySpec, kind: RunKind, reason: WidgetRunJob['reason'], at = Date.now()): WidgetRunJob {

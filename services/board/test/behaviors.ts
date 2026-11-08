@@ -65,6 +65,34 @@ export function boardBehaviors(name: string, rig: () => Promise<Rig>) {
       vi.setSystemTime(vi.getRealSystemTime() + shift);
     };
 
+    it('a math plan: the first stays, a later one is ignored, a tune and Clear all start over', async () => {
+      const plan = (price: string) => ({ plan_version: 1 as const, ops: [{ id: 'n1', op: 'implied_probability' as const, args: { price_cents: price } }] });
+      const a = acc();
+      await edge(BOARD.createDefaults, { params: { account_id: a }, body: { category: 'sports' } });
+      const wid = displays(await agent(BOARD.getBoard, { params: { account_id: a } }))[0]!.spec.widget_id;
+      const profile = async () => (await runner(BOARD.getWidget, { params: { widget_id: wid }, query: { account_id: a } })).profile!;
+      const put = (math_plan?: ReturnType<typeof plan>) => runner(BOARD.putResult, { params: { widget_id: wid }, body: { ...sampleResult(wid, a, 'pass'), ...(math_plan ? { math_plan } : {}) } });
+
+      await put();
+      expect((await profile()).last_math_plan).toBeNull();
+      await put(plan('price_1'));
+      expect((await profile()).last_math_plan).toEqual(plan('price_1'));
+      await put(plan('price_2'));
+      expect((await profile()).last_math_plan).toEqual(plan('price_1'));
+      await put();
+      expect((await profile()).last_math_plan).toEqual(plan('price_1'));
+
+      const brief = 'only injuries';
+      const p = await agent(BOARD.propose, { params: { account_id: a }, body: { changes: [{ op: 'tune', widget_id: wid, brief }] } });
+      await edge(BOARD.accept, { params: { proposal_id: p.proposal_id }, body: { account_id: a } });
+      expect(await profile()).toMatchObject({ brief, last_math_plan: null });
+      await put(plan('price_2'));
+      expect((await profile()).last_math_plan).toEqual(plan('price_2'));
+
+      await edge(BOARD.clear, { params: { widget_id: wid }, body: { account_id: a } });
+      expect((await profile()).last_math_plan).toBeNull();
+    });
+
     it('first paint: a new board is the prescribed default board, with cached prices before any run', async () => {
       const a = acc();
       const before = r.jobs.length;

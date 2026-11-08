@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { BOARD, CONNECTIONS, MARKETS, MODELS, POISONED_NOTE, TRUST_ACTIONS, newId, widgetRunJobId, type CompleteBody, type LogEntry, type RunKind, type SbxJobStatus as SbxJob, type Verdict, type Widget, type WidgetRunJob } from '@app/contracts';
 import { MemoryBus, NoRetry, SandboxBusy, createClient, hashToken, sandboxClient, type Call, type SandboxClient } from '@app/service-kit';
-import { fakeApp, fixtures, pageText, TEST_TOKENS } from '@app/testkit';
+import { fakeApp, fixtures, pageText, sampleResult, TEST_TOKENS } from '@app/testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createFakeAudit } from '../../audit/src/fake.ts';
 import { fake as boardFake } from '../../board/src/fake.ts';
@@ -395,6 +395,94 @@ describe.skipIf(!have)('runner', () => {
     expect(rec.steps.find((s) => s.step === 'plan')!.note).toMatch(/^planner plan refused \(op n1 \(implied_probability\) has no arg price; it takes price_cents\): default plan;/);
     expect(rec.steps.filter((s) => s.step === 'math').map((s) => s.status)).toEqual(['ok']);
     expect((await current(w)).result!.numbers.length).toBeGreaterThan(0);
+  });
+
+  const PROB = { op: 'implied_probability', args: { price_cents: 'price_1' } };
+  const MOVE = { op: 'movement', args: { series: 'series_1', window_s: 'window_s' } };
+  const planOf = (...ops: (typeof PROB | typeof MOVE)[]) => ({ plan_version: 1, ops: ops.map((o, i) => ({ id: `n${i + 1}`, ...o })) });
+  /** A planner answering each call with the next plan and a different clean article; `picked` records its choices. */
+  const planning = (plans: object[], picked: string[][] = []): Call => {
+    const inner = models();
+    return (async (e, input) => {
+      const r = (await inner(e, input as never)) as { content: string };
+      const body = (input as { body: CompleteBody }).body;
+      if (body.role !== 'planner') return r;
+      const { candidates } = JSON.parse(body.messages.at(-1)!.content) as { candidates: { id: string; domain: string }[] };
+      const clean = candidates.filter((c) => !c.domain.startsWith('fanpost'));
+      const candidate_ids = [clean[picked.length % clean.length]!.id];
+      const plan = plans[picked.length];
+      picked.push(candidate_ids);
+      return { ...r, content: JSON.stringify({ candidate_ids, plan }) };
+    }) as Call;
+  };
+  const opsOf = async (w: Widget) => (await current(w)).result!.numbers.map((n) => n.op);
+  const articlesOf = async (w: Widget) => (await current(w)).result!.sources.map((s) => s.candidate_id);
+  const planNote = (rec: { steps: { step: string; note: string | null }[] }) => rec.steps.find((s) => s.step === 'plan')!.note;
+  const tune = async (w: Widget) => {
+    const p = await via('agent', boardApp)(BOARD.propose, { params: { account_id: w.spec.account_id }, body: { changes: [{ op: 'tune', widget_id: w.spec.widget_id, brief: 'only injuries' }] } });
+    await edgeBoard(BOARD.accept, { params: { proposal_id: p.proposal_id }, body: { account_id: w.spec.account_id } });
+  };
+
+  it("a card's math stays put: the first model plan is saved, a refresh repeats it with the planner's new articles, a tune starts over", async () => {
+    const plans = [planOf(PROB, MOVE), planOf(PROB), planOf(MOVE)];
+    const picked: string[][] = [];
+    const d = deps({ models: planning(plans, picked) });
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+
+    const first = await handleRun(d, jobFor(w, 'research'), ctx());
+    expect(first.status).toBe('done');
+    expect(planNote(first)).toBe('planner plan; 1 source(s)');
+    expect((await current(w)).profile!.last_math_plan).toEqual(plans[0]);
+    expect(await opsOf(w)).toEqual(['implied_probability', 'movement']);
+    expect(await articlesOf(w)).toEqual(picked[0]);
+
+    const refresh = await handleRun(d, jobFor(w, 'research', 'refresh', Date.now() + 120_000), ctx());
+    expect(refresh.status).toBe('done');
+    expect(planNote(refresh)).toBe('saved plan; 1 source(s)');
+    expect(await opsOf(w)).toEqual(['implied_probability', 'movement']);
+    expect(picked[1]).not.toEqual(picked[0]);
+    expect(await articlesOf(w)).toEqual(picked[1]);
+    expect((await current(w)).profile!.last_math_plan).toEqual(plans[0]);
+
+    await tune(w);
+    expect((await current(w)).profile!.last_math_plan).toBeNull();
+    const tuned = await handleRun(d, jobFor(w, 'research', 'refresh', Date.now() + 240_000), ctx());
+    expect(planNote(tuned)).toBe('planner plan; 1 source(s)');
+    expect(await opsOf(w)).toEqual(['movement']);
+    expect((await current(w)).profile!.last_math_plan).toEqual(plans[2]);
+  });
+
+  it('a default plan is never saved, nor a model plan the engine had errors on', async () => {
+    const { byTitle } = await freshBoard();
+    const refused = byTitle('Bills news');
+    await handleRun(deps({ models: planning([planOf({ op: 'gap', args: { a_cents: 'price_1', b_cents: 'price_1' } } as never)]) }), jobFor(refused, 'research'), ctx());
+    expect((await current(refused)).result!.numbers.length).toBeGreaterThan(0);
+    expect((await current(refused)).profile!.last_math_plan).toBeNull();
+
+    const b = await freshBoard();
+    const errored = b.byTitle('Bills news');
+    const failing: SandboxClient = {
+      ...sandbox,
+      getJob: async (id) => {
+        const j = await sandbox.getJob(id);
+        return j.compute_result ? { ...j, compute_result: { ...j.compute_result, errors: [{ op_id: 'n2', code: 'bad_arg', message: 'x' }] } } : j;
+      },
+    };
+    await handleRun(deps({ models: planning([planOf(PROB, MOVE)]), sandbox: failing }), jobFor(errored, 'research'), ctx());
+    expect((await current(errored)).result!.numbers.length).toBeGreaterThan(0);
+    expect((await current(errored)).profile!.last_math_plan).toBeNull();
+  });
+
+  it('a saved plan that no longer passes the check is ignored: the planner plan computes the card', async () => {
+    const { byTitle, account_id } = await freshBoard();
+    const w = byTitle('Bills news');
+    const gap = planOf({ op: 'gap', args: { a_cents: 'price_1', b_cents: 'price_1' } } as never);
+    await via('runner', boardApp)(BOARD.putResult, { params: { widget_id: w.spec.widget_id }, body: { ...sampleResult(w.spec.widget_id, account_id, 'pass'), math_plan: gap as never } });
+    const rec = await handleRun(deps({ models: planning([planOf(PROB)]) }), jobFor(w, 'research'), ctx());
+    expect(planNote(rec)).toBe('planner plan; 1 source(s)');
+    expect(await opsOf(w)).toEqual(['implied_probability']);
+    expect((await current(w)).profile!.last_math_plan).toEqual(gap);
   });
 
   it('the planner sees ids, domains and dates only; a plan outside the catalog is refused for the default', async () => {

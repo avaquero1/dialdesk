@@ -236,7 +236,7 @@ type ReadOutcome =
 
 interface Outputs {
   sources?: { candidates: Candidate[]; quotes: MarketNumbers['quotes'] };
-  plan?: { plan: EnginePlan; candidate_ids: string[]; from: 'planner' | 'default' };
+  plan?: { plan: EnginePlan; candidate_ids: string[]; from: 'planner' | 'default' | 'saved' };
   reads?: Record<string, ReadOutcome>;
   /** since: the engine's moves from the owner's previous visit (N1.2.1), kept out of the widget's own numbers. */
   math?: { result: EngineResult; as_of: string; stale: boolean; notes: string[]; since?: ResultSince };
@@ -475,7 +475,7 @@ class Run {
 
   // ---------- guard + publish (both kinds) ----------
 
-  async publish(draft: Draft, extra: Pick<WidgetResult, 'blocked' | 'as_of' | 'stale' | 'notes' | 'since'>, phase: 'numbers' | 'summary') {
+  async publish(draft: Draft, extra: Pick<WidgetResult, 'blocked' | 'as_of' | 'stale' | 'notes' | 'since'>, phase: 'numbers' | 'summary', math_plan?: EnginePlan) {
     const guard = this.guard;
     const t0 = Date.now();
     let verdict = await guard.publish(draft, this.account_id);
@@ -527,7 +527,7 @@ class Run {
     const t1 = Date.now();
     // The publish step goes in the stored trace before the put, so the trace board keeps is the whole run.
     const trace = [...this.rec.steps, { ...this.peekStep('publish'), duration_ms: 0 }];
-    const put = await this.d.board(BOARD.putResult, { params: { widget_id: this.job.widget_id }, body: { account_id: this.account_id, result, verdict, trace, phase } });
+    const put = await this.d.board(BOARD.putResult, { params: { widget_id: this.job.widget_id }, body: { account_id: this.account_id, result, verdict, trace, phase, ...(math_plan ? { math_plan } : {}) } });
     await this.audit('result.published', {
       subject_id: this.job.widget_id,
       outcome: 'ok',
@@ -626,11 +626,17 @@ class Run {
     return this.out.sources;
   }
 
-  /** Step 1: the planner picks sources and math. Its inputs never hold page text, titles or past facts. */
+  /**
+   * Step 1: the planner picks sources and math. Its inputs never hold page text, titles or past facts. A widget's saved
+   * plan still in the catalog stands for the math, so a refresh repeats the card; the planner keeps choosing the articles.
+   */
   async plan(w: Widget, spec: DisplaySpec, src: NonNullable<Outputs['sources']>) {
     if (this.out.plan) return this.out.plan;
     const t0 = Date.now();
-    const fallback = { plan: defaultPlan(spec), candidate_ids: src.candidates.slice(0, MAX_SOURCES).map((c) => c.candidate_id), from: 'default' as const };
+    const saved = w.profile?.last_math_plan && !planProblem(spec, w.profile.last_math_plan) ? w.profile.last_math_plan : null;
+    const base = saved ? { plan: saved, from: 'saved' as const } : { plan: defaultPlan(spec), from: 'default' as const };
+    const fallback = { ...base, candidate_ids: src.candidates.slice(0, MAX_SOURCES).map((c) => c.candidate_id) };
+    const kept = saved ? 'saved plan' : 'default plan';
     const input = plannerInput(spec, w.profile?.brief ?? '', src);
     let out = fallback as NonNullable<Outputs['plan']>;
     let note: string;
@@ -647,17 +653,17 @@ class Run {
         }),
       );
       const p = PlannerOut.safeParse(jsonOf(res.content));
-      if (!p.success) note = 'planner answer unreadable: default plan';
+      if (!p.success) note = `planner answer unreadable: ${kept}`;
       else {
         const known = new Set(src.candidates.map((c) => c.candidate_id));
         const ids = p.data.candidate_ids === 'all-allowed' || !p.data.candidate_ids ? fallback.candidate_ids : p.data.candidate_ids.filter((id) => known.has(id));
-        const problem = p.data.plan === undefined ? 'no plan' : planProblem(spec, p.data.plan);
-        out = { plan: problem ? fallback.plan : (p.data.plan as EnginePlan), candidate_ids: [...new Set(ids)].slice(0, MAX_SOURCES), from: problem ? 'default' : 'planner' };
-        note = problem ? `planner plan refused (${problem}): default plan` : 'planner plan';
+        const problem = saved ? null : p.data.plan === undefined ? 'no plan' : planProblem(spec, p.data.plan);
+        out = { ...(saved || problem ? base : { plan: p.data.plan as EnginePlan, from: 'planner' as const }), candidate_ids: [...new Set(ids)].slice(0, MAX_SOURCES) };
+        note = saved ? kept : problem ? `planner plan refused (${problem}): ${kept}` : 'planner plan';
       }
     } catch (e) {
       if (e instanceof NoRetry && e.reason !== 'timeout') throw e;
-      note = `planner unavailable (${e instanceof CallError ? e.status : 'timeout'}): default plan`;
+      note = `planner unavailable (${e instanceof CallError ? e.status : 'timeout'}): ${kept}`;
     }
     this.out.plan = out;
     await this.step({ step: 'plan', status: 'ok', note: `${note}; ${out.candidate_ids.length} source(s)` }, t0);
@@ -846,11 +852,13 @@ class Run {
     const plan = await this.plan(w, spec, src);
     const chosen = plan.candidate_ids.map((id) => src.candidates.find((c) => c.candidate_id === id)).filter((c): c is Candidate => !!c);
     await this.reads(spec, chosen);
-    // A planner plan the check passed but the engine can't run (an arg name it doesn't know, a missing arg: the real
-    // planner wrote {"price": ...} for {"price_cents": ...}) computes nothing: the default plan, in code, once.
+    // A planner or saved plan the check passed but the engine can't run (an arg name it doesn't know, a missing arg: the
+    // real planner wrote {"price": ...} for {"price_cents": ...}) computes nothing: the default plan, in code, once. The
+    // plan is rewritten first, so a retry after this still knows the numbers are the default's.
     const m = await this.math(spec, plan.plan, w.baseline).catch((e) => {
-      if (plan.from !== 'planner' || !(e instanceof NoRetry) || e.message !== NO_NUMBERS) throw e;
-      return this.math(spec, defaultPlan(spec), w.baseline, 'math-default');
+      if (plan.from === 'default' || !(e instanceof NoRetry) || e.message !== NO_NUMBERS) throw e;
+      this.out.plan = { ...plan, plan: defaultPlan(spec), from: 'default' };
+      return this.math(spec, this.out.plan.plan, w.baseline, 'math-default');
     });
     if (!m) return;
 
@@ -879,7 +887,10 @@ class Run {
       return;
     }
     const summary = await this.summary(facts, m.result);
-    await this.publish({ summary, facts, sources, numbers: m.result.numbers, receipts: m.result.receipts }, { blocked, as_of: m.as_of, stale: m.stale, ...notesOf(m) }, 'summary');
+    // A model's plan that computed clean is what the card's math repeats from now on (board keeps the first).
+    const used = this.out.plan!;
+    const math_plan = used.from === 'planner' && !m.result.errors.length && w.profile?.last_math_plan === null ? used.plan : undefined;
+    await this.publish({ summary, facts, sources, numbers: m.result.numbers, receipts: m.result.receipts }, { blocked, as_of: m.as_of, stale: m.stale, ...notesOf(m) }, 'summary', math_plan);
   }
 }
 

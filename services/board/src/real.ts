@@ -45,6 +45,8 @@ import {
   checkWidgetCap,
   allMarketIds,
   applyTune,
+  keptPlanProfile,
+  tunedProfile,
   checkResult,
   defaultProfile,
   fetchQuotes,
@@ -509,7 +511,7 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
           if (c.op === 'tune') {
             validateTune(c, locked.spec);
             const spec = locked.spec.kind === 'display' ? applyTune(c, locked.spec) : locked.spec;
-            const profile = locked.row.profile && c.brief !== undefined ? { ...locked.row.profile, brief: c.brief } : locked.row.profile;
+            const profile = locked.row.profile ? tunedProfile(c, locked.row.profile) : null;
             await tx`update widgets set spec = ${json(tx, stored(spec))}, profile = ${profile ? json(tx, profile) : null}, updated_at = now()
                      where widget_id = ${c.widget_id} and account_id = ${account_id}`;
             changed(o, account_id, c.widget_id, 'changed');
@@ -665,6 +667,8 @@ export function createReal(deps: RealDeps): Handlers<typeof BOARD> {
                    phase = excluded.phase, result = excluded.result, verdict = excluded.verdict, trace = excluded.trace, stored_at = now()`;
         await tx`update widgets set state = ${result.blocked.length ? 'blocked' : 'normal'}, quotes = null, updated_at = now()
                  where widget_id = ${widget_id} and account_id = ${account_id}`;
+        const kept = keptPlanProfile(l.row.profile, body.math_plan);
+        if (kept) await tx`update widgets set profile = ${json(tx, kept)} where widget_id = ${widget_id} and account_id = ${account_id}`;
         o.events.push({ event: 'result.updated', payload: { account_id, at: now(), widget_id, result_id: result.result_id, phase: body.phase } });
         const flag = movementFlag(l.spec, result);
         if (!flag) return;

@@ -281,13 +281,12 @@ describe('e2e on the real pieces (live markets and news, Vultr models, real Chro
       saw.blocked = w.result!.blocked.map((b) => b.domain);
       expect(w.state).toBe('blocked');
       expect(w.result!.blocked.map((b) => b.domain)).toEqual(['fanpost.fixture.test']);
-      // Live prices move between the runs, and the real planner writes a new plan each run, so which ops it picks can differ
-      // (recorded, not failed): the clean numbers are recomputed from the market, each with its receipt.
+      // Live prices move between the runs, but the widget's saved plan repeats the same math (A1.3.8): the clean numbers
+      // are recomputed from the market with the same ops, each with its receipt.
       const r = w.result!;
       saw.ops_before = before!.numbers.map((n) => n.op);
       saw.ops_after = r.numbers.map((n) => n.op);
-      saw.ops_changed = JSON.stringify(saw.ops_before) !== JSON.stringify(saw.ops_after);
-      expect(saw.ops_after).toContain('implied_probability');
+      expect(saw.ops_after).toEqual(saw.ops_before);
       for (const n of r.numbers) expect(r.receipts.some((x) => x.id === n.receipt_id)).toBe(true);
     });
   }, 420_000);
