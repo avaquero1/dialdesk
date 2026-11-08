@@ -35,6 +35,17 @@ export const EngineResult = fromRust<EngineResult>(engineSchemas.result);
 export const EngineReceipt = fromRust<EngineReceipt>(engineSchemas.receipt);
 export const EngineNumber = defOf<EngineNumber>(engineSchemas.result, 'NumberOut');
 
+/** One arg of an engine op, as `engine --schema` prints it under "ops". */
+export interface EngineOpArg {
+  name: string;
+  kind: 'num' | 'series' | 'history';
+  required: boolean;
+}
+/** Every engine op's args (name, kind, required), from the engine itself: a plan's arg names are checked against them. */
+export const ENGINE_OP_ARGS = Object.fromEntries(
+  Object.entries((engineSchemas as unknown as { ops: Record<string, { args: EngineOpArg[] }> }).ops).map(([op, s]) => [op, s.args]),
+) as unknown as Record<E.OpName, readonly EngineOpArg[] | undefined>;
+
 export type SbxJobRequest = M.JobRequest;
 export type SbxJobStatus = M.JobStatus;
 export type SbxKillRequest = M.KillRequest;

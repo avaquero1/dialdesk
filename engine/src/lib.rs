@@ -277,6 +277,7 @@ pub fn schemas() -> serde_json::Value {
         "input": schemars::schema_for!(EngineInput),
         "result": schemars::schema_for!(EngineResult),
         "receipt": schemars::schema_for!(Receipt),
+        "ops": OpName::arg_schema(),
     })
 }
 

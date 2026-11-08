@@ -23,12 +23,12 @@ fn engine(args: &[&str], stdin: &str) -> (i32, serde_json::Value) {
 }
 
 #[test]
-fn schema_prints_four_keys() {
+fn schema_prints_four_schemas_and_the_ops() {
     let (code, v) = engine(&["--schema"], "");
     assert_eq!(code, 0);
     let keys: Vec<_> = v.as_object().unwrap().keys().cloned().collect();
-    assert_eq!(keys.len(), 4);
-    for k in ["plan", "input", "result", "receipt"] {
+    assert_eq!(keys.len(), 5);
+    for k in ["plan", "input", "result", "receipt", "ops"] {
         assert!(v[k].is_object(), "missing {k}");
     }
 }

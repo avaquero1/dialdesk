@@ -101,6 +101,31 @@ impl OpName {
         }
     }
 
+    /// Every op's args as `engine --schema` prints them under "ops": `{op: {args: [{name, kind, required}]}}`,
+    /// so a caller can refuse a plan with a wrong or missing arg name before it runs.
+    pub fn arg_schema() -> serde_json::Value {
+        let names = serde_json::to_value(schemars::schema_for!(OpName)).expect("OpName schema");
+        let mut out = serde_json::Map::new();
+        for v in names["oneOf"].as_array().expect("OpName is a oneOf") {
+            let name = v["const"].as_str().expect("an op name");
+            let op: OpName = serde_json::from_value(serde_json::json!(name)).expect("a known op");
+            let args: Vec<_> = op
+                .spec()
+                .iter()
+                .map(|(n, k, required)| {
+                    let kind = match k {
+                        Kind::Num => "num",
+                        Kind::Series => "series",
+                        Kind::History => "history",
+                    };
+                    serde_json::json!({ "name": n, "kind": kind, "required": required })
+                })
+                .collect();
+            out.insert(name.to_string(), serde_json::json!({ "args": args }));
+        }
+        serde_json::Value::Object(out)
+    }
+
     pub fn unit(self) -> Unit {
         match self {
             OpName::ImpliedProbability | OpName::OddsToProbability => Unit::Probability,

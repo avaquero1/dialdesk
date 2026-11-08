@@ -270,6 +270,166 @@
     "title": "EngineInput",
     "type": "object"
   },
+  "ops": {
+    "base_rate": {
+      "args": [
+        {
+          "kind": "num",
+          "name": "hits",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "total",
+          "required": true
+        }
+      ]
+    },
+    "base_rate_history": {
+      "args": [
+        {
+          "kind": "history",
+          "name": "history",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "lo_cents",
+          "required": false
+        },
+        {
+          "kind": "num",
+          "name": "hi_cents",
+          "required": false
+        }
+      ]
+    },
+    "expected_value": {
+      "args": [
+        {
+          "kind": "num",
+          "name": "price_cents",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "probability",
+          "required": true
+        }
+      ]
+    },
+    "gap": {
+      "args": [
+        {
+          "kind": "num",
+          "name": "a_cents",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "b_cents",
+          "required": true
+        }
+      ]
+    },
+    "implied_probability": {
+      "args": [
+        {
+          "kind": "num",
+          "name": "price_cents",
+          "required": true
+        }
+      ]
+    },
+    "movement": {
+      "args": [
+        {
+          "kind": "series",
+          "name": "series",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "window_s",
+          "required": true
+        }
+      ]
+    },
+    "odds_to_probability": {
+      "args": [
+        {
+          "kind": "num",
+          "name": "decimal_odds",
+          "required": true
+        }
+      ]
+    },
+    "pnl": {
+      "args": [
+        {
+          "kind": "num",
+          "name": "count",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "avg_price_cents",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "price_cents",
+          "required": true
+        }
+      ]
+    },
+    "position_value": {
+      "args": [
+        {
+          "kind": "num",
+          "name": "count",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "price_cents",
+          "required": true
+        }
+      ]
+    },
+    "price_at": {
+      "args": [
+        {
+          "kind": "series",
+          "name": "series",
+          "required": true
+        },
+        {
+          "kind": "num",
+          "name": "ago_s",
+          "required": true
+        }
+      ]
+    },
+    "price_to_odds": {
+      "args": [
+        {
+          "kind": "num",
+          "name": "probability",
+          "required": true
+        }
+      ]
+    },
+    "volatility": {
+      "args": [
+        {
+          "kind": "series",
+          "name": "series",
+          "required": true
+        }
+      ]
+    }
+  },
   "plan": {
     "$defs": {
       "OpCall": {

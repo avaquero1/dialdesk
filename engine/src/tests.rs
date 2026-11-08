@@ -503,6 +503,21 @@ fn schema_has_four_keys() {
 }
 
 #[test]
+fn schema_lists_every_op_and_its_args() {
+    let ops = &schemas()["ops"];
+    assert_eq!(ops.as_object().unwrap().len(), 12);
+    assert_eq!(
+        ops["implied_probability"]["args"],
+        json!([{"name": "price_cents", "kind": "num", "required": true}])
+    );
+    let bh = ops["base_rate_history"]["args"].as_array().unwrap();
+    assert_eq!(
+        bh.iter().filter(|a| a["required"] == json!(false)).count(),
+        2
+    );
+}
+
+#[test]
 fn huge_results_stay_finite_or_are_refused() {
     // Found by the property suite: tidy() overflowed 1 / 2.2e-308 to infinity.
     let odds = one(
