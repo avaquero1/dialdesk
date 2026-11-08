@@ -96,6 +96,7 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
   tsx on :18440-18448 (`e2e/real/stack.ts`, models with `MODELS_FAKE=1`), then drives edge's browser API: sign up, the first
   board on this weekend's games, the chat (Hi, a league, a team, two proposals, the taps), the runs on BullMQ, the research
   run with the poisoned page's box killed, a refresh that keeps the clean numbers, the trust counts and audit's verify.
+  audit's migrations run first, as audit_owner from the admin login (`npm run migrate -w services/audit`).
   markets runs from `e2e/real/markets-recorded.ts`: the real service on the recording of this weekend
   (`fixtures/markets/live/weekend`); every other host is refused, so nothing reaches the internet. Logs:
   `.logs/e2e-real/<service>.log`. Everything is removed afterwards. Not part of `make check` (Docker, `make dev-secrets`,

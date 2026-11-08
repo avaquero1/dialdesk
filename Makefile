@@ -126,12 +126,16 @@ shellcheck:
 
 # Meeting point 1 on this machine: the whole journey (e2e/real/journey.test.ts) on the nine real services, only the model
 # faked. Compose project vha-e2e-real (Postgres, Valkey, the fixture site on :8300); the test starts sandbox-manager on the
-# docker backend and the services with tsx on :18440-18448 (e2e/real/stack.ts). Everything is removed afterwards.
+# docker backend and the services with tsx on :18440-18448 (e2e/real/stack.ts), after audit's migrations (as audit_owner).
+# Everything is removed afterwards.
 E2E_REAL_PG_PORT ?= 55441
 E2E_REAL_VALKEY_PORT ?= 56441
 E2E_REAL := PG_DEV_PORT=$(E2E_REAL_PG_PORT) VALKEY_DEV_PORT=$(E2E_REAL_VALKEY_PORT) docker compose -p vha-e2e-real -f deploy/compose.dev.yml --env-file .env
 e2e-real: rust images engine-image
 	$(E2E_REAL) up -d --wait postgres valkey fixtures
+	@# audit never migrates itself (D1.1.2): its migrations run as audit_owner, from the admin login, before it starts.
+	@AUDIT_MIGRATE_DATABASE_URL=postgres://postgres:$$(sed -n 's/^PG_SUPERUSER_PASSWORD=//p' .env)@127.0.0.1:$(E2E_REAL_PG_PORT)/app \
+	  npm run -s migrate -w services/audit || { $(E2E_REAL) down -v; exit 1; }
 	E2E_REAL_PG_PORT=$(E2E_REAL_PG_PORT) E2E_REAL_VALKEY_PORT=$(E2E_REAL_VALKEY_PORT) npx vitest run --project e2e-real; \
 	  s=$$?; $(E2E_REAL) down -v; exit $$s
 
