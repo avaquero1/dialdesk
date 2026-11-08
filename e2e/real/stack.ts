@@ -9,9 +9,14 @@
  *
  * markets runs from e2e/real/markets-recorded.ts: the real service on the recording of this weekend's games.
  * Logs: .logs/e2e-real/<service>.log.
+ *
+ * `stackUp({ live: true })` is `make e2e-live` (meeting point 2, its own Compose project and ports): models real on Vultr
+ * (e2e/live/models-capped.ts, both caps at most $1.00 for the step), markets on the live exchanges and feeds
+ * (e2e/live/markets-live.ts, plus our own poisoned test page for one team's game), the topology's proxy on the internet.
+ * Logs: .logs/e2e-live/<service>.log.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseEnv } from 'node:util';
@@ -25,7 +30,10 @@ export const PORT = Object.fromEntries(SERVICES.map((s, i) => [s, BASE + i])) as
 export const PG_PORT = Number(process.env.E2E_REAL_PG_PORT ?? 55441);
 export const VALKEY_PORT = Number(process.env.E2E_REAL_VALKEY_PORT ?? 56441);
 export const ORIGIN = `http://localhost:${PORT.edge}`;
-const LOGS = join(ROOT, '.logs', 'e2e-real');
+export interface StackOpts {
+  /** Meeting point 2: real models, live markets and news, sandboxes that read live pages. */
+  live?: boolean;
+}
 
 export interface Stack {
   env: Record<string, string>;
@@ -34,11 +42,14 @@ export interface Stack {
   url: (s: Svc) => string;
   /** The tail of a service's log, for a failing step's message. */
   log: (s: Svc) => string;
+  /** Where the logs and the run's own files are (the cap self-test's result in live mode). */
+  logs: string;
+  scratch: string;
   down: () => Promise<void>;
 }
 
 /** The worktree's .env, re-pointed at this stack's ports. */
-export function stackEnv(managerUrl: string, scratch: string): Record<string, string> {
+export function stackEnv(managerUrl: string, scratch: string, opts: StackOpts = {}): Record<string, string> {
   const env = parseEnv(readFileSync(join(ROOT, '.env'), 'utf8')) as Record<string, string>;
   for (const s of SERVICES) {
     const S = s.toUpperCase();
@@ -48,7 +59,7 @@ export function stackEnv(managerUrl: string, scratch: string): Record<string, st
     if (db) env[`${S}_DATABASE_URL`] = db.replace('@127.0.0.1:55432/', `@127.0.0.1:${PG_PORT}/`);
     const vk = env[`${S}_VALKEY_URL`];
     if (vk) env[`${S}_VALKEY_URL`] = vk.replace(/@127\.0\.0\.1:56379$/, `@127.0.0.1:${VALKEY_PORT}`);
-    env[`${S}_FAKE`] = s === 'models' ? '1' : '0';
+    env[`${S}_FAKE`] = s === 'models' && !opts.live ? '1' : '0';
   }
   Object.assign(env, {
     RUNNER_URL_SANDBOX_MANAGER: managerUrl,
@@ -64,15 +75,37 @@ export function stackEnv(managerUrl: string, scratch: string): Record<string, st
     AUDIT_HEADS_DIR: join(scratch, 'audit-heads'),
     LOG_LEVEL: process.env.LOG_LEVEL ?? 'info',
   });
+  if (opts.live) {
+    const brave = process.env.MARKETS_BRAVE_KEY_FILE;
+    const need = (k: string) => process.env[k] || (() => { throw new Error(`e2e-live: set ${k}`); })();
+    Object.assign(env, {
+      MARKETS_SOURCE_ENV: 'prod',
+      MARKETS_BRAVE_KEY_FILE: brave && existsSync(brave) ? brave : '/nonexistent/brave-search',
+      // Our poisoned test page is a fixture row: runner keeps the fixture rows beside the prod ones.
+      RUNNER_SOURCE_ENV: 'fixture',
+      MODELS_DAILY_CAP_USD: need('E2E_LIVE_CAP_USD'),
+      MODELS_ACCOUNT_DAILY_USD: need('E2E_LIVE_CAP_USD'),
+      MODELS_ACCOUNT_DAILY_TOKENS: '3000000',
+      MODELS_ACCOUNT_RPM: '60',
+      E2E_LIVE_USAGE: need('E2E_LIVE_USAGE'),
+      E2E_LIVE_SELFTEST: join(scratch, 'cap-self-test.json'),
+      E2E_LIVE_POISON_TEAM: need('E2E_LIVE_POISON_TEAM'),
+    });
+  }
   return env;
 }
 
 const health = (url: string) => fetch(`${url}/health`).then((r) => r.ok, () => false);
 
-export async function stackUp(): Promise<Stack> {
+const LAUNCHERS: Partial<Record<Svc, string>> = { markets: 'e2e/real/markets-recorded.ts' };
+const LIVE_LAUNCHERS: Partial<Record<Svc, string>> = { markets: 'e2e/live/markets-live.ts', models: 'e2e/live/models-capped.ts' };
+
+export async function stackUp(opts: StackOpts = {}): Promise<Stack> {
+  const kind = opts.live ? 'e2e-live' : 'e2e-real';
+  const LOGS = join(ROOT, '.logs', kind);
   mkdirSync(LOGS, { recursive: true });
-  const scratch = mkdtempSync(join(tmpdir(), 'vha-e2e-real-'));
-  const topo = topologyUp(`vha-e2er${process.pid}`);
+  const scratch = mkdtempSync(join(tmpdir(), `vha-${kind}-`));
+  const topo = topologyUp(`vha-${opts.live ? 'e2el' : 'e2er'}${process.pid}`, { internet: opts.live });
   const procs: ChildProcess[] = [];
   let manager: Manager | undefined;
   const down = async () => {
@@ -85,9 +118,9 @@ export async function stackUp(): Promise<Stack> {
   try {
     const env0 = parseEnv(readFileSync(join(ROOT, '.env'), 'utf8')) as Record<string, string>;
     manager = await startManager(topo, env0.SANDBOX_MANAGER_CALLERS!);
-    const env = stackEnv(manager.url, scratch);
+    const env = stackEnv(manager.url, scratch, opts);
     for (const s of SERVICES) {
-      const main = s === 'markets' ? 'e2e/real/markets-recorded.ts' : `services/${s}/src/main.ts`;
+      const main = (opts.live ? LIVE_LAUNCHERS : LAUNCHERS)[s] ?? `services/${s}/src/main.ts`;
       const fd = openSync(join(LOGS, `${s}.log`), 'w');
       // Only the stack's env: nothing else from the shell running the test leaks into the services.
       const p = spawn(process.execPath, ['--import', 'tsx', main], { cwd: ROOT, env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: process.env.HOME ?? '/tmp', ...env }, stdio: ['ignore', fd, fd] });
@@ -106,7 +139,7 @@ export async function stackUp(): Promise<Stack> {
       }
       if (!ok) throw new Error(`${s} did not answer /health:\n${log(s)}`);
     }
-    return { env, manager, topo, url, log, down };
+    return { env, manager, topo, url, log, logs: LOGS, scratch, down };
   } catch (e) {
     await down();
     throw e;

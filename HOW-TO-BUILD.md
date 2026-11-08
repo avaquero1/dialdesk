@@ -114,6 +114,13 @@ Run one as a fake: `npm run fake -w services/<name>`, or all nine: `make fakes`.
   (`fixtures/markets/live/weekend`); every other host is refused, so nothing reaches the internet. Logs:
   `.logs/e2e-real/<service>.log`. Everything is removed afterwards. Not part of `make check` (Docker, `make dev-secrets`,
   `make images`). `E2E_REAL_PORT_BASE`, `E2E_REAL_PG_PORT` and `E2E_REAL_VALKEY_PORT` move the ports.
+- `make e2e-live`: meeting point 2 (C2.1), the e2e-real journey on the **real pieces**: models on Vultr (`e2e/live/models-capped.ts`:
+  both caps at `E2E_LIVE_CAP_USD`, at most 1.00, with the spend kept across runs in `E2E_LIVE_USAGE`, and a no-network cap
+  self-test that must refuse before it listens), markets on the live Kalshi, Polymarket and feed APIs (`e2e/live/markets-live.ts`;
+  Brave when `MARKETS_BRAVE_KEY_FILE` exists), real Chromium boxes whose dev proxy reaches the internet (`topologyUp(name,
+  { internet: true })`), and our own poisoned test page as the first candidate of the `E2E_LIVE_POISON_TEAM` (default `kc`) game.
+  Compose project `vha-e2e-live` (Postgres :55461, Valkey :56461), services on :18460-18468. It spends money: never in `make check`.
+  Each run's record (steps, pass or fail, times, spend) goes to `E2E_LIVE_OUT/E2E_LIVE_RUN.json`.
 - `make agent-pg-test`: agent's Postgres conversation store (`services/agent/test/pg-store.test.ts`) on a throwaway
   Postgres 17 (Compose project `vha-agent-pg-test`, port 55436), as the superuser, removed afterwards.
 - **The trust page's numbers** come from log actions named in `TRUST_ACTIONS` (packages/contracts/src/api/audit.ts), with the

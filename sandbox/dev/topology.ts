@@ -82,7 +82,12 @@ function makeCert(dir: string): string {
   return createHash('sha256').update(der).digest('base64');
 }
 
-export function topologyUp(name = `vha-t${process.pid}`): Topology {
+/**
+ * `internet: true` (only `make e2e-live`, meeting point 2): <name>-out is a plain bridge instead of an internal one, so the
+ * proxy can reach real sites. The sandboxes stay on the internal <name>-sbx and still go out only through the proxy and
+ * its per-sandbox allow list.
+ */
+export function topologyUp(name = `vha-t${process.pid}`, opts: { internet?: boolean } = {}): Topology {
   if (HOST) return hostTopologyUp(name);
   const why = dockerReady();
   if (why) throw new Error(why);
@@ -97,7 +102,7 @@ export function topologyUp(name = `vha-t${process.pid}`): Topology {
     writeFileSync(join(dir, 'Caddyfile'), readFileSync(join(import.meta.dirname, 'fixtures-tls.Caddyfile')));
     const labels = ['--label', `vha.topology=${name}`];
     docker('network', 'create', '--internal', ...labels, `${name}-sbx`);
-    docker('network', 'create', '--internal', ...labels, `${name}-out`);
+    docker('network', 'create', ...(opts.internet ? [] : ['--internal']), ...labels, `${name}-out`);
     const hardened = ['--user', uid, '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', ...labels];
     // Caddy's binary carries a file capability, which no-new-privileges refuses to exec: the (trusted, dev-only)
     // fixture server keeps that one capability instead.

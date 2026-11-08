@@ -15,7 +15,7 @@ export SANDBOX_COMPUTE_IMAGE ?= vha-engine-compute:$(IMAGE_TAG)
 prune-tags = $(if $(filter file,$(origin $(1))),docker image ls --format '{{.Repository}}:{{.Tag}}' $(2) | \
   grep -x '$(2):$(IMAGE_WT)-[0-9a-f]\{12\}' | grep -vx '$($(1))' | xargs -r docker image rm || true,true)
 
-.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check shellcheck deploy-dry-run e2e-real agent-pg-test
+.PHONY: check typecheck lint gen gen-check contracts e2e rust images install dev-secrets infra-up infra-down fakes health stop-fakes containment containment-local valkey-test web web-e2e engine-image engine-image-check audit-test s3-test nft-check deploy-image-check shellcheck deploy-dry-run e2e-real e2e-live agent-pg-test
 
 check: rust gen-check typecheck lint shellcheck contracts web e2e
 	@echo "make check: all green"
@@ -154,6 +154,28 @@ e2e-real: rust images engine-image
 	  npm run -s migrate -w services/audit || { $(E2E_REAL) down -v; exit 1; }
 	E2E_REAL_PG_PORT=$(E2E_REAL_PG_PORT) E2E_REAL_VALKEY_PORT=$(E2E_REAL_VALKEY_PORT) npx vitest run --project e2e-real; \
 	  s=$$?; $(E2E_REAL) down -v; exit $$s
+
+# Meeting point 2 (C2.1): the same journey on the real pieces (e2e/live/journey.test.ts): Vultr's models under the step's
+# caps (E2E_LIVE_CAP_USD, at most 1.00, global and per account; the spend is kept in E2E_LIVE_USAGE across runs), the live
+# Kalshi, Polymarket and feed APIs (Brave when MARKETS_BRAVE_KEY_FILE exists), real Chromium sandboxes whose proxy reaches
+# the internet, and our own poisoned test page as one candidate of the E2E_LIVE_POISON_TEAM game's research run. It spends
+# money and uses the internet: never part of `make check`. Compose project vha-e2e-live (Postgres :55461, Valkey :56461),
+# services on :18460-18468. Each run's record goes to E2E_LIVE_OUT/E2E_LIVE_RUN.json.
+E2E_LIVE_PG_PORT ?= 55461
+E2E_LIVE_VALKEY_PORT ?= 56461
+E2E_LIVE_CAP_USD ?= 1.00
+E2E_LIVE_USAGE ?= $(CURDIR)/.logs/e2e-live/usage.json
+E2E_LIVE_POISON_TEAM ?= kc
+E2E_LIVE := PG_DEV_PORT=$(E2E_LIVE_PG_PORT) VALKEY_DEV_PORT=$(E2E_LIVE_VALKEY_PORT) docker compose -p vha-e2e-live -f deploy/compose.dev.yml --env-file .env
+e2e-live: rust images engine-image
+	@mkdir -p "$$(dirname "$(E2E_LIVE_USAGE)")"
+	$(E2E_LIVE) up -d --wait postgres valkey
+	@AUDIT_MIGRATE_DATABASE_URL=postgres://postgres:$$(sed -n 's/^PG_SUPERUSER_PASSWORD=//p' .env)@127.0.0.1:$(E2E_LIVE_PG_PORT)/app \
+	  npm run -s migrate -w services/audit || { $(E2E_LIVE) down -v; exit 1; }
+	E2E_REAL_PORT_BASE=18460 E2E_REAL_PG_PORT=$(E2E_LIVE_PG_PORT) E2E_REAL_VALKEY_PORT=$(E2E_LIVE_VALKEY_PORT) \
+	  E2E_LIVE_CAP_USD=$(E2E_LIVE_CAP_USD) E2E_LIVE_USAGE=$(E2E_LIVE_USAGE) E2E_LIVE_POISON_TEAM=$(E2E_LIVE_POISON_TEAM) \
+	  npx vitest run --project e2e-live; \
+	  s=$$?; $(E2E_LIVE) down -v; exit $$s
 
 # agent's Postgres conversation store (services/agent/test/pg-store.test.ts) on a throwaway Postgres 17: its own Compose
 # project and port, removed afterwards.
