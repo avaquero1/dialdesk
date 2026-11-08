@@ -265,8 +265,8 @@ pub fn hash_json<T: Serialize>(v: &T) -> String {
     hex::encode(Sha256::digest(&bytes))
 }
 
-pub fn receipt_id(plan_hash: &str, op_id: &str) -> String {
-    let digest = Sha256::digest(format!("{plan_hash}{op_id}").as_bytes());
+pub fn receipt_id(plan_hash: &str, input_hash: &str, op_id: &str) -> String {
+    let digest = Sha256::digest(format!("{plan_hash}{input_hash}{op_id}").as_bytes());
     format!("r-{}", &hex::encode(digest)[..8])
 }
 
@@ -390,7 +390,7 @@ pub fn run(input: &EngineInput) -> EngineResult {
         match ops::eval(call, input, &done) {
             Ok(out) => {
                 let value = out.value;
-                let rid = receipt_id(&res.plan_hash, &call.id);
+                let rid = receipt_id(&res.plan_hash, &res.input_hash, &call.id);
                 let unit = call.op.unit();
                 res.numbers.push(NumberOut {
                     id: call.id.clone(),

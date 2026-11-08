@@ -473,7 +473,7 @@ fn receipts_are_deterministic() {
     assert!(a.ok);
     assert_eq!(a, b);
     let r = &a.receipts[0];
-    assert_eq!(r.id, receipt_id(&a.plan_hash, "m1"));
+    assert_eq!(r.id, receipt_id(&a.plan_hash, &a.input_hash, "m1"));
     assert_eq!(r.id.len(), 10);
     assert!(r.id.starts_with("r-"));
     assert_eq!(a.numbers[0].receipt_id, r.id);
@@ -490,6 +490,26 @@ fn receipts_are_deterministic() {
     let mut other = mk();
     other.plan.ops.swap(0, 1);
     assert_ne!(run(&other).receipts[1].id, a.receipts[0].id);
+
+    // The same plan on other data gives other receipt ids: another price, or another game at the same price.
+    let mut price = mk();
+    price.numbers.insert("c".into(), Value::Number(45.0));
+    assert_eq!(hash_json(&price.plan), a.plan_hash);
+    assert_ne!(run(&price).receipts[1].id, a.receipts[1].id);
+    let game = |source: &str| {
+        let mut i = mk();
+        i.provenance.insert(
+            "c".into(),
+            Provenance {
+                source: source.into(),
+                as_of: "2026-11-08T12:00:00Z".into(),
+            },
+        );
+        run(&i)
+    };
+    let (g1, g2) = (game("kalshi:a"), game("kalshi:b"));
+    assert_ne!(g1.receipts[1].id, g2.receipts[1].id);
+    assert_eq!(g1.receipts[1].id, game("kalshi:a").receipts[1].id);
 }
 
 #[test]

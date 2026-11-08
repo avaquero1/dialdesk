@@ -5,12 +5,15 @@
  * handleBoardNumbers runs every widget of the batch as its own run (its own run_state row, trace, receipts and
  * publish, through handleRun), side by side. Each run gets its inputs as it always does, then hands its engine input
  * to the batch instead of opening a box. When every run has handed its input in or finished without one (or after
- * RUN_RULES.schedule.batchWaitMs), the batch puts all the inputs in one engine plan, each widget's ids under its own
+ * RUN_RULES.schedule.batchWaitMs), the batch puts the inputs in one engine plan, each widget's ids under its own
  * prefix (`b<i>_`), and runs it in one compute box. Each run gets back its own numbers (ids without the prefix),
  * its own receipts and errors. The engine's receipts are kept as the engine wrote them: their op ids and refs carry
  * the prefix, and their plan hash is the batch's plan, the plan that really ran.
  *
- * The box's trust rows (created, destroyed) are forwarded once, by the run whose box it is.
+ * A batch that doesn't fit one box (BOX_LIMITS) goes in as few as fit (A1.4.3), one after the other: widgets stay in
+ * order and each widget's plan stays whole. A box that fails fails only its own widgets.
+ *
+ * A box's trust rows (created, destroyed) are forwarded once, by the run whose box it is.
  */
 import { EngineResult, QUEUES, widgetRunJobId, type EngineInput, type SbxJobStatus, type WidgetRunJob, type WidgetSpec } from '@app/contracts';
 import { NoRetry, QUEUE_RULES, RUN_RULES, RetryLater, SandboxBusy, type JobCtx } from '@app/service-kit';
@@ -20,6 +23,12 @@ import type { RunRecord } from './store.ts';
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
 /** The engine's id rule: lowercase, digits and _, at most 32. */
 const ENGINE_ID = /^[a-z][a-z0-9_]{0,31}$/;
+/** The engine's PLAN_VERSION: merge() writes one version for the whole plan. */
+const PLAN_VERSION = 1;
+/** What one compute box takes: the engine's MAX_OPS, the manager's request body (axum's default, 2 MiB less the envelope) and the box's output limit (Limits::COMPUTE). */
+export const BOX_LIMITS = { ops: 256, inputBytes: 2 * 1024 * 1024 - 4096, outputBytes: 256 * 1024 };
+/** The most an op's number, receipt and plan row take in the output besides its call and provenance (measured: 480-690 over every op, with a 40-char git hash). */
+const OP_OUTPUT_BYTES = 700;
 
 interface Part {
   run: ComputeRunner;
@@ -28,6 +37,7 @@ interface Part {
   resolve: (j: SbxJobStatus | null) => void;
   reject: (e: unknown) => void;
 }
+type Member = { p: Part; prefix: string };
 
 /**
  * Collects the engine inputs of `n` runs (more can `join` until it fires) and computes them in one box. It fires when
@@ -97,28 +107,45 @@ export class ComputeBatch {
     this.onFire?.();
     const parts = this.parts.flatMap((p, i) => (p ? [{ p, prefix: `b${i}_` }] : []));
     const fit = parts.filter(({ p, prefix }) => fits(p.input, prefix));
-    // A widget whose ids don't fit under a prefix computes alone (none today: ids are short).
+    // A widget the engine would refuse, or whose ids don't fit under a prefix, computes alone: its refusal stays its own.
     for (const { p } of parts.filter((x) => !fit.includes(x))) this.solo(p.run, p.spec, p.input).then(p.resolve, p.reject);
-    if (!fit.length) return;
-    if (fit.length === 1) {
-      const { p } = fit[0]!;
+    // One after the other: a board holds one compute box at a time, however many it needs.
+    for (const box of intoBoxes(fit)) await this.computeBox(box);
+  }
+
+  /** Computes one box; a failure stays with this box's widgets. */
+  private async computeBox(box: Member[]) {
+    if (box.length === 1) {
+      const { p } = box[0]!;
       return this.solo(p.run, p.spec, p.input).then(p.resolve, p.reject);
     }
-    const first = fit[0]!.p;
+    const first = box[0]!.p;
     try {
-      const j = await this.solo(first.run, first.spec, merge(fit.map(({ p, prefix }) => ({ input: p.input, prefix }))));
-      for (const { p, prefix } of fit) p.resolve(j && sliceStatus(j, prefix, p !== first));
+      const j = await this.solo(first.run, first.spec, merge(box.map(({ p, prefix }) => ({ input: p.input, prefix }))));
+      for (const { p, prefix } of box) p.resolve(j && sliceStatus(j, prefix, p !== first));
     } catch (e) {
-      for (const { p } of fit) p.reject(e);
+      for (const { p } of box) p.reject(e);
     }
   }
 }
 
 const pre = (prefix: string, id: string) => `${prefix}${id}`;
+/** False when the engine's plan checks would refuse this input (check_plan): one widget's refusal would fail the whole box. */
 function fits(input: EngineInput, prefix: string) {
-  const ids = [...Object.keys(input.numbers), ...input.plan.ops.map((o) => o.id)];
-  return ids.every((id) => ENGINE_ID.test(pre(prefix, id)));
+  const ops = input.plan.ops.map((o) => o.id);
+  const has = (k: string) => Object.hasOwn(input.numbers, k);
+  const named = [...Object.keys(input.origins ?? {}), ...Object.keys(input.provenance ?? {})];
+  const provenance = Object.values(input.provenance ?? {});
+  return (
+    input.plan.plan_version === PLAN_VERSION &&
+    [...Object.keys(input.numbers), ...ops].every((id) => ENGINE_ID.test(pre(prefix, id))) &&
+    new Set(ops).size === ops.length &&
+    !ops.some(has) &&
+    named.every(has) &&
+    provenance.every((p) => inRange(p.source, 200) && inRange(p.as_of, 40))
+  );
 }
+const inRange = (s: string, max: number) => s.length > 0 && Buffer.byteLength(s) <= max;
 const prefixKeys = <V>(o: Record<string, V> | undefined, prefix: string) =>
   Object.fromEntries(Object.entries(o ?? {}).map(([k, v]) => [pre(prefix, k), v]));
 
@@ -132,6 +159,38 @@ export function merge(parts: { input: EngineInput; prefix: string }[]): EngineIn
     Object.assign(out.numbers, prefixKeys(input.numbers, prefix));
     Object.assign(out.origins!, prefixKeys(input.origins, prefix));
     Object.assign(out.provenance!, prefixKeys(input.provenance, prefix));
+  }
+  return out;
+}
+
+const bytes = (v: unknown) => Buffer.byteLength(JSON.stringify(v));
+
+/** What a widget takes of a box. The output is estimated from the op's call (the plan row and the receipt's refs) and its args' provenance. */
+function boxCost({ p: { input }, prefix }: Member) {
+  const m = merge([{ input, prefix }]);
+  const outputBytes = m.plan.ops.reduce(
+    (n, o) => n + OP_OUTPUT_BYTES + 2 * bytes(o) + Object.values(o.args).reduce((a, k) => a + bytes(m.provenance?.[k] ?? ''), 0),
+    0,
+  );
+  return { ops: m.plan.ops.length, inputBytes: bytes(m), outputBytes };
+}
+
+/**
+ * The batch's widgets in boxes: in order, each box filled until the next widget would break a limit, which gives the
+ * fewest boxes that keep the order. A widget too big for a box on its own gets a box of its own and fails alone.
+ */
+function intoBoxes(members: Member[]): Member[][] {
+  const out: Member[][] = [];
+  let used = { ops: 0, inputBytes: 0, outputBytes: 0 };
+  for (const m of members) {
+    const c = boxCost(m);
+    const over = used.ops + c.ops > BOX_LIMITS.ops || used.inputBytes + c.inputBytes > BOX_LIMITS.inputBytes || used.outputBytes + c.outputBytes > BOX_LIMITS.outputBytes;
+    if (!out.length || over) {
+      out.push([]);
+      used = { ops: 0, inputBytes: 0, outputBytes: 0 };
+    }
+    out.at(-1)!.push(m);
+    used = { ops: used.ops + c.ops, inputBytes: used.inputBytes + c.inputBytes, outputBytes: used.outputBytes + c.outputBytes };
   }
   return out;
 }
