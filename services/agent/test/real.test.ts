@@ -16,7 +16,7 @@ import { fake as boardFake } from '../../board/src/fake.ts';
 import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { MemoryUsageStore } from '../../models/src/meter.ts';
 import { real as modelsReal } from '../../models/src/real.ts';
-import { createReal, MAX_STEPS, NEUTRAL_LINE, NEUTRAL_PICKS_LINE, NO_DIGITS_NOTE } from '../src/real.ts';
+import { createReal, MAX_STEPS, NEUTRAL_LINE, NEUTRAL_PICKS_LINE, NO_DIGITS_NOTE, TOOL_NOTE } from '../src/real.ts';
 import { MemoryConversationStore } from '../src/store.ts';
 import { cases } from './cases.ts';
 import { KC, MADE_UP_PROBABILITY, startScriptedVultr, type ScriptedVultr } from './scripted-vultr.ts';
@@ -97,6 +97,28 @@ describe('agent real mode: the rules', () => {
   it('sends the six tools to the chat role, and only those', () => {
     const names = chatCalls().at(-1)!.tools.map((t: { function: { name: string } }) => t.function.name).sort();
     expect(names).toEqual(Object.keys(AGENT_TOOLS).sort());
+  });
+
+  it('names no tool in what the model wrote, as the history reads it back', async () => {
+    await chat('Chiefs, Bills, and the NBA tonight.');
+    const said = chatCalls().at(-1)!.messages.filter((m: { role: string }) => m.role === 'assistant').map((m: { content: string }) => m.content);
+    expect(said).toContain(TOOL_NOTE);
+    for (const name of Object.keys(AGENT_TOOLS)) expect(said.join('\n')).not.toContain(name);
+  });
+
+  it('a reply that only copies the note is no dead end: the proposal stays', async () => {
+    const r = await chat('the model copies the note');
+    expect(r.status).toBe(200);
+    expect(r.body.turn.text).toBe('Done.');
+    expect(r.body.turn.text).not.toBe(BLOCKED_CHAT_LINE);
+    expect(r.body.turn.chips[0]).toMatchObject({ tool: 'propose_widget', status: 'proposed' });
+  });
+
+  it('a reply that only copies the note, with nothing proposed, is not the blocked line', async () => {
+    const r = await chat('the model writes only a note');
+    expect(r.status).toBe(200);
+    expect(r.body.turn.text).not.toBe(BLOCKED_CHAT_LINE);
+    expect(r.body.turn.text).not.toContain(TOOL_NOTE);
   });
 
   it('proposes a widget as pending; the board changes only on the click', async () => {

@@ -49,6 +49,8 @@ export const HISTORY_TURNS = 12;
 export const MODEL_DOWN_LINE = "I can't reach the model right now. Try again in a minute.";
 export const CAP_LINE = "The chat has used today's budget. It comes back after midnight UTC.";
 const NO_ANSWER_LINE = "I couldn't finish that. Try asking another way.";
+/** The history's note beside a tool call. It names no tool: the model copied "(called: propose_widget)" as its reply, and the guard read the name as an order. */
+export const TOOL_NOTE = '(used a tool, result below)';
 /** A reply the model couldn't write without a digit nobody gave it: code writes these, and no digit is in them. */
 export const NEUTRAL_LINE = "Here's what I can add for you. Tap one to add it.";
 export const NEUTRAL_PICKS_LINE = "Tap a league or a team and I'll line up what I can add.";
@@ -125,12 +127,14 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
       const r = await complete({ role: 'chat', account_id: st.account_id, messages, tools, max_tokens: 600 });
       if (r === 'cap') return { template: CAP_LINE, fixed: true, steps: step };
       if (r === 'down') return { template: MODEL_DOWN_LINE, fixed: true, steps: step };
+      // The note belongs to the history: a model that copies it has said nothing.
+      const content = r.content.replaceAll(TOOL_NOTE, '').trim();
       if (!r.tool_calls.length) {
-        const text = withSaid(said, r.content.trim());
+        const text = withSaid(said, content);
         return { template: text || (st.chips.length ? 'Done.' : NO_ANSWER_LINE), fixed: !text, steps: step };
       }
-      said.push(r.content);
-      messages.push({ role: 'assistant', content: `${r.content.trim()}\n(called: ${r.tool_calls.map((c) => c.name.slice(0, 40)).join(', ')})`.trim() });
+      said.push(content);
+      messages.push({ role: 'assistant', content: `${content}\n${TOOL_NOTE}`.trim() });
       for (const c of r.tool_calls) {
         const result = await runTool(c.name, c.arguments, st, deps);
         messages.push({ role: 'tool', tool_name: c.name.slice(0, 40), content: JSON.stringify(result) });

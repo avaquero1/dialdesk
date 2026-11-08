@@ -5,7 +5,7 @@
  */
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { NO_DIGITS_NOTE } from '../src/real.ts';
+import { NO_DIGITS_NOTE, TOOL_NOTE } from '../src/real.ts';
 
 export const KC = 'kalshi:KXNFLGAME-26NOV08KCBUF-KC';
 export const KC_POLY = 'polymarket:nfl-kc-buf-2026-11-08';
@@ -51,6 +51,8 @@ export function play(user: string, results: string[], again = false): Move {
       : { content: 'Kickoff is at 73.' };
   if (u.includes('digit quiet')) return first ? { calls: [['propose_widget', { widgets: [draft('Chiefs Week 77')] }]] } : {};
   if (u.includes('digit advice')) return { content: 'You should buy YES at 73.' };
+  if (u.includes('copies the note')) return first ? { calls: [['propose_widget', { widgets: [draft('Chiefs note')] }]] } : { content: TOOL_NOTE };
+  if (u.includes('only a note')) return first ? { calls: [['quote_market', { market_id: KC }]] } : { content: TOOL_NOTE };
   if (u.includes('49ers')) return { content: 'The 49ers it is.' };
   if (u.includes('number bait')) return { content: 'The market says 70% today.' };
   if (u.includes('stray slot')) return { content: 'The market says {n7}.' };
