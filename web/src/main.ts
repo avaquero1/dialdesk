@@ -13,6 +13,7 @@ import { fillIcons } from './icons.ts';
 import { Live } from './live.ts';
 import { initLook, lookFromServer } from './look.ts';
 import { initMoment, onRunEvent, paintAll } from './moment.ts';
+import { initAccounts } from './accounts.ts';
 import { closeSurface, initSurfaces, openApp, openFolder, openMenu, openNow, syncLook, toast } from './surfaces.ts';
 import { openHow } from './safety.ts';
 
@@ -180,6 +181,7 @@ async function start(a: Account) {
       if (id) openApp(id);
     },
   });
+  initAccounts({ account: () => account });
   initChat(a, { relayout: () => requestAnimationFrame(() => layoutAll()), pending: b.pending.map((p) => p.proposal_id), boardChanged: () => refetchSoon(0) });
   live = new Live({
     onEvent,

@@ -4,6 +4,7 @@
  * server or from a model. The words follow the house rules: implied probability, movement, expected value.
  */
 import type { Quote, Widget, WidgetResult } from '@app/contracts';
+import { connections, exchangeName } from './conns.ts';
 import { css, esc } from './dom.ts';
 import { IC } from './icons.ts';
 
@@ -218,18 +219,26 @@ function news(w: Widget, s: Display) {
 function positions(w: Widget, s: Display) {
   const v = nums(w, 'position_value')[0];
   const pnl = nums(w, 'pnl')[0];
-  if (!s.params.connection_id || !w.result) {
+  if (s.params.connection_id && w.result)
     return (
       head(s.title) +
-      '<div class="who">No account connected</div>' +
-      '<div class="w-empty">Connect Kalshi or Polymarket, read only, in Accounts. The agent never trades.</div>'
+      '<div class="who">Connected <span class="pillnote">read only</span></div>' +
+      `<div class="bal num">${v ? esc(fmtNum(v)) : '—'}</div>` +
+      `<div class="pos-meta">${pnl ? `<span class="mv mv--${mvCls(pnl.value)} num">${esc(signedUsd(pnl.value))} today</span>` : ''}</div>`
     );
-  }
+  const c = connections().find((x) => x.connection_id === s.params.connection_id) ?? connections()[0];
+  if (!c)
+    return (
+      head(s.title) +
+      '<button class="acc-open" type="button" data-open-accounts><span class="who">Not connected</span>' +
+      '<span class="w-empty">Tap to connect Kalshi or Polymarket, read only, in Accounts. The agent never trades.</span></button>'
+    );
+  // Connected, but no numbers on this display yet (none have been read for it).
   return (
     head(s.title) +
-    '<div class="who">Connected <span class="pillnote">read only</span></div>' +
-    `<div class="bal num">${v ? esc(fmtNum(v)) : '—'}</div>` +
-    `<div class="pos-meta">${pnl ? `<span class="mv mv--${mvCls(pnl.value)} num">${esc(signedUsd(pnl.value))} today</span>` : ''}</div>`
+    `<div class="who">${esc(exchangeName(c.exchange))} <span class="pillnote">read only</span></div>` +
+    `<div class="w-empty">${esc(c.exchange === 'kalshi' && c.checked_at ? `Checked with Kalshi at ${fmtTime(c.checked_at)}. We can look, never trade.` : 'Public wallet. We can look, never trade.')}</div>` +
+    '<div class="w-empty">No balance or positions on this display yet.</div>'
   );
 }
 

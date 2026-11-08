@@ -228,7 +228,7 @@ function makeTile(w: Widget): HTMLElement {
 }
 
 /** Re-renders a tile's inside in place (new numbers), keeping its position and its motion classes. */
-function refreshTile(id: string) {
+export function refreshTile(id: string) {
   const el = EL.get(id);
   const w = S.widgets.get(id);
   if (!el || !w) return;

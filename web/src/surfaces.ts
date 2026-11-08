@@ -2,17 +2,18 @@
  * Surfaces: the ⋯ menu, the app sheets, the open folder and the Look sheet. Each pours from where it started (the
  * button or the tile) to its final box and drains back. Content is laid out at the final size; only the box moves.
  *
- * Safety (the trust page) and How we got this live in safety.ts. Not built yet: the menu's agent row, Accounts and Catalog.
- * They show as greyed items or a "next build" note, never as fake results.
+ * Safety (the trust page) and How we got this live in safety.ts, Accounts in accounts.ts. Not built yet: Catalog. It shows
+ * a "next build" note, never fake results.
  */
 import type { Account, Widget, WidgetResult } from '@app/contracts';
-import { $, $$, clamp, css, cssNum, esc, mk, reduced, root } from './dom.ts';
+import { $, $$, clamp, css, cssNum, esc, mk, reduced, root, setHtml } from './dom.ts';
 import { EL, S, buildLens } from './board.ts';
 import { IC, type IconName } from './icons.ts';
 import { L, THEMES, mqDark, resolveMode, setLook, themeHue } from './look.ts';
 import { cardHtml, fmtNum, fmtTime, tileName } from './widgets.ts';
 import { foldersFor, menuRows, sizesFor, type MenuAction } from './menu.ts';
 import { openHow, openSafety } from './safety.ts';
+import { openAccounts } from './accounts.ts';
 
 interface Box {
   x: number;
@@ -21,7 +22,7 @@ interface Box {
   h: number;
   r: number;
 }
-type Surface = HTMLDivElement & { _set: (b: Box) => void; _from: () => Box };
+type Surface = HTMLDivElement & { _set: (b: Box) => void; _from: () => Box; _place: (natural: number) => Box };
 
 let layer: HTMLElement;
 let scrim: HTMLElement;
@@ -105,10 +106,23 @@ function openSurface(o: Open): Surface {
   set(to);
   s._set = set;
   s._from = o.fromFn ?? (() => o.from);
+  s._place = o.place;
   scrim.className = 'scrim on' + (o.clear ? ' clear' : '');
   SF = s;
   o.after?.(s);
   return s;
+}
+
+/** New content for the open surface (or none: it grew), and its box moves to fit it, as on open (Accounts). */
+export function refill(html?: string) {
+  const s = SF;
+  const inner = s?.querySelector<HTMLElement>('.s-in');
+  if (!s || !inner) return;
+  if (html !== undefined) setHtml(inner, html);
+  inner.style.height = '';
+  const to = s._place(inner.offsetHeight);
+  inner.style.height = to.h + 'px';
+  s._set(to);
 }
 
 export function closeSurface(instant?: boolean) {
@@ -311,7 +325,6 @@ function settingsBody() {
 
 const APP_BODY: Record<string, () => string> = {
   receipts: receiptsBody,
-  accounts: () => sheetHead('Accounts', 'The agent reads. It never trades for you.') + nextBuild('Connect Kalshi or Polymarket with a read-only key.', 2),
   catalog: () => sheetHead('Catalog', 'Add a widget to your board.') + nextBuild('Adding widgets by hand and through the chat.', 2),
   settings: settingsBody,
 };
@@ -320,6 +333,7 @@ export function openApp(id: string) {
   const w = S.widgets.get(id);
   if (!w || w.spec.kind !== 'app') return;
   if (w.spec.app === 'trust') return void openSafety(id);
+  if (w.spec.app === 'accounts') return openAccounts(id);
   const body = APP_BODY[w.spec.app];
   if (!body) return;
   panel('sheet', body(), {

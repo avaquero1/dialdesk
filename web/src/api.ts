@@ -3,7 +3,7 @@
  * Every state-changing call carries the page's Origin (the browser adds it) and edge checks it.
  * Any route may answer 429 (rate limits) or 413 (body cap): both become a notice, never a crash.
  */
-import type { Account, Board, ChatReply, ChatTurn, EDGE, Look, Output, Proposal, RunTraceStep, Widget } from '@app/contracts';
+import type { Account, Board, ChatReply, ChatTurn, Connection, EDGE, Look, Output, Proposal, RunTraceStep, Widget } from '@app/contracts';
 
 export type { Account, Board, Look, Widget };
 /** The Safety app's data: audit's counts and models' spend, through edge. */
@@ -107,4 +107,11 @@ export const api = {
   trace: (id: string) => call<{ steps: RunTraceStep[] }>('GET', `/api/widgets/${encodeURIComponent(id)}/trace`),
   // The top bar's chip: the same counts, quiet (it keeps its last words on a 429).
   trustQuiet: () => call<TrustPage>('GET', '/api/trust', undefined, { quiet: true }),
+  // Accounts. connect's body is opaque to edge (the private key in it is sealed to connections); quiet: the sheet says
+  // what went wrong in its own words.
+  connectionsKey: () => call<{ alg: 'x25519-sealed-box'; public_key: string }>('GET', '/api/connections/public-key', undefined, { quiet: true }),
+  connections: () => call<{ connections: Connection[] }>('GET', '/api/connections'),
+  connect: (body: Record<string, unknown>) => call<Connection>('POST', '/api/connections', body, { quiet: true }),
+  consent: (id: string, share_numbers: boolean) => call<Connection>('PUT', `/api/connections/${encodeURIComponent(id)}/consent`, { share_numbers }),
+  disconnect: (id: string) => call<{ ok: true }>('DELETE', `/api/connections/${encodeURIComponent(id)}`),
 };

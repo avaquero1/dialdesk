@@ -2,7 +2,8 @@
  * The Safety app (inside: Trust) and "How we got this" (inside: Receipts), in plain words.
  *
  * Safety: today's numbers from audit's trust page through edge, the tricks blocked on this board (from the widgets'
- * results), the connected accounts, the spend on AI per job, and the signed log with a "Check it" button (verify).
+ * results), the connected accounts, every consent the user gave (connecting an account, when, its scope; sharing its
+ * numbers), the spend on AI per job, and the signed log with a "Check it" button (verify).
  * Counts: every sealed box is destroyed after its read, so "destroyed" already includes the killed ones; a killed box
  * is also a trick blocked.
  *
@@ -16,6 +17,8 @@ import { esc, wait } from './dom.ts';
 import { S } from './board.ts';
 import { IC } from './icons.ts';
 import { closeBtn, panel, rz, sheetHead, tileFrom, toast } from './surfaces.ts';
+import { loadConnections } from './accounts.ts';
+import { connections } from './conns.ts';
 import { fmtNum, fmtTime, tileName } from './widgets.ts';
 
 type Num = WidgetResult['numbers'][number];
@@ -60,6 +63,57 @@ const stat = (n: number, words: string, i: number, key: string) =>
 const section = (t: string, i: number) => `<h3 class="sf-h${rz(i)}>${esc(t)}</h3>`;
 const line = (t: string, s: string, i: number, cls = '') => `<div class="rowitem${cls}${rz(i)}><div class="grow"><div class="t">${esc(t)}</div><div class="s">${esc(s)}</div></div></div>`;
 
+type Counts = TrustPage['counts'];
+
+/** Connected accounts: the log's scope checks, and the live list (a fake or a log that is a step behind). */
+function connectedNow(logged: Counts['connected']) {
+  const out = new Map(logged.map((a) => [a.connection_id, a]));
+  for (const x of connections())
+    if (!out.has(x.connection_id) && x.checked_at && (x.exchange === 'kalshi' ? x.scope_verified : true))
+      out.set(x.connection_id, { connection_id: x.connection_id, exchange: x.exchange, scope: x.scope, checked_at: x.checked_at });
+  return [...out.values()];
+}
+
+const dayTime = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${fmtTime(iso)}`;
+};
+
+/**
+ * Every consent the user gave, newest first: each account they connected (when, and its scope) and each time they let
+ * their widgets use its numbers or stopped (audit's consent.* rows). From the log, plus the live connections list.
+ */
+function consentsGiven(c: Counts) {
+  const ex = new Map<string, string>();
+  for (const a of c.connected) ex.set(a.connection_id, a.exchange);
+  for (const x of connections()) ex.set(x.connection_id, x.exchange);
+  const out: { at: string; kind: string; what: string; sub: string }[] = [];
+  const seen = new Set<string>();
+  const connect = (id: string, exchange: string, scope: string, at: string, label?: string) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const who = exchange === 'polymarket' ? `your Polymarket wallet${label ? ` ${label}` : ''}` : `Kalshi${label ? ` (key ${label})` : ''}`;
+    const sc = scope === 'read' ? 'Read only: we can see your balance and positions, never trade or move money.' : `Only "${scope}".`;
+    out.push({ at, kind: 'connect', what: `You connected ${who}`, sub: `${dayTime(at)}. ${sc}` });
+  };
+  for (const x of connections()) if (x.checked_at) connect(x.connection_id, x.exchange, x.scope, x.checked_at, x.label);
+  for (const a of c.connected) connect(a.connection_id, a.exchange, a.scope, a.checked_at);
+  for (const g of c.consents) {
+    const name = exName(ex.get(g.subject_id ?? '') ?? 'your account');
+    const what = g.action.endsWith('numbers_shared')
+      ? `You let your widgets use ${name}'s numbers`
+      : g.action.endsWith('numbers_withdrawn')
+        ? `You stopped sharing ${name}'s numbers`
+        : `You allowed: ${g.action.replace(/^consent\./, '').replace(/_/g, ' ')}`;
+    out.push({ at: g.at, kind: g.action.replace(/^consent\./, ''), what, sub: `${dayTime(g.at)}. Balance and positions only, never a key.` });
+  }
+  // The live list says sharing is on but the log has no row for it yet: still show it.
+  for (const x of connections())
+    if (x.share_numbers && !c.consents.some((g) => g.subject_id === x.connection_id))
+      out.push({ at: x.checked_at ?? '', kind: 'numbers_shared', what: `You let your widgets use ${exName(x.exchange)}'s numbers`, sub: 'Balance and positions only, never a key.' });
+  return out.sort((a, b) => b.at.localeCompare(a.at));
+}
+
 function safetyHTML(t: TrustPage | null) {
   let i = 2;
   const head = sheetHead('Safety', 'Every article is read in a sealed box that is destroyed right after.');
@@ -88,13 +142,19 @@ function safetyHTML(t: TrustPage | null) {
   else html.push(line('None on your board', 'When a page tries to give the agent orders, it shows here with the time.', i++));
 
   html.push(section('Connected accounts', i++));
-  if (c.connected.length)
-    for (const a of c.connected)
+  const conns = connectedNow(c.connected);
+  if (conns.length)
+    for (const a of conns)
       html.push(
         `<div class="rowitem${rz(i++)}><span class="ic ok">${IC.check}</span><div class="grow"><div class="t">${esc(exName(a.exchange))}</div>` +
-          `<div class="s">${esc(`${a.scope === 'read' ? 'Read only' : `Only "${a.scope}"`}, checked with ${exName(a.exchange)} at ${fmtTime(a.checked_at)}. We can look, never trade.`)}</div></div></div>`,
+          `<div class="s">${esc(a.exchange === 'polymarket' ? 'Public wallet, read only. We can look, never trade.' : `${a.scope === 'read' ? 'Read only' : `Only "${a.scope}"`}, checked with ${exName(a.exchange)} at ${fmtTime(a.checked_at)}. We can look, never trade.`)}</div></div></div>`,
       );
   else html.push(line('No accounts connected', 'Connecting one is always read only: we can look, never trade.', i++));
+
+  html.push(section('What you allowed', i++));
+  const given = consentsGiven(c);
+  if (given.length) for (const g of given) html.push(`<div class="rowitem sf-consent${rz(i++)} data-consent="${esc(g.kind)}"><span class="ic">${IC.check}</span><div class="grow"><div class="t">${esc(g.what)}</div><div class="s">${esc(g.sub)}</div></div></div>`);
+  else html.push(line('Nothing yet', 'When you connect an account or let your widgets use its numbers, it shows here with the time.', i++));
 
   const sp = t.spend;
   html.push(section('Spent on AI today', i++));
@@ -124,7 +184,7 @@ function verifyWords(v: Verify) {
 }
 
 export async function openSafety(id: string) {
-  const t = await api.trust().catch(() => null);
+  const [t] = await Promise.all([api.trust().catch(() => null), loadConnections()]);
   panel('sheet sheet--safety', safetyHTML(t), {
     w: 520,
     from: tileFrom(id),
