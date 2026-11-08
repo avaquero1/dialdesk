@@ -13,7 +13,7 @@
  */
 import type { RunTraceStep, Widget, WidgetResult } from '@app/contracts';
 import { api, ApiError, type TrustPage, type Verify } from './api.ts';
-import { esc, wait } from './dom.ts';
+import { esc, mk, reduced, wait } from './dom.ts';
 import { S } from './board.ts';
 import { IC } from './icons.ts';
 import { closeBtn, panel, rz, sheetHead, tileFrom, toast } from './surfaces.ts';
@@ -123,7 +123,7 @@ function safetyHTML(t: TrustPage | null) {
   const html = [head, section('Today', i++)];
   html.push(
     `<div class="sf-stats">` +
-      stat(c.sandboxes_created, c.sandboxes_created === 1 ? 'article read in a sealed box' : 'articles read in sealed boxes', i++, 'read') +
+      stat(c.articles_read, c.articles_read === 1 ? 'article read in a sealed box' : 'articles read in sealed boxes', i++, 'read') +
       stat(c.sandboxes_destroyed, c.sandboxes_destroyed === 1 ? 'sealed box destroyed after use' : 'sealed boxes destroyed after use', i++, 'destroyed') +
       stat(c.proxy_refused, c.proxy_refused === 1 ? 'request stopped at the door' : 'requests stopped at the door', i++, 'stopped') +
       stat(tricks, tricks === 1 ? 'trick blocked' : 'tricks blocked', i++, 'tricks') +
@@ -230,6 +230,62 @@ function pricesStep(w: Widget, r: WidgetResult | null) {
   return p(t) + (stale ? p("One exchange wasn't answering, so these are the last prices we had.") : '');
 }
 
+/**
+ * A clean page's screenshot, small, tap to enlarge; the picture loads after the sheet opens (loadShots). Only a read
+ * that finished clean has one: a blocked or poisoned read shows its site and time, never a picture or its words.
+ */
+function shotHTML(r: WidgetResult, s: WidgetResult['sources'][number], tr: RunTraceStep | undefined) {
+  if (!tr?.source?.screenshot_key || tr.status !== 'ok' || s.status !== 'read' || r.blocked.some((b) => b.candidate_id === s.candidate_id)) return '';
+  const label = `The page on ${s.domain}, as its sealed box saw it. Tap to enlarge.`;
+  return (
+    `<button class="how-shot is-loading" type="button" data-shot-run="${esc(tr.run_id)}" data-shot-cnd="${esc(s.candidate_id)}" aria-label="${esc(label)}">` +
+    `<img alt="" decoding="async"><span class="how-shot-tag">External page</span></button>`
+  );
+}
+
+const PNG_B64 = /^iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/;
+/** Fills each screenshot button of an open How we got this; one that doesn't load is removed (never a broken image). */
+function loadShots(sheet: HTMLElement, widgetId: string) {
+  for (const b of sheet.querySelectorAll<HTMLButtonElement>('.how-shot')) {
+    api
+      .screenshot(widgetId, b.dataset.shotRun!, b.dataset.shotCnd!)
+      .then((x) => {
+        if (!PNG_B64.test(x.png_base64)) throw new Error('not a PNG');
+        const img = b.querySelector('img')!;
+        img.addEventListener('load', () => b.classList.remove('is-loading'), { once: true });
+        img.src = `data:image/png;base64,${x.png_base64}`;
+      })
+      .catch(() => b.remove());
+  }
+}
+
+/** The screenshot, large, over everything; a tap or Escape closes it. Opacity and transform only. */
+function zoomShot(b: HTMLButtonElement) {
+  const src = b.querySelector('img')?.src;
+  if (!src || b.classList.contains('is-loading')) return;
+  const z = mk('div', 'how-zoom', `<figure><img alt=""><figcaption>External page · tap to close</figcaption></figure>`);
+  z.setAttribute('role', 'dialog');
+  z.setAttribute('aria-label', b.getAttribute('aria-label')!.replace(' Tap to enlarge.', ''));
+  z.querySelector('img')!.src = src;
+  const close = () => {
+    removeEventListener('keydown', key, true);
+    z.classList.remove('is-open');
+    setTimeout(() => z.remove(), reduced() ? 0 : 220);
+    b.focus();
+  };
+  const key = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    close();
+  };
+  z.addEventListener('click', close);
+  addEventListener('keydown', key, true);
+  document.body.append(z);
+  z.tabIndex = -1;
+  z.focus();
+  requestAnimationFrame(() => z.classList.add('is-open'));
+}
+
 function articlesStep(r: WidgetResult | null, trace: RunTraceStep[]) {
   if (!r) return p('Nothing read yet. Until its first run, this widget shows the latest exchange prices only.');
   const reads = new Map(trace.filter((s) => s.step === 'read' && s.source).map((s) => [s.source!.candidate_id, s]));
@@ -237,7 +293,10 @@ function articlesStep(r: WidgetResult | null, trace: RunTraceStep[]) {
   for (const s of r.sources) {
     const tr = reads.get(s.candidate_id);
     const who = s.outlet ?? s.domain;
-    if (s.status === 'read') out.push(`<li class="how-src is-read">${IC.check}<span><b>${esc(who)}</b> was read in a sealed box${tr ? ` at ${esc(fmtTime(tr.at))}` : ''}. The box was destroyed after.</span></li>`);
+    if (s.status === 'read')
+      out.push(
+        `<li class="how-src is-read">${IC.check}<span><b>${esc(who)}</b> was read in a sealed box${tr ? ` at ${esc(fmtTime(tr.at))}` : ''}. The box was destroyed after.${shotHTML(r, s, tr)}</span></li>`,
+      );
     else if (s.status === 'blocked') {
       const b = r.blocked.find((x) => x.candidate_id === s.candidate_id);
       out.push(
@@ -309,6 +368,11 @@ export async function openHow(id: string) {
     from: tileFrom(id),
     fromFn: () => tileFrom(id),
     after: (s) => {
+      loadShots(s, id);
+      s.addEventListener('click', (e) => {
+        const sh = (e.target as Element).closest<HTMLButtonElement>('.how-shot');
+        if (sh) zoomShot(sh);
+      });
       const b = s.querySelector<HTMLButtonElement>('#how-toggle')!;
       const d = s.querySelector<HTMLElement>('#how-details')!;
       b.addEventListener('click', () => {

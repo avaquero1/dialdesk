@@ -105,6 +105,16 @@ export const api = {
   trust: () => call<TrustPage>('GET', '/api/trust'),
   auditVerify: () => call<Verify>('GET', '/api/audit/verify'),
   trace: (id: string) => call<{ steps: RunTraceStep[] }>('GET', `/api/widgets/${encodeURIComponent(id)}/trace`),
+  /** A clean page's screenshot (the widget owner's only). quiet: a missing one just isn't shown. */
+  screenshot: (id: string, run: string, cnd: string) =>
+    call<{ screenshot_key: string; content_type: 'image/png'; png_base64: string }>(
+      'GET',
+      `/api/widgets/${encodeURIComponent(id)}/screenshots/${encodeURIComponent(run)}/${encodeURIComponent(cnd)}`,
+      undefined,
+      { quiet: true },
+    ),
+  // The Add app: one widget of a catalog type with its prescribed defaults, accepted at once.
+  addWidget: (type: string) => call<{ proposal: Proposal; widgets: Widget[] }>('POST', '/api/widgets', { type }),
   // The top bar's chip: the same counts, quiet (it keeps its last words on a 429).
   trustQuiet: () => call<TrustPage>('GET', '/api/trust', undefined, { quiet: true }),
   // Accounts. connect's body is opaque to edge (the private key in it is sealed to connections); quiet: the sheet says

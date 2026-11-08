@@ -58,7 +58,8 @@ async function seed(account_id: string, ids: { gap: string; news: string }) {
   const env = stackEnv();
   const bus = busFromConfig('runner', { VALKEY_URL: env.RUNNER_VALKEY_URL });
   const sm = (action: string, subject_id: string, rest: Record<string, unknown> = {}) => bus.log(logEntry('sandbox-manager', action, { account_id, subject_id, ...rest }));
-  for (const s of ['sbx_safety01', 'sbx_safety02', 'sbx_safety03']) await sm('sandbox.created', s);
+  for (const s of ['sbx_safety01', 'sbx_safety02', 'sbx_safety03']) await sm('sandbox.created', s, { ids: { kind: 'browse' } });
+  await sm('sandbox.created', 'sbx_safety00', { ids: { kind: 'compute' } });
   await sm('sandbox.killed', 'sbx_safety03', { outcome: 'killed' });
   await sm('proxy.refused', 'sbx_safety03', { sizes: { requests: 4 } });
   for (const s of ['sbx_safety01', 'sbx_safety02', 'sbx_safety03']) await sm('sandbox.destroyed', s);
@@ -123,12 +124,16 @@ beforeAll(async () => {
   await seed(me.account_id, { gap: gap.widget_id, news: news.widget_id });
   // audit reads the log stream on its own clock: wait until it has counted the rows.
   let seen = 0;
-  for (let t = 0; t < 60 && seen !== 7; t++) {
+  let counts = { sandboxes_created: 0, articles_read: 0, proxy_refused: 0 };
+  for (let t = 0; t < 60 && seen !== 8; t++) {
     if (t) await page.waitForTimeout(500);
-    const tr = await page.evaluate(() => fetch('/api/trust').then((r) => r.json() as Promise<{ counts: { sandboxes_created: number; proxy_refused: number } }>));
+    const tr = await page.evaluate(() => fetch('/api/trust').then((r) => r.json() as Promise<{ counts: { sandboxes_created: number; articles_read: number; proxy_refused: number } }>));
+    counts = tr.counts;
     seen = tr.counts.sandboxes_created + tr.counts.proxy_refused;
   }
-  expect(seen, 'audit counted the seeded rows').toBe(7);
+  expect(seen, 'audit counted the seeded rows').toBe(8);
+  // 4 sealed boxes, but only the 3 browse boxes are articles: the compute box is the math step's.
+  expect(counts).toMatchObject({ sandboxes_created: 4, articles_read: 3 });
   await page.reload();
   await ready(page);
   await settled(page);

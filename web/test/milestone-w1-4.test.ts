@@ -97,7 +97,9 @@ describe('Milestone W1.4: the containment moment on screen (phone)', () => {
     Object.assign(T, { account_id: me.account_id, widget_id: one!.widget_id, title: one!.title });
 
     // An earlier clean research run: 3 articles read in 3 sealed boxes, 62% on the widget.
-    for (const s of ['sbx_m01', 'sbx_m02', 'sbx_m03']) await sm('sandbox.created', s);
+    for (const s of ['sbx_m01', 'sbx_m02', 'sbx_m03']) await sm('sandbox.created', s, { ids: { kind: 'browse' } });
+    // The math step's compute box: a sealed box, but not an article (the chip counts articles_read).
+    await sm('sandbox.created', 'sbx_m00', { ids: { kind: 'compute' } });
     for (const s of ['sbx_m01', 'sbx_m02', 'sbx_m03']) await sm('sandbox.destroyed', s);
     clean = sampleResult(T.widget_id, T.account_id, 'pass');
     clean.result.numbers[0]!.value = 0.62;
@@ -139,7 +141,7 @@ describe('Milestone W1.4: the containment moment on screen (phone)', () => {
       return { name: getComputedStyle(s).animationName, iter: getComputedStyle(s).animationIterationCount, spinners: e.querySelectorAll('[class*="spin"]').length };
     });
     expect(shimmer).toEqual({ name: 'shimmer', iter: 'infinite', spinners: 0 });
-    for (const s of ['sbx_m04', 'sbx_m05', 'sbx_m06']) await sm('sandbox.created', s);
+    for (const s of ['sbx_m04', 'sbx_m05', 'sbx_m06']) await sm('sandbox.created', s, { ids: { kind: 'browse' } });
     await step({ step: 'read', status: 'ok', source: a, sandbox: { sandbox_id: 'sbx_m04', state: 'held' }, proxy: { allowed: 3, refused: 0 } });
     await step({ step: 'read', status: 'ok', source: bad, sandbox: { sandbox_id: 'sbx_m05', state: 'held' }, proxy: { allowed: 1, refused: 4 } });
     await step({ step: 'extract', status: 'ok', sandbox: { sandbox_id: 'sbx_m04', state: 'released' }, note: '1 fact(s)' });
@@ -207,6 +209,9 @@ describe('Milestone W1.4: the containment moment on screen (phone)', () => {
     // The chip: 6 articles read safely today, 1 trick blocked (audit's counts through edge).
     await expect.poll(() => chip().getAttribute('aria-label'), { timeout: 20_000 }).toBe('Safety: 6 articles read safely today · 1 trick blocked');
     expect(await chip().innerText()).toBe('1 trick blocked');
+    // The count is articles_read (browse boxes), not every sealed box: the compute box isn't an article.
+    const counts = await page.evaluate(() => fetch('/api/trust').then((r) => r.json()).then((j) => j.counts as { sandboxes_created: number; articles_read: number }));
+    expect(counts).toMatchObject({ sandboxes_created: 7, articles_read: 6 });
     await settled(page);
     await shot(page, '4-after');
     await tile().screenshot({ path: join(SHOTS, 'w1-4-4-after-tile.png') });

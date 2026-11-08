@@ -7,7 +7,8 @@ import type { RunTraceStep, WidgetResult } from '@app/contracts';
 
 /** The two counts the chip reads from audit's trust page (TrustCounts; tricks are boxes killed, as the Safety sheet counts them). */
 export interface ChipCounts {
-  sandboxes_created: number;
+  /** browse boxes only (audit): the math step's compute boxes are not articles. */
+  articles_read: number;
   sandboxes_killed: number;
 }
 
@@ -24,7 +25,7 @@ const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en
 /** The chip: "128 articles read safely today · 1 trick blocked" (tricks only when there were some). */
 export function chipWords(c: ChipCounts | null): { long: string; short: string } {
   if (!c) return { long: 'Every article read in a sealed box', short: 'Sealed boxes' };
-  const read = c.sandboxes_created;
+  const read = c.articles_read;
   const tricks = c.sandboxes_killed;
   const long = read ? `${plural(read, 'article', 'articles')} read safely today` : 'No articles read yet today';
   const n = read.toLocaleString('en-US');

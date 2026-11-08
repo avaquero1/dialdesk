@@ -14,10 +14,10 @@ const fold = (steps: RunTraceStep[], r: RunView = newRun(run_id, 'research')) =>
 
 describe('the safety chip', () => {
   it('says how many articles were read safely today, and the tricks blocked only when there were some', () => {
-    expect(chipWords({ sandboxes_created: 128, sandboxes_killed: 1 })).toEqual({ long: '128 articles read safely today · 1 trick blocked', short: '1 trick blocked' });
-    expect(chipWords({ sandboxes_created: 3, sandboxes_killed: 0 }).long).toBe('3 articles read safely today');
-    expect(chipWords({ sandboxes_created: 1, sandboxes_killed: 2 }).long).toBe('1 article read safely today · 2 tricks blocked');
-    expect(chipWords({ sandboxes_created: 0, sandboxes_killed: 0 }).long).toBe('No articles read yet today');
+    expect(chipWords({ articles_read: 128, sandboxes_killed: 1 })).toEqual({ long: '128 articles read safely today · 1 trick blocked', short: '1 trick blocked' });
+    expect(chipWords({ articles_read: 3, sandboxes_killed: 0 }).long).toBe('3 articles read safely today');
+    expect(chipWords({ articles_read: 1, sandboxes_killed: 2 }).long).toBe('1 article read safely today · 2 tricks blocked');
+    expect(chipWords({ articles_read: 0, sandboxes_killed: 0 }).long).toBe('No articles read yet today');
     expect(chipWords(null).long).toBe('Every article read in a sealed box');
   });
 });

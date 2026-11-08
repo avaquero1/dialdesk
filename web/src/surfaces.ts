@@ -2,18 +2,19 @@
  * Surfaces: the ⋯ menu, the app sheets, the open folder and the Look sheet. Each pours from where it started (the
  * button or the tile) to its final box and drains back. Content is laid out at the final size; only the box moves.
  *
- * Safety (the trust page) and How we got this live in safety.ts, Accounts in accounts.ts. Not built yet: Catalog. It shows
- * a "next build" note, never fake results.
+ * Safety (the trust page) and How we got this live in safety.ts, Accounts in accounts.ts, Add and Settings in apps.ts.
+ * Not built yet: the menu's agent row. It shows as a greyed item, never fake results.
  */
 import type { Account, Widget, WidgetResult } from '@app/contracts';
 import { $, $$, clamp, css, cssNum, esc, mk, reduced, root, setHtml } from './dom.ts';
-import { EL, S, buildLens } from './board.ts';
+import { EL, S } from './board.ts';
 import { IC, type IconName } from './icons.ts';
 import { L, THEMES, mqDark, resolveMode, setLook, themeHue } from './look.ts';
 import { cardHtml, fmtNum, fmtTime, tileName } from './widgets.ts';
 import { foldersFor, menuRows, sizesFor, type MenuAction } from './menu.ts';
 import { openHow, openSafety } from './safety.ts';
 import { openAccounts } from './accounts.ts';
+import { addBody, addClick, settingsBody, settingsClick } from './apps.ts';
 
 interface Box {
   x: number;
@@ -34,6 +35,8 @@ export interface SurfaceHooks {
   account: () => Account | null;
   logout: () => void;
   closeChat: () => void;
+  /** The board changed on the server (the Add app added a widget): fetch it, so the change pours in. */
+  boardChanged: () => void;
   /** A row of the ⋯ menu: refresh, size (arg: the size), move (arg: the folder id), clear (already asked), remove. */
   menuAction: (id: string, act: MenuAction, arg?: string) => void;
 }
@@ -179,8 +182,6 @@ export const closeBtn = (i: number) => `<button class="iconbtn${rz(i)} type="but
 export const sheetHead = (t: string, sub?: string) => `<div class="sh-head${rz(0)}><h2>${esc(t)}</h2>${closeBtn(0)}</div>` + (sub ? `<p class="sh-sub${rz(1)}>${esc(sub)}</p>` : '');
 const rowi = (ic: IconName, t: string, s: string, right: string, i: number) =>
   `<div class="rowitem${rz(i)}><span class="ic">${IC[ic]}</span><div class="grow"><div class="t">${esc(t)}</div><div class="s">${esc(s)}</div></div>${right}</div>`;
-/** A plain note for a part that is not built yet. */
-const nextBuild = (what: string, i: number) => `<div class="stub-note${rz(i)}><b>Next build.</b> ${esc(what)}</div>`;
 export const tileFrom = (id: string) => {
   const t = EL.get(id)?.querySelector('.a-tile, .f-tile');
   return t ? boxOf(t.getBoundingClientRect(), S.tile * 0.27) : boxOf({ left: innerWidth / 2 - 30, top: innerHeight / 2 - 30, width: 60, height: 60 }, 16);
@@ -313,19 +314,9 @@ function receiptsBody() {
   );
 }
 
-function settingsBody() {
-  const toggle = (k: string, on: boolean, label: string, sub: string, i: number) =>
-    `<div class="rowitem${rz(i)}><div class="grow"><div class="t">${esc(label)}</div><div class="s">${esc(sub)}</div></div><button class="toggle" type="button" data-toggle="${k}" aria-pressed="${on}" aria-label="${esc(label)}"></button></div>`;
-  return (
-    sheetHead('Settings') +
-    toggle('motion', reduced(), 'Reduced motion', 'Every change becomes a short fade', 1) +
-    toggle('refract', root.dataset.refract === '1', 'Glass refraction', 'Bends the wallpaper at the glass edge (Chromium)', 2)
-  );
-}
-
 const APP_BODY: Record<string, () => string> = {
   receipts: receiptsBody,
-  catalog: () => sheetHead('Catalog', 'Add a widget to your board.') + nextBuild('Adding widgets by hand and through the chat.', 2),
+  catalog: addBody,
   settings: settingsBody,
 };
 
@@ -344,28 +335,11 @@ export function openApp(id: string) {
       s.addEventListener('click', (e) => {
         const how = (e.target as Element).closest<HTMLElement>('[data-how]');
         if (how) return void openHow(how.dataset.how!);
-        const t = (e.target as Element).closest<HTMLElement>('[data-toggle]');
-        if (!t) return;
-        const on = t.getAttribute('aria-pressed') !== 'true';
-        t.setAttribute('aria-pressed', String(on));
-        if (t.dataset.toggle === 'motion') root.dataset.motion = on ? 'reduced' : 'full';
-        else {
-          root.dataset.refract = on ? '1' : '0';
-          buildLens();
-        }
-        savePrefs();
+        if (w.spec.kind === 'app' && w.spec.app === 'catalog') return void addClick(e, hooks.boardChanged);
+        if (w.spec.kind === 'app' && w.spec.app === 'settings') settingsClick(e, hooks.logout);
       });
     },
   });
-}
-
-/** Per-device display preferences (not the look, which lives in the account). */
-export function savePrefs() {
-  try {
-    localStorage.setItem('prefs', JSON.stringify({ motion: root.dataset.motion, refract: root.dataset.refract }));
-  } catch {
-    /* storage blocked: the preference lasts for this page only */
-  }
 }
 
 // ---------- the account sheet (the avatar) ----------

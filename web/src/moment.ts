@@ -179,7 +179,7 @@ async function loadChip() {
     chip.classList.add('is-new');
   }
   chip.setAttribute('aria-label', `Safety: ${w.long}`);
-  chip.dataset.read = String(t.counts.sandboxes_created);
+  chip.dataset.read = String(t.counts.articles_read);
   chip.dataset.tricks = String(t.counts.sandboxes_killed);
 }
 /** audit counts the log on its own clock: ask now-ish, and once more a little later. */

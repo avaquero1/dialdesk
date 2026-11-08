@@ -49,7 +49,7 @@ function reconcile(widgets: Parameters<typeof reconcileBoard>[0]) {
 }
 
 function setMotion() {
-  let pref: { motion?: string; refract?: string } = {};
+  let pref: { motion?: string; refract?: string; transparency?: string } = {};
   try {
     pref = JSON.parse(localStorage.getItem('prefs') ?? '{}') as typeof pref;
   } catch {
@@ -59,6 +59,9 @@ function setMotion() {
   root.dataset.motion = sys || pref.motion === 'reduced' || Q.get('motion') === 'reduced' ? 'reduced' : 'full';
   const canRefract = /Chrome\//.test(navigator.userAgent) && CSS.supports('backdrop-filter', 'url(#a) blur(1px)');
   root.dataset.refract = canRefract && pref.refract !== '0' && Q.get('refract') !== '0' ? '1' : '0';
+  // Reduced transparency: solid glass instead of see-through (Settings, or the device's own setting).
+  const sysSolid = matchMedia('(prefers-reduced-transparency: reduce)').matches;
+  root.dataset.transparency = sysSolid || pref.transparency === 'reduced' || Q.get('transparency') === 'reduced' ? 'reduced' : 'full';
 }
 
 /** The session ended (a 401, or /live closed with 4001 and /api/me agrees): back to the door, the board kept. */
@@ -160,6 +163,7 @@ async function start(a: Account) {
     account: () => account,
     logout,
     closeChat,
+    boardChanged: () => refetchSoon(0),
     // "Change it with the agent": the chat, with the widget named in the input.
     menuAction: (id, act, arg) => {
       if (act !== 'agent') return menuAction(id, act, arg);
