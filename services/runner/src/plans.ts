@@ -3,7 +3,7 @@
  * own spec (user_probability, window_s). A plan from the planner is checked against the widget's catalog entry; one
  * that fails is refused whole and the default plan for the type runs instead.
  */
-import { CONNECTIONS, ENGINE_OP_ARGS, EnginePlan, MARKETS, displayEntry, type DisplayType, type EngineInput, type EngineResult, type Market, type ResultSince, type WidgetResult, type WidgetSpec } from '@app/contracts';
+import { CONNECTIONS, ENGINE_OP_ARGS, EnginePlan, type EngineOpArg, MARKETS, displayEntry, type DisplayType, type EngineInput, type EngineResult, type Market, type ResultSince, type WidgetResult, type WidgetSpec } from '@app/contracts';
 import { CallError, type Call } from '@app/service-kit';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
@@ -116,8 +116,9 @@ export function planProblem(spec: DisplaySpec, plan: unknown): string | null {
 }
 
 /**
- * An op's arg names against the engine's own op schema (`engine --schema`, "ops"): an arg the op doesn't take, or a
- * required one left out, makes the engine compute nothing (the real planner wrote {"price": ...} for {"price_cents": ...}).
+ * An op's args against the engine's own op schema (`engine --schema`, "ops"): an arg the op doesn't take, a required one
+ * left out, or a key of the wrong kind (a price where a series goes) makes the engine compute nothing (the real planner
+ * wrote {"price": ...} for {"price_cents": ...}).
  */
 export function argProblem(op: Op): string | null {
   const want = ENGINE_OP_ARGS[op.op];
@@ -126,6 +127,27 @@ export function argProblem(op: Op): string | null {
   const takes = want.map((a) => a.name).join(', ');
   for (const name of Object.keys(op.args)) if (!names.has(name)) return `op ${op.id} (${op.op}) has no arg ${name}; it takes ${takes}`;
   for (const a of want) if (a.required && !(a.name in op.args)) return `op ${op.id} (${op.op}) needs arg ${a.name}`;
+  for (const a of want) {
+    const ref = op.args[a.name];
+    const kind = ref === undefined ? undefined : keyKind(ref);
+    if (kind && kind.kind !== a.kind) return `op ${op.id} (${op.op}) arg ${a.name} takes ${KIND_WORDS[a.kind]}, not ${kind.words}`;
+  }
+  return null;
+}
+
+type ArgKind = EngineOpArg['kind'];
+const KIND_WORDS: Record<ArgKind, string> = { num: 'a number', series: 'a series', history: 'a history' };
+
+/**
+ * The kind of value a key holds (numberKeys, or an earlier op's id, which is a number), with plain words for it; null
+ * for a name that is neither (planProblem refuses it as an unknown input).
+ */
+export function keyKind(key: string): { kind: ArgKind; words: string } | null {
+  if (/^n[0-9]{1,2}$/.test(key)) return { kind: 'num', words: `a number (op ${key})` };
+  if (/^(series_[0-9]+|kalshi_series|polymarket_series)$/.test(key)) return { kind: 'series', words: 'a series' };
+  if (/^(home|band)_history$/.test(key)) return { kind: 'history', words: 'a history' };
+  if (/^(price_[0-9]+|kalshi_price|polymarket_price)$/.test(key)) return { kind: 'num', words: 'a price' };
+  if (/^(window_s|day_s|ago_[0-9]+|user_probability|band_lo|band_hi)$/.test(key)) return { kind: 'num', words: 'a number' };
   return null;
 }
 

@@ -7,7 +7,8 @@ import { ENGINE_OP_ARGS, type DisplayType, type EnginePlan, type WidgetSpec } fr
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { argProblem, defaultPlan, planProblem } from '../src/plans.ts';
+import { argProblem, defaultPlan, keyKind, numberKeys, planProblem } from '../src/plans.ts';
+import { PLANNER_PROMPT } from '../src/run.ts';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
 const spec = (type: DisplayType, market_ids = ['kalshi:KXNFLGAME-26NOV08KCBUF-KC', 'polymarket:nfl-kc-buf-2026-11-08']) =>
@@ -54,4 +55,34 @@ describe("a plan's arg names, against the engine's op schema", () => {
       expect(planProblem(s, plan), type).toBeNull();
     }
   });
+
+  it("a key of the wrong kind is refused with a plain reason (a price where a series goes, a series where a number goes)", () => {
+    expect(argProblem({ id: 'n3', op: 'movement', args: { series: 'price_1', window_s: 'window_s' } })).toBe('op n3 (movement) arg series takes a series, not a price');
+    expect(argProblem({ id: 'n1', op: 'implied_probability', args: { price_cents: 'series_1' } })).toBe('op n1 (implied_probability) arg price_cents takes a number, not a series');
+    expect(argProblem({ id: 'n2', op: 'base_rate_history', args: { history: 'kalshi_series' } })).toBe('op n2 (base_rate_history) arg history takes a history, not a series');
+    expect(argProblem({ id: 'n4', op: 'price_at', args: { series: 'n1', ago_s: 'ago_1' } })).toBe('op n4 (price_at) arg series takes a series, not a number (op n1)');
+    expect(planProblem(spec('news'), { plan_version: 1, ops: [{ id: 'n1', op: 'movement', args: { series: 'kalshi_price', window_s: 'window_s' } }] })).toBe(
+      'op n1 (movement) arg series takes a series, not a price',
+    );
+    // An op's output is a number: it may feed a number arg.
+    expect(argProblem({ id: 'n2', op: 'price_to_odds', args: { probability: 'n1' } })).toBeNull();
+  });
+
+  it('every key a plan may read has a kind', () => {
+    for (const type of ['events', 'probability', 'gap', 'news', 'movement'] as const) for (const k of numberKeys(spec(type))) expect(keyKind(k), `${type} ${k}`).not.toBeNull();
+  });
 });
+
+describe("the planner's prompt, from the engine's op schema", () => {
+  it('names every engine op, one line each, with every arg name and its kind', () => {
+    const ops = Object.entries(ENGINE_OP_ARGS);
+    expect(ops.length).toBeGreaterThanOrEqual(12);
+    for (const [op, args] of ops) {
+      const lines = PLANNER_PROMPT.split('\n').filter((l) => l.startsWith(`- ${op}: `));
+      expect(lines, op).toHaveLength(1);
+      for (const a of args!) expect(lines[0], `${op} ${a.name}`).toContain(`"${a.name}": ${a.kind === 'num' ? 'number' : a.kind}${a.required ? '' : ' (optional)'}`);
+    }
+    expect(PLANNER_PROMPT.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(ops.length);
+  });
+});
+

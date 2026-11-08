@@ -1,0 +1,231 @@
+{
+  "step": "A1.3.5",
+  "recorded_on": "2026-11-08",
+  "spend": {
+    "cap_usd": 0.25,
+    "spent_usd": 0.001545,
+    "stopped": null
+  },
+  "cases": [
+    {
+      "type": "news",
+      "rep": 1,
+      "spec": {
+        "kind": "display",
+        "widget_id": "wdg_planproofnews",
+        "account_id": "acc_planproof0001",
+        "type": "news",
+        "title": "news",
+        "size": "M",
+        "market_ids": [
+          "kalshi:KXNFLGAME-26NOV08CINATL-CIN"
+        ],
+        "params": {},
+        "sources": []
+      },
+      "model": "mimo-v2.6-flash",
+      "usd": 0.00015404999999999998,
+      "content": "{\"candidate_ids\": [\"cand_1\", \"cand_3\", \"cand_4\", \"cand_2\"], \"plan\": {\"plan_version\": 1, \"ops\": [{\"id\": \"n1\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"kalshi_price\"}}, {\"id\": \"n2\", \"op\": \"movement\", \"args\": {\"series\": \"kalshi_series\", \"window_s\": \"window_s\"}}]}}",
+      "verdict": {
+        "problem": null,
+        "ops": 2,
+        "computed": 2,
+        "engine_errors": 0
+      }
+    },
+    {
+      "type": "news",
+      "rep": 2,
+      "spec": {
+        "kind": "display",
+        "widget_id": "wdg_planproofnews",
+        "account_id": "acc_planproof0001",
+        "type": "news",
+        "title": "news",
+        "size": "M",
+        "market_ids": [
+          "kalshi:KXNFLGAME-26NOV08CINATL-CIN"
+        ],
+        "params": {},
+        "sources": []
+      },
+      "model": "mimo-v2.6-flash",
+      "usd": 0.00017404999999999998,
+      "content": "{\"candidate_ids\": [\"cand_1\", \"cand_2\", \"cand_3\", \"cand_4\", \"cand_5\"], \"plan\": {\"plan_version\": 1, \"ops\": [{\"id\": \"n1\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"kalshi_price\"}}, {\"id\": \"n2\", \"op\": \"movement\", \"args\": {\"series\": \"kalshi_series\", \"window_s\": \"window_s\"}}, {\"id\": \"n3\", \"op\": \"movement\", \"args\": {\"series\": \"kalshi_series\", \"window_s\": \"day_s\"}}]}}",
+      "verdict": {
+        "problem": null,
+        "ops": 3,
+        "computed": 3,
+        "engine_errors": 0
+      }
+    },
+    {
+      "type": "events",
+      "rep": 1,
+      "spec": {
+        "kind": "display",
+        "widget_id": "wdg_planproofevents",
+        "account_id": "acc_planproof0001",
+        "type": "events",
+        "title": "events",
+        "size": "M",
+        "market_ids": [
+          "kalshi:KXNFLGAME-26NOV08CINATL-CIN",
+          "kalshi:KXNFLGAME-26NOV08CLENO-CLE",
+          "kalshi:KXNFLGAME-26NOV08DALIND-DAL"
+        ],
+        "params": {},
+        "sources": []
+      },
+      "model": "mimo-v2.6-flash",
+      "usd": 0.00022015,
+      "content": "{\"candidate_ids\": [\"cand_1\", \"cand_2\", \"cand_3\", \"cand_4\", \"cand_5\"], \"plan\": {\"plan_version\": 1, \"ops\": [{\"id\": \"n1\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"price_1\"}}, {\"id\": \"n2\", \"op\": \"movement\", \"args\": {\"series\": \"series_1\", \"window_s\": \"window_s\"}}, {\"id\": \"n3\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"price_2\"}}, {\"id\": \"n4\", \"op\": \"movement\", \"args\": {\"series\": \"series_2\", \"window_s\": \"window_s\"}}, {\"id\": \"n5\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"price_3\"}}, {\"id\": \"n6\", \"op\": \"movement\", \"args\": {\"series\": \"series_3\", \"window_s\": \"window_s\"}}, {\"id\": \"n7\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"kalshi_price\"}}, {\"id\": \"n8\", \"op\": \"movement\", \"args\": {\"series\": \"kalshi_series\", \"window_s\": \"day_s\"}}]}}",
+      "verdict": {
+        "problem": null,
+        "ops": 8,
+        "computed": 8,
+        "engine_errors": 0
+      }
+    },
+    {
+      "type": "events",
+      "rep": 2,
+      "spec": {
+        "kind": "display",
+        "widget_id": "wdg_planproofevents",
+        "account_id": "acc_planproof0001",
+        "type": "events",
+        "title": "events",
+        "size": "M",
+        "market_ids": [
+          "kalshi:KXNFLGAME-26NOV08CINATL-CIN",
+          "kalshi:KXNFLGAME-26NOV08CLENO-CLE",
+          "kalshi:KXNFLGAME-26NOV08DALIND-DAL"
+        ],
+        "params": {},
+        "sources": []
+      },
+      "model": "mimo-v2.6-flash",
+      "usd": 0.00022689999999999999,
+      "content": "{\"candidate_ids\": [\"cand_1\", \"cand_2\", \"cand_3\"], \"plan\": {\"plan_version\": 1, \"ops\": [{\"id\": \"n1\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"price_1\"}}, {\"id\": \"n2\", \"op\": \"movement\", \"args\": {\"series\": \"series_1\", \"window_s\": \"window_s\"}}, {\"id\": \"n3\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"price_2\"}}, {\"id\": \"n4\", \"op\": \"movement\", \"args\": {\"series\": \"series_2\", \"window_s\": \"window_s\"}}, {\"id\": \"n5\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"price_3\"}}, {\"id\": \"n6\", \"op\": \"movement\", \"args\": {\"series\": \"series_3\", \"window_s\": \"window_s\"}}]}}",
+      "verdict": {
+        "problem": null,
+        "ops": 6,
+        "computed": 6,
+        "engine_errors": 0
+      }
+    },
+    {
+      "type": "probability",
+      "rep": 1,
+      "spec": {
+        "kind": "display",
+        "widget_id": "wdg_planproofprobability",
+        "account_id": "acc_planproof0001",
+        "type": "probability",
+        "title": "probability",
+        "size": "M",
+        "market_ids": [
+          "kalshi:KXNFLGAME-26NOV08CINATL-CIN"
+        ],
+        "params": {
+          "user_probability": 0.6
+        },
+        "sources": []
+      },
+      "model": "mimo-v2.6-flash",
+      "usd": 0.0002453,
+      "content": "{\"candidate_ids\": [\"cand_1\", \"cand_2\", \"cand_3\", \"cand_4\", \"cand_5\"], \"plan\": {\"plan_version\": 1, \"ops\": [{\"id\": \"n1\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"kalshi_price\"}}, {\"id\": \"n2\", \"op\": \"expected_value\", \"args\": {\"price_cents\": \"kalshi_price\", \"probability\": \"user_probability\"}}, {\"id\": \"n3\", \"op\": \"movement\", \"args\": {\"series\": \"kalshi_series\", \"window_s\": \"window_s\"}}, {\"id\": \"n4\", \"op\": \"price_at\", \"args\": {\"series\": \"kalshi_series\", \"ago_s\": \"ago_1\"}}, {\"id\": \"n5\", \"op\": \"base_rate_history\", \"args\": {\"history\": \"band_history\", \"lo_cents\": \"band_lo\", \"hi_cents\": \"band_hi\"}}, {\"id\": \"n6\", \"op\": \"base_rate_history\", \"args\": {\"history\": \"home_history\"}}]}}",
+      "verdict": {
+        "problem": null,
+        "ops": 6,
+        "computed": 6,
+        "engine_errors": 0
+      }
+    },
+    {
+      "type": "probability",
+      "rep": 2,
+      "spec": {
+        "kind": "display",
+        "widget_id": "wdg_planproofprobability",
+        "account_id": "acc_planproof0001",
+        "type": "probability",
+        "title": "probability",
+        "size": "M",
+        "market_ids": [
+          "kalshi:KXNFLGAME-26NOV08CINATL-CIN"
+        ],
+        "params": {
+          "user_probability": 0.6
+        },
+        "sources": []
+      },
+      "model": "mimo-v2.6-flash",
+      "usd": 0.00017204999999999998,
+      "content": "{\"candidate_ids\": [\"cand_1\", \"cand_2\", \"cand_3\", \"cand_4\", \"cand_5\"], \"plan\": {\"plan_version\": 1, \"ops\": [{\"id\": \"n1\", \"op\": \"implied_probability\", \"args\": {\"price_cents\": \"kalshi_price\"}}, {\"id\": \"n2\", \"op\": \"expected_value\", \"args\": {\"price_cents\": \"kalshi_price\", \"probability\": \"user_probability\"}}, {\"id\": \"n3\", \"op\": \"movement\", \"args\": {\"series\": \"kalshi_series\", \"window_s\": \"window_s\"}}, {\"id\": \"n4\", \"op\": \"price_at\", \"args\": {\"series\": \"kalshi_series\", \"ago_s\": \"ago_1\"}}, {\"id\": \"n5\", \"op\": \"base_rate_history\", \"args\": {\"history\": \"band_history\", \"lo_cents\": \"band_lo\", \"hi_cents\": \"band_hi\"}}]}}",
+      "verdict": {
+        "problem": null,
+        "ops": 5,
+        "computed": 5,
+        "engine_errors": 0
+      }
+    },
+    {
+      "type": "movement",
+      "rep": 1,
+      "spec": {
+        "kind": "display",
+        "widget_id": "wdg_planproofmovement",
+        "account_id": "acc_planproof0001",
+        "type": "movement",
+        "title": "movement",
+        "size": "M",
+        "market_ids": [
+          "kalshi:KXNFLGAME-26NOV08CINATL-CIN"
+        ],
+        "params": {
+          "window_s": 86400
+        },
+        "sources": []
+      },
+      "model": "mimo-v2.6-flash",
+      "usd": 0.0001857,
+      "content": "{\"candidate_ids\": [\"cand_1\", \"cand_2\", \"cand_3\", \"cand_4\"], \"plan\": {\"plan_version\": 1, \"ops\": [{\"id\": \"n1\", \"op\": \"movement\", \"args\": {\"series\": \"kalshi_series\", \"window_s\": \"window_s\"}}, {\"id\": \"n2\", \"op\": \"volatility\", \"args\": {\"series\": \"kalshi_series\"}}, {\"id\": \"n3\", \"op\": \"price_at\", \"args\": {\"series\": \"kalshi_series\", \"ago_s\": \"window_s\"}}]}}",
+      "verdict": {
+        "problem": null,
+        "ops": 3,
+        "computed": 3,
+        "engine_errors": 0
+      }
+    },
+    {
+      "type": "movement",
+      "rep": 2,
+      "spec": {
+        "kind": "display",
+        "widget_id": "wdg_planproofmovement",
+        "account_id": "acc_planproof0001",
+        "type": "movement",
+        "title": "movement",
+        "size": "M",
+        "market_ids": [
+          "kalshi:KXNFLGAME-26NOV08CINATL-CIN"
+        ],
+        "params": {
+          "window_s": 86400
+        },
+        "sources": []
+      },
+      "model": "mimo-v2.6-flash",
+      "usd": 0.0001672,
+      "content": "{\"candidate_ids\": [\"cand_1\", \"cand_2\", \"cand_3\", \"cand_4\", \"cand_5\"], \"plan\": {\"plan_version\": 1, \"ops\": [{\"id\": \"n1\", \"op\": \"movement\", \"args\": {\"series\": \"kalshi_series\", \"window_s\": \"window_s\"}}, {\"id\": \"n2\", \"op\": \"volatility\", \"args\": {\"series\": \"kalshi_series\"}}, {\"id\": \"n3\", \"op\": \"price_at\", \"args\": {\"series\": \"kalshi_series\", \"ago_s\": \"ago_1\"}}]}}",
+      "verdict": {
+        "problem": null,
+        "ops": 3,
+        "computed": 3,
+        "engine_errors": 0
+      }
+    }
+  ]
+}
