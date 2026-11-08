@@ -32,6 +32,7 @@ import {
   type RunTraceStep,
   type SbxJobStatus,
   type Verdict,
+  type VerdictReasonCode,
   type Widget,
   type ResultSince,
   type WidgetResult,
@@ -70,6 +71,37 @@ export interface BatchSlot {
 type Draft = Pick<WidgetResult, 'summary' | 'facts' | 'receipts' | 'numbers' | 'sources'>;
 /** A result's notes (a base rate not shown, in words), only when there are some. */
 const notesOf = (m: { notes: string[]; since?: ResultSince }) => ({ ...(m.notes.length ? { notes: m.notes } : {}), ...(m.since ? { since: m.since } : {}) });
+
+/** Why a fact was left out, per rule, in plain words for the widget (never the page's words, never a digit). */
+const LEFT_OUT_WHY: Record<VerdictReasonCode, string> = {
+  advice: 'read like advice',
+  instruction: 'read like orders to the agent',
+  exfil: 'asked for data to be sent somewhere',
+  unsourced_claim: 'had no source',
+  missing_receipt: 'had no receipt',
+  bare_digit: 'had a number with no receipt',
+  secret: 'looked like a key or a password',
+  bad_link: 'had a bad link',
+  unchecked: 'could not be checked',
+};
+const COUNT_WORDS = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+/** "One item was left out because it read like advice": one sentence per rule (a fact counts once, under its first rule). */
+export function leftOutNotes(dropped: Verdict['reasons']): string[] {
+  const byCode = new Map<VerdictReasonCode, Set<string>>();
+  const seen = new Set<string>();
+  for (const r of dropped) {
+    if (seen.has(r.where)) continue;
+    seen.add(r.where);
+    byCode.set(r.code, (byCode.get(r.code) ?? new Set()).add(r.where));
+  }
+  return [...byCode].map(([code, ids]) => {
+    const n = ids.size;
+    const count = COUNT_WORDS[n] ?? 'Some';
+    return n === 1 ? `One item was left out because it ${LEFT_OUT_WHY[code]}.` : `${count} items were left out because they ${LEFT_OUT_WHY[code]}.`;
+  });
+}
+/** The guard looks again after each cut (layer one decides alone, so layer two may only speak on the next look). */
+const MAX_GUARD_LOOKS = 5;
 
 const NO_NUMBERS = 'the engine computed no numbers';
 
@@ -442,21 +474,41 @@ class Run {
     const guard = this.guard;
     const t0 = Date.now();
     let verdict = await guard.publish(draft, this.account_id);
-    let note: string | null = null;
-    if (verdict.outcome !== 'pass' && draft.summary) {
-      // The summary broke a rule: publish the numbers and facts without it.
+    const notes: string[] = [];
+    const dropped: Verdict['reasons'] = [];
+    // A rule broken by facts (where = a fact id) leaves those facts out, and a summary that quotes them; the rest is
+    // checked again. A summary that breaks a rule goes the same way. Anything else (numbers, receipts, sources, the
+    // guard itself) blocks the whole publish, and so does nothing left.
+    for (let look = 1; verdict.outcome !== 'pass' && look < MAX_GUARD_LOOKS; look++) {
+      const factIds = new Set(draft.facts.map((f) => f.fact_id));
+      const onFacts = verdict.reasons.filter((r) => factIds.has(r.where));
+      const onSummary = verdict.reasons.filter((r) => !factIds.has(r.where) && /^summary(\.|$)/.test(r.where));
+      const elsewhere = verdict.reasons.filter((r) => !factIds.has(r.where) && !/^summary(\.|$)/.test(r.where));
+      if (onFacts.length && !elsewhere.length) {
+        const gone = new Set(onFacts.map((r) => r.where));
+        const facts = draft.facts.filter((f) => !gone.has(f.fact_id));
+        if (!facts.length) break;
+        const quotesGone = !!draft.summary && Object.values(draft.summary.slots).some((x) => x.kind === 'quote' && gone.has(x.fact_id));
+        dropped.push(...onFacts);
+        notes.push(`facts left out: ${[...new Set(onFacts.map((r) => `${r.code}@${r.where}`))].join(', ')}`);
+        if (draft.summary && (onSummary.length || quotesGone)) notes.push(onSummary.length ? `summary blocked: ${[...new Set(onSummary.map((r) => r.code))].join(', ')}` : 'summary dropped: it quotes a fact left out');
+        draft = { ...draft, facts, summary: onSummary.length || quotesGone ? null : draft.summary };
+      } else if (draft.summary) {
+        // The summary broke a rule (or something else did): publish the numbers and facts without it, then look again.
+        notes.push(`summary blocked: ${[...new Set(verdict.reasons.map((r) => r.code))].join(', ')}`);
+        draft = { ...draft, summary: null };
+      } else break;
       await this.audit('guard.blocked', { subject_id: this.job.widget_id, outcome: 'blocked', ids: { run_id: this.run_id, verdict_id: verdict.verdict_id } });
-      note = `summary blocked: ${[...new Set(verdict.reasons.map((r) => r.code))].join(', ')}`;
-      draft = { ...draft, summary: null };
       verdict = await guard.publish(draft, this.account_id);
     }
     // A block names its rules and where they hit (field paths or fact ids, never text): the trace says why nothing went out.
-    if (verdict.outcome !== 'pass') note = [note, `blocked: ${[...new Set(verdict.reasons.map((r) => `${r.code}@${r.where}`))].join(', ')}`].filter(Boolean).join('; ');
-    await this.step({ step: 'guard', status: verdict.outcome === 'pass' ? 'ok' : 'failed', verdict_id: verdict.verdict_id, note }, t0);
+    if (verdict.outcome !== 'pass') notes.push(`blocked: ${[...new Set(verdict.reasons.map((r) => `${r.code}@${r.where}`))].join(', ')}`);
+    await this.step({ step: 'guard', status: verdict.outcome === 'pass' ? 'ok' : 'failed', verdict_id: verdict.verdict_id, note: notes.join('; ') || null }, t0);
     if (verdict.outcome !== 'pass') {
       await this.audit('guard.blocked', { subject_id: this.job.widget_id, outcome: 'blocked', ids: { run_id: this.run_id, verdict_id: verdict.verdict_id } });
       throw new NoRetry('guard_block');
     }
+    if (dropped.length) extra = { ...extra, notes: [...(extra.notes ?? []), ...leftOutNotes(dropped)].slice(0, 8) };
     const result: WidgetResult = {
       result_id: newId('res'),
       widget_id: this.job.widget_id,

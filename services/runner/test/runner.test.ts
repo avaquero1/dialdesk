@@ -7,7 +7,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { BOARD, CONNECTIONS, MARKETS, MODELS, POISONED_NOTE, TRUST_ACTIONS, newId, widgetRunJobId, type CompleteBody, type LogEntry, type RunKind, type SbxJobStatus as SbxJob, type Widget, type WidgetRunJob } from '@app/contracts';
+import { BOARD, CONNECTIONS, MARKETS, MODELS, POISONED_NOTE, TRUST_ACTIONS, newId, widgetRunJobId, type CompleteBody, type LogEntry, type RunKind, type SbxJobStatus as SbxJob, type Verdict, type Widget, type WidgetRunJob } from '@app/contracts';
 import { MemoryBus, NoRetry, SandboxBusy, createClient, hashToken, sandboxClient, type Call, type SandboxClient } from '@app/service-kit';
 import { fakeApp, fixtures, pageText, TEST_TOKENS } from '@app/testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,7 +18,7 @@ import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { fake as modelsFake } from '../../models/src/fake.ts';
 import { getRunHandlers } from '../src/real.ts';
 import { LINE_POINTS, defaultPlan, isBiggestMove, lineAgo, moverIds } from '../src/plans.ts';
-import { handleRun, layerOneGuard, modelGuard, type RunnerDeps } from '../src/run.ts';
+import { handleRun, layerOneGuard, modelGuard, type Guard, type RunnerDeps } from '../src/run.ts';
 import { ACTIVE_FOR_MS, Scheduler } from '../src/scheduler.ts';
 import { MemoryStore } from '../src/store.ts';
 
@@ -463,6 +463,112 @@ describe.skipIf(!have)('runner', () => {
     expect(String(rec)).toMatch(/guard_block/);
     const steps = [...d.store.runs.values()].flatMap((r) => r.steps).filter((s) => s.step === 'guard');
     expect(steps.at(-1)!.note).toMatch(/(^|; )blocked: advice@facts\.f2$/);
+  });
+
+  // A1.3.6: a fact that breaks a rule is left out, not the whole widget.
+  /** The real guard, with reasons added at the publish stage by `flag` (what a rule or a live model said about the draft). */
+  const flagging = (d: RunnerDeps, flag: (draft: Parameters<Guard['publish']>[0]) => Verdict['reasons']): Guard => {
+    const g = modelGuard(d.models);
+    return {
+      extract: g.extract,
+      publish: async (draft, account) => {
+        const v = await g.publish(draft, account);
+        const reasons = [...v.reasons, ...flag(draft)];
+        return reasons.length ? { ...v, outcome: 'block' as const, reasons } : v;
+      },
+    };
+  };
+  /** The fake reader gives one fact a page; these tests need several. The quote is on the fixture page, so all four are kept. */
+  const FOUR_FACTS = JSON.stringify({ facts: ['The left tackle has a knee injury.', 'The left tackle is listed questionable.', 'The injury is to a starter.', 'The report names a knee problem.'].map((claim) => ({ claim, quote: 'listed as questionable with a knee injury' })) });
+  const guardNote = (d: { store: MemoryStore }) => [...d.store.runs.values()].flatMap((r) => r.steps).filter((s) => s.step === 'guard').at(-1)!.note;
+
+  it('advice in one fact (layer two names its id): that fact is left out, the rest goes out with a plain note', async () => {
+    const inner = answering('reader', FOUR_FACTS);
+    // The decision model at the publish stage calls f2 advice while f2 is in the draft.
+    const live: Call = (async (e, input) => {
+      const body = (input as { body: CompleteBody }).body;
+      const r = (await inner(e, input as never)) as { content: string };
+      if (body.role !== 'guard' || !body.messages[0]!.content.includes('{"advice": [ids]}')) return r;
+      const items = (JSON.parse(body.messages[1]!.content) as { items: { id: string }[] }).items;
+      return { ...r, content: JSON.stringify({ advice: items.some((i) => i.id === 'f2') ? ['f2'] : [] }) };
+    }) as Call;
+    const d = deps({ models: live });
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    const rec = await handleRun(d, jobFor(w, 'research'), ctx());
+    expect(rec.status).toBe('poisoned'); // this widget's fixture pages include the poisoned one: its box is killed as before
+    const r = (await current(w)).result!;
+    expect(r.facts.length).toBeGreaterThan(0);
+    expect(r.facts.map((f) => f.fact_id)).not.toContain('f2');
+    expect(r.blocked.length).toBeGreaterThan(0);
+    expect(r.facts.some((f) => r.blocked.some((b) => b.candidate_id === f.candidate_id))).toBe(false);
+    expect(r.notes).toContain('One item was left out because it read like advice.');
+    expect(r.summary).not.toBeNull(); // the fake summary quotes {q1}, not f2
+    expect(guardNote(d)).toBe('facts left out: advice@f2');
+    expect(rec.steps.find((s) => s.step === 'guard')!.status).toBe('ok');
+  });
+
+  it('a layer-one rule on facts (unsourced_claim at fact ids): one sentence per rule, and the rest goes out', async () => {
+    const d = deps({ models: answering('reader', FOUR_FACTS) });
+    d.guard = flagging(d, (draft) => [
+      ...draft.facts.filter((f) => f.fact_id === 'f2' || f.fact_id === 'f3').map((f) => ({ code: 'unsourced_claim' as const, where: f.fact_id })),
+      ...draft.facts.filter((f) => f.fact_id === 'f4').map((f) => ({ code: 'advice' as const, where: f.fact_id })),
+    ]);
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    await handleRun(d, jobFor(w, 'research'), ctx());
+    const r = (await current(w)).result!;
+    const left = r.facts.map((f) => f.fact_id);
+    expect(left).toContain('f1');
+    expect(left.filter((id) => ['f2', 'f3', 'f4'].includes(id))).toEqual([]);
+    expect(r.notes).toEqual(expect.arrayContaining(['Two items were left out because they had no source.', 'One item was left out because it read like advice.']));
+    for (const n of r.notes ?? []) expect(n).not.toMatch(/[0-9]/);
+    expect(guardNote(d)).toMatch(/^facts left out: unsourced_claim@f2, unsourced_claim@f3, advice@f4$/);
+  });
+
+  it('a summary that quotes a left-out fact loses the summary; the numbers and the other facts go out', async () => {
+    const d = deps({ models: answering('reader', FOUR_FACTS) });
+    d.guard = flagging(d, (draft) => draft.facts.filter((f) => f.fact_id === 'f1').map((f) => ({ code: 'advice' as const, where: f.fact_id })));
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    await handleRun(d, jobFor(w, 'research'), ctx());
+    const r = (await current(w)).result!;
+    expect(r.summary).toBeNull(); // the fake summary's {q1} is f1
+    expect(r.facts.length).toBeGreaterThan(0);
+    expect(r.facts.map((f) => f.fact_id)).not.toContain('f1');
+    expect(r.numbers.length).toBeGreaterThan(0);
+    expect(r.notes).toContain('One item was left out because it read like advice.');
+    expect(guardNote(d)).toBe('facts left out: advice@f1; summary dropped: it quotes a fact left out');
+  });
+
+  it('every fact flagged: the whole publish is blocked, as before', async () => {
+    const d = deps({ models: answering('reader', FOUR_FACTS) });
+    d.guard = flagging(d, (draft) => draft.facts.map((f) => ({ code: 'advice' as const, where: f.fact_id })));
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    const rec = await handleRun(d, jobFor(w, 'research'), ctx()).catch((e) => e);
+    expect(String(rec)).toMatch(/guard_block/);
+    expect(guardNote(d)).toMatch(/blocked: advice@f1, advice@f2/);
+    expect((await current(w)).result?.facts ?? []).toEqual([]);
+  });
+
+  it.each([
+    ['a number', 'missing_receipt' as const, 'n1'],
+    ['a source', 'bad_link' as const, 'cand'],
+    ['the guard itself', 'unchecked' as const, 'guard.model'],
+  ])('a reason on %s beside a flagged fact: the whole publish is blocked, as before', async (_what, code, where) => {
+    const d = deps({ models: answering('reader', FOUR_FACTS) });
+    d.guard = flagging(d, (draft) => [
+      ...draft.facts.filter((f) => f.fact_id === 'f2').map((f) => ({ code: 'advice' as const, where: f.fact_id })),
+      { code, where: where === 'cand' ? draft.sources[0]!.candidate_id : where },
+    ]);
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    const rec = await handleRun(d, jobFor(w, 'research'), ctx()).catch((e) => e);
+    expect(String(rec)).toMatch(/guard_block/);
+    expect(guardNote(d)).toMatch(/(^|; )blocked: .*advice@f2/);
+    expect(guardNote(d)).not.toMatch(/facts left out/);
+    expect((await current(w)).result?.facts ?? []).toEqual([]);
   });
 
   it('busy at compute: the job waits without an attempt, then resumes from the saved steps', async () => {
