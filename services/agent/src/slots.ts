@@ -53,6 +53,13 @@ export function boardMoves(results: (WidgetResult | null)[]): Map<string, BoardM
   return out;
 }
 
+/** A slot and a unit word typed after it. The value already shows its unit, so "{n1} points" must not read "17 points points". */
+const SLOT_WITH_UNIT_RE = /\{n([0-9]{1,2})\}(\s+(?:points?|cents?|percent)\b)?/gi;
+const repeatsUnit = (value: string, unit: string) => {
+  const u = unit.trim().toLowerCase();
+  return u.startsWith('point') ? /\bpoints?$/.test(value) : u.startsWith('cent') ? value.endsWith('¢') : value.endsWith('%');
+};
+
 /** What a receipt's slot means, in the words the chat may repeat. No digit (the model copies them). */
 const meaning = (op: string) =>
   op === 'implied_probability' ? 'the chance'
@@ -94,14 +101,14 @@ export class Slots {
   fill(template: string): { text: string; missing: string[]; used: SlotValue[] } {
     const missing: string[] = [];
     const used: SlotValue[] = [];
-    const text = template.replace(SLOT_RE, (whole, n: string) => {
+    const text = template.replace(SLOT_WITH_UNIT_RE, (whole, n: string, unit: string | undefined) => {
       const v = this.values.get(`n${n}`);
       if (!v) {
         missing.push(`n${n}`);
         return whole;
       }
       used.push(v);
-      return v.text;
+      return v.text + (unit && repeatsUnit(v.text, unit) ? '' : (unit ?? ''));
     });
     return { text, missing, used };
   }

@@ -165,3 +165,19 @@ describe('what a receipt slot means', () => {
     for (const op of ['implied_probability', 'gap', 'expected_value', 'movement', 'base_rate']) expect(said(op)).not.toMatch(/[0-9]|implied|\bEV\b|_/);
   });
 });
+
+describe('a unit typed after a slot', () => {
+  const filled = (template: string, op: string, unit: string, value: number) => {
+    const s = new Slots();
+    s.receipt({ id: 'r-00000001', op, unit, value } as never);
+    return s.fill(template).text;
+  };
+  it('is dropped when the value already says it', () => {
+    expect(filled('moved {n1} points since yesterday', 'movement', 'points', -17)).toBe('moved down 17 points since yesterday');
+    expect(filled('{n1} points apart', 'gap', 'points', 1)).toBe('1 point apart');
+    expect(filled('{n1} percent', 'implied_probability', 'probability', 0.62)).toBe('62%');
+  });
+  it('stays when the value shows a different unit', () => {
+    expect(filled('{n1} points', 'implied_probability', 'probability', 0.62)).toBe('62% points');
+  });
+});
