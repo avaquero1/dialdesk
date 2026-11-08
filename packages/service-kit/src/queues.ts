@@ -13,7 +13,8 @@ export type JobData<Q extends QueueName> = Q extends typeof QUEUES.widgetRuns ? 
 
 /** The run rules from the architecture ("Run rules"), in one place for runner and the queues. */
 export const RUN_RULES = {
-  timeoutsMs: { browse: 30_000, extract: 30_000, compute: 5_000, summary: 20_000, run: 180_000 },
+  /** `compute` waits past the box's own wall limit (Limits::COMPUTE, 15 s), so the manager ends a slow box, not this wait. */
+  timeoutsMs: { browse: 30_000, extract: 30_000, compute: 20_000, summary: 20_000, run: 180_000 },
   /** Model calls: two retries with backoff, on 429 and 5xx only. */
   modelRetries: { retries: 2, baseMs: 1_000 },
   /** Sandbox jobs: one retry on an infrastructure error, never on poison. */

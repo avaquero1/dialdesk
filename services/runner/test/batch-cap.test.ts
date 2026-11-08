@@ -8,7 +8,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BOARD, EngineResult, MARKETS, MODELS, widgetRunJobId, type EngineInput, type EngineReceipt, type SbxJobStatus, type WidgetRunJob } from '@app/contracts';
-import { MemoryBus, createClient, hashToken, sandboxClient, type SandboxClient } from '@app/service-kit';
+import { MemoryBus, RUN_RULES, createClient, hashToken, sandboxClient, type SandboxClient } from '@app/service-kit';
 import { fakeApp, TEST_TOKENS } from '@app/testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Slots } from '../../agent/src/slots.ts';
@@ -167,6 +167,12 @@ describe.skipIf(!have)('a batch fits its compute box (A1.4.3)', () => {
   it('the cap is the engine’s', () => {
     expect(readFileSync(join(ROOT, 'engine/src/lib.rs'), 'utf8')).toContain(`pub const MAX_OPS: usize = ${BOX_LIMITS.ops};`);
     expect(readFileSync(join(ROOT, 'sandbox/manager/src/types.rs'), 'utf8')).toMatch(new RegExp(`COMPUTE: Limits = Limits \\{[^}]*output_kb: ${BOX_LIMITS.outputBytes / 1024},`));
+  });
+
+  it('runner waits longer than a compute box can live', () => {
+    const wall = readFileSync(join(ROOT, 'sandbox/manager/src/types.rs'), 'utf8').match(/COMPUTE: Limits = Limits \{[^}]*wall_s: (\d+),/)?.[1];
+    expect(wall).toBe('15');
+    expect(RUN_RULES.timeoutsMs.compute).toBeGreaterThan(Number(wall) * 1000);
   });
 });
 

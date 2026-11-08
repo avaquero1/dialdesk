@@ -179,11 +179,12 @@ impl Limits {
         output_kb: 2048,
     };
     // The engine's own checked flags (engine/README.md): 64 MB, 8 processes.
+    // 15 s: a board's first numbers box took more than 5 s on a loaded machine (RUN_RULES.timeoutsMs.compute waits longer).
     pub const COMPUTE: Limits = Limits {
         cpu_millis: 1000,
         memory_mb: 64,
         pids: 8,
-        wall_s: 5,
+        wall_s: 15,
         hold_s: 0,
         disk_mb: 16,
         output_kb: 256,

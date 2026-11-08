@@ -6,7 +6,8 @@
  * candidates also hold our own poisoned test page (fixtures/site, served by the dev topology, never the internet).
  *
  * It spends money: not part of `make check`. Each step's pass or fail, time and model spend (the step's usage file) go to
- * E2E_LIVE_OUT/<E2E_LIVE_RUN>.json: ids, domains, states and numbers, never a key or page text.
+ * E2E_LIVE_OUT/<E2E_LIVE_RUN>.json: ids, domains, states and numbers, never a key or page text. A failed step also keeps
+ * the board's run traces, and every compute box's time is recorded (record.ts).
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,6 +18,7 @@ import { createClient, sandboxClient, type SandboxClient } from '@app/service-ki
 import { fixtures } from '@app/testkit';
 import { BANNED_WORDS } from '../../services/runner/src/run.ts';
 import { ORIGIN, PG_PORT, stackUp, type Stack, type Svc } from '../real/stack.ts';
+import { computeBoxTimes, failureTrace } from './record.ts';
 import { StepUsageStore } from './usage.ts';
 
 const OUT = process.env.E2E_LIVE_OUT ?? join(import.meta.dirname, '..', '..', '.logs', 'e2e-live');
@@ -70,8 +72,21 @@ async function step(name: string, fn: (saw: Record<string, unknown>) => Promise<
     record.steps.push({ step: name, pass: true, ms: Date.now() - t0, spend_usd: +(usage.total() - usd0).toFixed(6), usage: usageDelta(rows0), ...saw });
   } catch (e) {
     const why = String((e as Error).message).split('\n')[0]!.slice(0, 300);
-    record.steps.push({ step: name, pass: false, ms: Date.now() - t0, spend_usd: +(usage.total() - usd0).toFixed(6), usage: usageDelta(rows0), why, ...saw });
+    const failed: Record<string, unknown> = { step: name, pass: false, ms: Date.now() - t0, spend_usd: +(usage.total() - usd0).toFixed(6), usage: usageDelta(rows0), why, ...saw };
+    record.steps.push(failed);
+    failed.failure_trace = await boardTrace();
     throw e;
+  }
+}
+
+/** Every run on the board at a failed step, so the failure explains itself (never page text: failureTrace). */
+async function boardTrace() {
+  try {
+    const { widgets } = await board();
+    const traces = await Promise.all(widgets.map((w) => browser(EDGE.trace, { params: { widget_id: w.spec.widget_id } }).catch(() => ({ steps: [] as RunTraceStep[] }))));
+    return failureTrace(traces.flatMap((t) => t.steps));
+  } catch (e) {
+    return { error: String((e as Error).message).slice(0, 200) };
   }
 }
 
@@ -138,9 +153,11 @@ async function databaseSaw() {
   try {
     const applied = (await sql<{ name: string }[]>`select name from board._migrations order by name`).map((m) => m.name);
     const [ix] = await sql<{ present: boolean }[]>`select to_regclass('board.run_requests_account_refresh') is not null as present`;
-    const created = [...(await sql<{ sandbox_id: string; kind: string; job_id: string; run_id: string; widget_id: string }[]>`
-      select entry->>'subject_id' as sandbox_id, entry->'ids'->>'kind' as kind, entry->'ids'->>'job_id' as job_id, entry->'ids'->>'run_id' as run_id, entry->'ids'->>'widget_id' as widget_id
+    const created = [...(await sql<{ sandbox_id: string; kind: string; job_id: string; run_id: string; widget_id: string; at: string }[]>`
+      select entry->>'subject_id' as sandbox_id, entry->'ids'->>'kind' as kind, entry->'ids'->>'job_id' as job_id, entry->'ids'->>'run_id' as run_id, entry->'ids'->>'widget_id' as widget_id, entry->>'at' as at
       from audit.chain where entry->>'action' = 'sandbox.created' order by seq`)];
+    const destroyed = [...(await sql<{ sandbox_id: string; at: string }[]>`
+      select entry->>'subject_id' as sandbox_id, entry->>'at' as at from audit.chain where entry->>'action' = 'sandbox.destroyed' order by seq`)];
     const kills = [...(await sql<{ sandbox_id: string; job_id: string; reason: string }[]>`
       select entry->>'subject_id' as sandbox_id, entry->'ids'->>'job_id' as job_id, entry->'ids'->>'reason' as reason
       from audit.chain where entry->>'action' = 'sandbox.killed' order by seq`)];
@@ -148,6 +165,7 @@ async function databaseSaw() {
       board_migrations: applied,
       migration_0005_applied: applied.includes('0005_refresh_cap.sql') && !!ix?.present,
       boxes: { browse: created.filter((b) => b.kind === 'browse').length, compute: created.filter((b) => b.kind === 'compute').length, created },
+      compute_box_times: computeBoxTimes(created, destroyed),
       kills,
       compute_killed_on_timeout: kills.filter((k) => !k.job_id?.includes(':read:') && /timeout/.test(k.reason ?? '')),
     };
