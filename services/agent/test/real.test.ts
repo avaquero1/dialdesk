@@ -19,7 +19,8 @@ import { real as modelsReal } from '../../models/src/real.ts';
 import { createReal, MAX_STEPS } from '../src/real.ts';
 import { MemoryConversationStore } from '../src/store.ts';
 import { cases } from './cases.ts';
-import { KC, startScriptedVultr, type ScriptedVultr } from './scripted-vultr.ts';
+import { KC, MADE_UP_PROBABILITY, startScriptedVultr, type ScriptedVultr } from './scripted-vultr.ts';
+import { isUsersNumber } from '../src/tools.ts';
 
 const KEY = `vtest_${randomBytes(24).toString('base64url')}`;
 const dir = mkdtempSync(join(tmpdir(), 'agent-test-'));
@@ -201,6 +202,13 @@ describe('agent real mode: the rules', () => {
     expect(ok.body.turn.chips[0]).toMatchObject({ tool: 'tune_widget', status: 'proposed', args: { widget_id: probWidget, user_probability: 0.7 } });
     const bad = await chat(`tune made up ${probWidget}`);
     expect(bad.body.turn.chips[0]).toMatchObject({ tool: 'tune_widget', status: 'refused' });
+  });
+
+  it("the made-up probability never reads as the user's number in a widget id (the random-id flake)", () => {
+    // Ids like the board's random ones, with every one- and two-digit run in them. The old 0.9 matched "wid_ab90cd".
+    const ids = Array.from({ length: 100 }, (_, n) => `wid_ab${n}cd${n % 10}ef`);
+    for (const id of ids) expect(isUsersNumber(MADE_UP_PROBABILITY, [`tune made up ${id}`]), id).toBe(false);
+    expect(isUsersNumber(0.9, ['tune made up wid_ab90cd'])).toBe(true);
   });
 
   it('a Tune chat changes only its own widget', async () => {

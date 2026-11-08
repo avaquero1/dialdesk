@@ -3,7 +3,7 @@
  * own spec (user_probability, window_s). A plan from the planner is checked against the widget's catalog entry; one
  * that fails is refused whole and the default plan for the type runs instead.
  */
-import { CONNECTIONS, EnginePlan, MARKETS, displayEntry, type DisplayType, type EngineInput, type EngineResult, type Market, type ResultSince, type WidgetResult, type WidgetSpec } from '@app/contracts';
+import { CONNECTIONS, ENGINE_OP_ARGS, EnginePlan, MARKETS, displayEntry, type DisplayType, type EngineInput, type EngineResult, type Market, type ResultSince, type WidgetResult, type WidgetSpec } from '@app/contracts';
 import { CallError, type Call } from '@app/service-kit';
 
 type DisplaySpec = Extract<WidgetSpec, { kind: 'display' }>;
@@ -107,9 +107,25 @@ export function planProblem(spec: DisplaySpec, plan: unknown): string | null {
   for (const op of p.data.ops) {
     if (!/^n[0-9]{1,2}$/.test(op.id) || ids.has(op.id)) return `op id ${op.id}`;
     if (!allowed.has(op.op)) return `op ${op.op} is not in the catalog for ${spec.type}`;
+    const problem = argProblem(op);
+    if (problem) return problem;
     for (const ref of Object.values(op.args)) if (!keys.has(ref) && !ids.has(ref)) return `unknown input ${ref}`;
     ids.add(op.id);
   }
+  return null;
+}
+
+/**
+ * An op's arg names against the engine's own op schema (`engine --schema`, "ops"): an arg the op doesn't take, or a
+ * required one left out, makes the engine compute nothing (the real planner wrote {"price": ...} for {"price_cents": ...}).
+ */
+export function argProblem(op: Op): string | null {
+  const want = ENGINE_OP_ARGS[op.op];
+  if (!want) return `op ${op.op} is not an engine op`;
+  const names = new Set(want.map((a) => a.name));
+  const takes = want.map((a) => a.name).join(', ');
+  for (const name of Object.keys(op.args)) if (!names.has(name)) return `op ${op.id} (${op.op}) has no arg ${name}; it takes ${takes}`;
+  for (const a of want) if (a.required && !(a.name in op.args)) return `op ${op.id} (${op.op}) needs arg ${a.name}`;
   return null;
 }
 

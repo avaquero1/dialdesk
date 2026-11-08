@@ -1,6 +1,7 @@
 /** The reply put together by code: text beside a tool call is kept, and a widget count past the chips is rewritten. */
 import type { ToolChip } from '@app/contracts';
 import { describe, expect, it } from 'vitest';
+import { RULES } from '../src/prompt.ts';
 import { claimedCount, fixWidgetCount, proposedCount, withSaid } from '../src/reply.ts';
 
 const chip = (n: number, status: ToolChip['status'] = 'proposed'): ToolChip =>
@@ -8,6 +9,11 @@ const chip = (n: number, status: ToolChip['status'] = 'proposed'): ToolChip =>
 const look = { tool: 'set_look', args: { theme: 'glass' }, label: 'set_look', status: 'applied', proposal_id: null } as unknown as ToolChip;
 
 describe('withSaid', () => {
+  it("RULES tells the model what withSaid does: text beside a tool call is shown, before the last reply", () => {
+    expect(RULES).not.toMatch(/never shown/);
+    expect(RULES).toContain('The user sees the text you write beside a tool call, then your last reply');
+    expect(withSaid(['Here are two widgets.'], 'Tap to add them.')).toBe('Here are two widgets. Tap to add them.');
+  });
   it('keeps the line written beside a tool call, before the last reply', () => {
     expect(withSaid(['I do math, not calls.'], 'The Chiefs are at {n1}.')).toBe('I do math, not calls. The Chiefs are at {n1}.');
   });

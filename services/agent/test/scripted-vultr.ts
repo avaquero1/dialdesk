@@ -27,6 +27,13 @@ const draft = (title: string, more: Record<string, unknown> = {}) => ({
   ...more,
 });
 
+/**
+ * The probability the scripted model makes up for "tune made up". Read as the user's it would be 12.3, which needs a
+ * decimal point: a widget id (letters and digits) in the user's message can never carry it. 0.9 flaked whenever the
+ * board's random id had a 90 in it.
+ */
+export const MADE_UP_PROBABILITY = 0.123;
+
 /** One move: `user` is the user's message, `results` the tool results since it (newest last). */
 export function play(user: string, results: string[]): Move {
   const u = user.toLowerCase();
@@ -64,7 +71,7 @@ export function play(user: string, results: string[]): Move {
     const id = /r-[0-9a-f]{8}/.exec(user)?.[0];
     return first ? { calls: [['read_receipt', { receipt_id: id }]] } : { content: '{n1} is the implied probability on that widget.' };
   }
-  if (u.includes('tune made up')) return first ? { calls: [['tune_widget', { widget_id: widget, user_probability: 0.9 }]] } : { content: 'Tap to keep it.' };
+  if (u.includes('tune made up')) return first ? { calls: [['tune_widget', { widget_id: widget, user_probability: MADE_UP_PROBABILITY }]] } : { content: 'Tap to keep it.' };
   const mine = /my probability is (\d+)%/.exec(u);
   if (mine) return first ? { calls: [['tune_widget', { widget_id: widget, user_probability: Number(mine[1]) / 100 }]] } : { content: 'Tap to keep it.' };
   if (u.includes('remove it')) return first ? { calls: [['remove_widget', { widget_id: widget }]] } : { content: 'Tap to remove it.' };

@@ -386,14 +386,14 @@ describe.skipIf(!have)('runner', () => {
     for (const s of clean) expect(s.sandbox!.state).toBe('released');
   });
 
-  it("a planner plan the engine can't run (an arg name it doesn't know) falls back to the default plan, in code", async () => {
+  it("a planner plan with an arg name the engine doesn't know is refused up front for the default plan, in code", async () => {
     const bad = '{"candidate_ids": "all-allowed", "plan": {"plan_version": 1, "ops": [{"id": "n1", "op": "implied_probability", "args": {"price": "kalshi_price"}}]}}';
     const d = deps({ models: answering('planner', bad) });
     const { byTitle } = await freshBoard();
     const w = byTitle('Bills news');
     const rec = await handleRun(d, jobFor(w, 'research'), ctx());
-    expect(rec.steps.find((s) => s.step === 'plan')!.note).toMatch(/^planner plan;/);
-    expect(rec.steps.filter((s) => s.step === 'math').map((s) => s.status)).toEqual(['failed', 'ok']);
+    expect(rec.steps.find((s) => s.step === 'plan')!.note).toMatch(/^planner plan refused \(op n1 \(implied_probability\) has no arg price; it takes price_cents\): default plan;/);
+    expect(rec.steps.filter((s) => s.step === 'math').map((s) => s.status)).toEqual(['ok']);
     expect((await current(w)).result!.numbers.length).toBeGreaterThan(0);
   });
 
