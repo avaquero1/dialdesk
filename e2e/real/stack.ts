@@ -53,7 +53,9 @@ export function stackEnv(managerUrl: string, scratch: string): Record<string, st
   Object.assign(env, {
     RUNNER_URL_SANDBOX_MANAGER: managerUrl,
     RUNNER_SOURCE_ENV: 'fixture',
-    RUNNER_SCHEDULE_TICK_MS: '2000',
+    // The scheduler's re-runs (every display, folder cards too, each 120 s) are not part of this journey and, on a loaded
+    // box, crowd out the refresh's compute sandbox ("compute timed out"). e2e/flow.test.ts tests the scheduler itself.
+    RUNNER_SCHEDULE_TICK_MS: '600000',
     MARKETS_SOURCE_ENV: 'fixture',
     MARKETS_BRAVE_KEY_FILE: '/nonexistent/brave-search',
     EDGE_ALLOWED_ORIGINS: ORIGIN,
