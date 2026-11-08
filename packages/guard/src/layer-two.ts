@@ -85,8 +85,8 @@ export function guardPrompt(stage: Stage, items: Item[]): CompleteBody['messages
 }
 
 /**
- * Reads the model's answer into reasons. Accepts our shape (`{"advice": [ids], "instructions": [ids]}`, or booleans),
- * a `{"outcome": "pass"|"block"|"poison"}` answer (the models fake), and a ```json fence around any of them. A content-safety
+ * Reads the model's answer into reasons. Accepts our shape (`{"advice": [ids], "instructions": [ids]}`, or booleans; a
+ * question left out is not a "none", so a clean answer that skips one can't be read), a `{"outcome": "pass"|"block"|"poison"}` answer (the models fake), and a ```json fence around any of them. A content-safety
  * verdict ("unsafe", `"Response Safety": "unsafe"`) blocks, but its "safe" is no pass: it judges harm, not advice or orders
  * to an agent (nemotron-3.5-content-safety called an injected order "safe" in the first real calls). Returns null when it
  * can't tell, e.g. nemotron's echo `{"Assistant Response": "<the reply>"}`.
@@ -111,19 +111,20 @@ export function readAnswer(stage: Stage, content: string, items: Item[]): Reason
   if (!a || typeof a !== 'object' || Array.isArray(a)) return null;
   const o = a as Record<string, unknown>;
 
-  let understood = false;
+  let answered = 0;
   for (const q of QUESTIONS[stage]) {
     const v = o[q] ?? o[q === 'instructions' ? 'instruction' : q];
     if (v === undefined) continue;
     if (Array.isArray(v)) {
-      understood = true;
+      answered++;
       for (const id of v) out.push({ code: CODE[q], where: whereOf(id) });
     } else if (typeof v === 'boolean') {
-      understood = true;
+      answered++;
       if (v) out.push({ code: CODE[q], where: fallbackWhere });
     } else return null;
   }
-  if (understood) return out;
+  // A clean verdict has to cover every question of the stage. A flag counts even from a partial answer: asking again must not clear it.
+  if (answered === QUESTIONS[stage].length || out.length) return out;
 
   if (typeof o.outcome === 'string') {
     if (o.outcome === 'pass') return [];

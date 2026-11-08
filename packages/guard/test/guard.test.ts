@@ -429,6 +429,64 @@ describe('the decision model call', () => {
   });
 });
 
+describe('a chat answer has to cover both questions (A1.4.9)', () => {
+  const reply = [{ id: 'reply', text: 'x' }];
+
+  it('both keys: pass or flag as they should', () => {
+    expect(readAnswer('chat', '{"advice": [], "instructions": []}', reply)).toEqual([]);
+    expect(readAnswer('chat', '{"advice": false, "instruction": false}', reply)).toEqual([]);
+    expect(readAnswer('chat', '{"advice": ["reply"], "instructions": []}', reply)).toEqual([{ code: 'advice', where: 'reply' }]);
+    expect(readAnswer('chat', '{"advice": [], "instructions": ["reply"]}', reply)).toEqual([{ code: 'instruction', where: 'reply' }]);
+    expect(readAnswer('chat', '{"advice": [], "instructions": "maybe"}', reply)).toBeNull();
+  });
+
+  it('one key saying none is unreadable, whichever it is', () => {
+    for (const bad of ['{"advice": []}', '{"instructions": []}', '{"instruction": []}', '{"advice": false}', '{"instructions": false}', '```json\n{"advice": []}\n```'])
+      expect({ bad, r: readAnswer('chat', bad, reply) }).toEqual({ bad, r: null });
+  });
+
+  it('a flag from one key still blocks: asking again must not clear it', () => {
+    expect(readAnswer('chat', '{"advice": ["reply"]}', reply)).toEqual([{ code: 'advice', where: 'reply' }]);
+    expect(readAnswer('chat', '{"instructions": true}', reply)).toEqual([{ code: 'instruction', where: 'reply' }]);
+  });
+
+  it('a skipped question can only lean on an outcome or a safety verdict, never on itself', () => {
+    expect(readAnswer('chat', '{"advice": [], "outcome": "block"}', reply)).toEqual([{ code: 'advice', where: 'reply' }]);
+    expect(readAnswer('chat', '{"advice": [], "Response Safety": "unsafe"}', reply)).toEqual([{ code: 'advice', where: 'reply' }]);
+    expect(readAnswer('chat', '{"advice": [], "Response Safety": "safe"}', reply)).toBeNull();
+  });
+
+  it('the outcome form still works', () => {
+    expect(readAnswer('chat', '{"outcome": "pass"}', reply)).toEqual([]);
+    expect(readAnswer('chat', '{"outcome": "block"}', reply)).toEqual([{ code: 'advice', where: 'reply' }]);
+    expect(readAnswer('chat', '{"outcome": "poison"}', reply)).toEqual([{ code: 'instruction', where: 'reply' }]);
+  });
+
+  it('extract and publish ask one question, so one key is the whole answer', () => {
+    const facts = [{ id: 'f1', text: 'x' }];
+    expect(readAnswer('extract', '{"instructions": []}', facts)).toEqual([]);
+    expect(readAnswer('extract', '{"instructions": ["f1"]}', facts)).toEqual([{ code: 'instruction', where: 'f1' }]);
+    expect(readAnswer('publish', '{"advice": []}', [{ id: 'summary', text: 'x' }])).toEqual([]);
+    expect(readAnswer('publish', '{"advice": ["summary"]}', [{ id: 'summary', text: 'x' }])).toEqual([{ code: 'advice', where: 'summary' }]);
+  });
+
+  it('through the guard: one key gets one more try, a whole answer then decides, two partial answers block', async () => {
+    const ONE = '{"advice": []}';
+    const CLEAN = '{"advice": [], "instructions": []}';
+    const twice = async (a: string, b: string) => {
+      let calls = 0;
+      const models = (async () => ({ content: calls++ ? b : a, model: 'test/guard' })) as unknown as ModelsCall;
+      return { verdict: await guardChat('The price is 62 cents.', { models, account_id: null }), calls: () => calls };
+    };
+    const retried = await twice(ONE, CLEAN);
+    expect(retried.verdict.outcome).toBe('pass');
+    expect(retried.calls()).toBe(2);
+    const twoPartial = await twice(ONE, ONE);
+    expect(twoPartial.verdict).toMatchObject({ outcome: 'block', reasons: [{ code: 'unchecked', where: 'guard.answer' }] });
+    expect(twoPartial.calls()).toBe(2);
+  });
+});
+
 describe('guard layer two: real answers from Vultr (A1.1.1)', () => {
   // Recorded from the guard role on Vultr Serverless Inference, with the prompts guardPrompt builds. No key in the file.
   const real = JSON.parse(readFileSync(new URL('./fixtures/real-answers.json', import.meta.url), 'utf8')) as {
