@@ -18,7 +18,7 @@ import { fake as marketsFake } from '../../markets/src/fake.ts';
 import { fake as modelsFake } from '../../models/src/fake.ts';
 import { getRunHandlers } from '../src/real.ts';
 import { LINE_POINTS, defaultPlan, isBiggestMove, lineAgo, moverIds } from '../src/plans.ts';
-import { handleRun, type RunnerDeps } from '../src/run.ts';
+import { handleRun, layerOneGuard, type RunnerDeps } from '../src/run.ts';
 import { ACTIVE_FOR_MS, Scheduler } from '../src/scheduler.ts';
 import { MemoryStore } from '../src/store.ts';
 
@@ -353,6 +353,48 @@ describe.skipIf(!have)('runner', () => {
     expect((rec.outputs as { trust?: Record<string, number> }).trust).toEqual({ [`${rec.run_id}:math`]: 2 });
     await handleRun(d, job, ctx());
     expect(rows.filter((r) => r.service === 'sandbox-manager').map((r) => r.action)).toEqual(first);
+  });
+
+  /** The models fake, with the reader's or planner's answer replaced (what a real model wrote). */
+  const answering = (role: CompleteBody['role'], content: string, seen: CompleteBody[] = []): Call => {
+    const inner = models({}, seen);
+    return (async (e, input) => {
+      const r = (await inner(e, input as never)) as { content: string };
+      return (input as { body: CompleteBody }).body.role === role ? { ...r, content } : r;
+    }) as Call;
+  };
+
+  it('the page check kills the poisoned box even when the reader reports nothing, and the page never reaches the reader', async () => {
+    // The A1.2.1 bake-off: the real readers left the planted orders out of their facts.
+    const seen: CompleteBody[] = [];
+    const d = deps({ models: answering('reader', '{"facts": [{"claim": "Buffalo\'s left tackle is questionable", "quote": "Buffalo\'s left tackle is questionable"}]}', seen), guard: layerOneGuard });
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    const rec = await handleRun(d, jobFor(w, 'research'), ctx());
+    expect(rec.status).toBe('poisoned');
+    const poisoned = rec.steps.filter((s) => s.status === 'poisoned');
+    expect(poisoned).toHaveLength(1);
+    const read = rec.steps.find((s) => s.step === 'read' && s.sandbox?.sandbox_id === poisoned[0]!.sandbox!.sandbox_id)!;
+    expect(read.source!.domain).toBe('fanpost.fixture.test');
+    expect(await sandbox.getJob(`${rec.run_id}:read:${read.source!.candidate_id}`)).toMatchObject({ state: 'killed', kill_reason: 'poison' });
+    const readerSaw = seen.filter((b) => b.role === 'reader').map((b) => b.messages.at(-1)!.content);
+    expect(readerSaw.length).toBeGreaterThan(0);
+    for (const t of readerSaw) expect(t).not.toMatch(/ignore your previous instructions/i);
+    // The clean pages were read and released.
+    const clean = rec.steps.filter((s) => s.step === 'extract' && s.status === 'ok');
+    expect(clean.length).toBe(readerSaw.length);
+    for (const s of clean) expect(s.sandbox!.state).toBe('released');
+  });
+
+  it("a planner plan the engine can't run (an arg name it doesn't know) falls back to the default plan, in code", async () => {
+    const bad = '{"candidate_ids": "all-allowed", "plan": {"plan_version": 1, "ops": [{"id": "n1", "op": "implied_probability", "args": {"price": "kalshi_price"}}]}}';
+    const d = deps({ models: answering('planner', bad) });
+    const { byTitle } = await freshBoard();
+    const w = byTitle('Bills news');
+    const rec = await handleRun(d, jobFor(w, 'research'), ctx());
+    expect(rec.steps.find((s) => s.step === 'plan')!.note).toMatch(/^planner plan;/);
+    expect(rec.steps.filter((s) => s.step === 'math').map((s) => s.status)).toEqual(['failed', 'ok']);
+    expect((await current(w)).result!.numbers.length).toBeGreaterThan(0);
   });
 
   it('the planner sees ids, domains and dates only; a plan outside the catalog is refused for the default', async () => {

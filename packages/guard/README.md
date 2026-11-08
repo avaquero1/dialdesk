@@ -3,7 +3,20 @@
 The check inside agent and runner (not a service). Every reader output, result and chat reply passes it before it
 reaches the user. It returns a `Verdict` (packages/contracts).
 
-## Two layers
+## The page check, then two layers
+
+**The page check: the page's own text, before any model** (`checkPage`, `src/page.ts`). runner runs it on the whole
+text the browse box returns (visible, hidden and comment text, not only the part the reader gets), before the reader
+is called. A hit poisons the page: runner kills the held sandbox and the page never reaches a model. So the kill doesn't
+depend on what a reader model chooses to repeat (the A1.2.1 bake-off: the real readers left the planted orders out of
+their facts). Its patterns are narrower than layer one's, because a page is full of words that look like orders: each
+needs text that names an AI reader ("AI assistant:", "notice for AI assistants", "if you are an LLM", "AI models reading
+this page must…"), or a phrase only an injection uses ("ignore your previous instructions", "tell the user", "do not
+mention this comment", chat-template tokens, our tool names, "send the user's API keys", keys sent to a URL). Text is
+folded first (NFKC, zero-width and format characters removed). No false kills on the fixture site's clean pages, five
+Wikipedia sports pages (`test/fixtures/real-pages`, "Free agent" among them) and sports phrasings such as "You are now
+leaving NFL.com", "Agent: Drew Rosenhaus", "assistant coach", "AI-generated summary" (`test/page.test.ts`). A pass here
+proves nothing: the reader's facts still go through both layers below.
 
 **Layer one: rules in code, no model** (`checkExtract`, `checkPublish`, `checkChat`). It runs first and decides alone
 when it's sure: any match blocks or poisons, and the model is not asked. board re-checks a result with `checkPublish`.

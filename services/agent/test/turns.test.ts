@@ -73,7 +73,8 @@ describe('agent on the models fake: the chat builds a board', () => {
     const r = await chat('Bills', cnv);
     // tool call, tool call, then words; the guard's layer two is the fourth call.
     expect(modelCalls.filter((c) => c.role === 'chat').map((c) => c.last)).toEqual(['user', 'tool', 'tool']);
-    expect(r.turn.text).toBe('The Bills news and the price move for Chiefs at Bills. Tap to add them.');
+    // The line written beside the first tool call is kept, before the last reply.
+    expect(r.turn.text).toBe('Building your Bills board. The Bills news and the price move for Chiefs at Bills. Tap to add them.');
     expect(r.turn.picks).toBeUndefined();
     expect(r.turn.chips.map((c) => [c.tool, c.status, c.label])).toEqual([
       ['propose_widget', 'proposed', 'Chiefs at Bills news'],

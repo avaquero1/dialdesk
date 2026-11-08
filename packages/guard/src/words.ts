@@ -50,6 +50,7 @@ const AGENTS = '(?:ai|a\\.i\\.|assistant|agent|model|llm|chatbot|bot|gpt|claude)
 export const INSTRUCTION_PATTERNS: RegExp[] = [
   /\b(?:ignore|disregard|forget|override|bypass)\b[^.\n]{0,30}\b(?:instructions?|prompts?|rules|directions|guidelines|guardrails|system message)\b/i,
   /\byou are now\b/i,
+  new RegExp(`\\binstructions? (?:aimed at|targeting|addressed to|directed at|meant for) (?:all |any )?${AGENTS}\\b`, 'i'),
   /\b(?:new|updated|real|hidden|secret) instructions\b/i,
   /\bsystem prompt\b/i,
   /\b(?:system|admin|developer|operator) (?:notice|message|override|instruction|command)s?\b/i,

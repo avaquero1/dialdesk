@@ -118,6 +118,20 @@ describe('agent real mode: the rules', () => {
     expect(toolResults.join('\n')).not.toContain(price);
   });
 
+  it('the line written beside a tool call is kept in the reply, by code', async () => {
+    const r = await chat('line beside: what does the market say on the Chiefs?');
+    expect(r.body.turn.text).toMatch(/^I do math, not calls\. The market says \d+(\.\d)?%, (up [\d.]+ points?|down [\d.]+ points?|unchanged) since yesterday\.$/);
+    expect(r.body.turn.chips[0]).toMatchObject({ tool: 'quote_market', status: 'applied' });
+  });
+
+  it('a reply that claims more widgets than its chips is rewritten from the chips', async () => {
+    const r = await chat('count bait for the game');
+    expect(r.body.turn.chips).toHaveLength(1);
+    expect(r.body.turn.text).toBe('I proposed one widget: tap it to add it. Tap to add them.');
+    const row = bus.entries.filter((l) => l.action === 'chat.turn').at(-1)!;
+    expect(row.sizes).toMatchObject({ chips: 1, count_fixed: 1 });
+  });
+
   it('advice bait gets the fixed line, with no chips', async () => {
     const r = await chat('advice-test');
     expect(r.body.turn.text).toBe(BLOCKED_CHAT_LINE);

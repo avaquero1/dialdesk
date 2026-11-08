@@ -71,8 +71,14 @@ describe('extract (flow B step 3): the fixture pages', () => {
 
   it('the visible text of the poisoned page alone is clean: the orders are only in the hidden parts', () => {
     const html = fixtures.page('fanpost.fixture.test/nfl/chiefs-bills-insider.html');
-    const visible = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<div style="display:none"[\s\S]*?<\/div>/, '').replace(/<p class="sponsor-note">[\s\S]*?<\/p>/, '');
+    // The footer is left out too: it says what the page hides in the words a reader uses to report it.
+    const visible = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<div style="display:none"[\s\S]*?<\/div>/, '').replace(/<p class="sponsor-note">[\s\S]*?<\/p>/, '').replace(/<footer>[\s\S]*?<\/footer>/, '');
     expect(checkExtract(asFacts(pageText(visible))).outcome).toBe('pass');
+  });
+
+  it('the reader reporting the planted text (READER_PROMPT\'s first fact) poisons by itself, with no quote', () => {
+    const v = checkExtract([{ fact_id: 'f1', claim: 'The page embeds instructions aimed at AI agents', quote: '' }]);
+    expect(v.outcome).toBe('poison');
   });
 
   it('poisons the models fake\'s poisoned reader output without asking the model (layer one is sure)', async () => {

@@ -22,6 +22,7 @@ import {
 import { checkChat, guardChatReply } from '@app/guard';
 import { CallError, HttpError, MemoryBus, busFromConfig, clientFromEnv, createLogger, followAccountDeletes, logEntry, now, type Bus, type Call, type Handlers, type Logger } from '@app/service-kit';
 import { picksFor } from './picks.ts';
+import { fixWidgetCount, withSaid } from './reply.ts';
 import { RULES, boardForModel, dataBlock, marketsForModel } from './prompt.ts';
 import { Slots, digitsIn, forHistory, strayDigits } from './slots.ts';
 import { MemoryConversationStore, PgConversationStore, connect, type ConversationStore, type StoredTurn } from './store.ts';
@@ -112,21 +113,25 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
   async function loop(st: TurnState, messages: CompleteBody['messages']): Promise<{ template: string; fixed: boolean; steps: number }> {
     // The JSON Schema's own "$schema" URL carries digits and tells the model nothing.
     const tools = agentToolDefs().map(({ parameters: { $schema: _s, ...parameters }, ...t }) => ({ ...t, parameters }));
+    // Text the model wrote beside its tool calls ("I do math, not calls." beside quote_market): kept for the reply.
+    const said: string[] = [];
     for (let step = 1; step <= MAX_STEPS; step++) {
       const r = await complete({ role: 'chat', account_id: st.account_id, messages, tools, max_tokens: 600 });
       if (r === 'cap') return { template: CAP_LINE, fixed: true, steps: step };
       if (r === 'down') return { template: MODEL_DOWN_LINE, fixed: true, steps: step };
       if (!r.tool_calls.length) {
-        const text = r.content.trim();
+        const text = withSaid(said, r.content.trim());
         return { template: text || (st.chips.length ? 'Done.' : NO_ANSWER_LINE), fixed: !text, steps: step };
       }
+      said.push(r.content);
       messages.push({ role: 'assistant', content: `${r.content.trim()}\n(called: ${r.tool_calls.map((c) => c.name.slice(0, 40)).join(', ')})`.trim() });
       for (const c of r.tool_calls) {
         const result = await runTool(c.name, c.arguments, st, deps);
         messages.push({ role: 'tool', tool_name: c.name.slice(0, 40), content: JSON.stringify(result) });
       }
     }
-    return { template: st.chips.length ? 'Done.' : NO_ANSWER_LINE, fixed: true, steps: MAX_STEPS };
+    const text = withSaid(said, '');
+    return { template: text || (st.chips.length ? 'Done.' : NO_ANSWER_LINE), fixed: !text, steps: MAX_STEPS };
   }
 
   /** Sends the pending changes to board, one proposal per chip. A refusal there turns the chip refused. */
@@ -183,7 +188,11 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
         ...history.map((t) => (t.role === 'user' ? { role: 'user' as const, content: t.text } : { role: 'assistant' as const, content: forHistory(t.template ?? t.text) })),
         { role: 'user', content: message },
       ];
-      const { template, fixed, steps } = await loop(st, messages);
+      const looped = await loop(st, messages);
+      const { fixed, steps } = looped;
+      // Words that claim more widgets than the chips propose are rewritten by code from the chips.
+      const counted = fixed ? { text: looped.template, fixed: 0 } : fixWidgetCount(looped.template, st.chips);
+      const template = counted.text;
 
       // Numbers: slots filled by code; a digit the model typed itself blocks the reply.
       const filled = st.slots.fill(template);
@@ -228,7 +237,7 @@ export function createReal(deps: RealDeps): Handlers<typeof AGENT> {
             ...(proposals.length && { proposal_ids: proposals.join(',').slice(0, 120) }),
           },
           hashes: { message: sha256(message), reply: sha256(turn.text) },
-          sizes: { message_chars: message.length, reply_chars: turn.text.length, model_calls: steps, tool_calls: st.calls, refused: st.refused, chips: turn.chips.length },
+          sizes: { message_chars: message.length, reply_chars: turn.text.length, model_calls: steps, tool_calls: st.calls, refused: st.refused, chips: turn.chips.length, count_fixed: counted.fixed },
         }),
       );
       log.info({ conversation_id: id, verdict: verdict.outcome, reasons: verdict.reasons.map((r) => r.code), tool_calls: st.calls, refused: st.refused }, 'chat turn');

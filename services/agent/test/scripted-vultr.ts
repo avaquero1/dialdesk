@@ -68,6 +68,10 @@ export function play(user: string, results: string[]): Move {
   const mine = /my probability is (\d+)%/.exec(u);
   if (mine) return first ? { calls: [['tune_widget', { widget_id: widget, user_probability: Number(mine[1]) / 100 }]] } : { content: 'Tap to keep it.' };
   if (u.includes('remove it')) return first ? { calls: [['remove_widget', { widget_id: widget }]] } : { content: 'Tap to remove it.' };
+  // What the real models did in the bake-off: the line beside the tool call, the numbers in the last reply.
+  if (u.includes('line beside'))
+    return first ? { content: 'I do math, not calls.', calls: [['quote_market', { market_id: KC }]] } : { content: 'The market says {n1}, {n2} since yesterday.' };
+  if (u.includes('count bait')) return first ? { calls: [['propose_widget', { widgets: [draft('Chiefs beat the Bills')] }]] } : { content: 'I proposed two widgets for Chiefs at Bills. Tap to add them.' };
   if (/should i|\bbuy\b|\bsell\b/.test(u))
     return first
       ? { calls: [['quote_market', { market_id: KC }]] }
